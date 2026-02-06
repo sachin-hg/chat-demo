@@ -1,0 +1,432 @@
+{
+  "messages": [
+    {
+      "eventId": "evt_demo_01",
+      "createdAt": "2026-02-06T10:00:00.000Z",
+      "eventType": "info",
+      "sender": { "type": "system" },
+      "payload": {
+        "messageType": "context",
+        "content": {
+          "data": {
+            "page": "SRP",
+            "service": "buy",
+            "category": "residential",
+            "city": "526acdc6c33455e9e4e9",
+            "filters": {
+              "apartment_type_id": [1, 2],
+              "contact_person_id": [1, 2],
+              "facing": ["east", "west"],
+              "has_lift": true,
+              "is_gated_community": true,
+              "is_verified": true,
+              "max_area": 4000,
+              "max_poss": 0,
+              "max_price": 4800000,
+              "radius": 3000,
+              "routing_range": 10,
+              "routing_range_type": "time",
+              "min_price": 100,
+              "property_type_id": [1, 2],
+              "type": "project",
+              "poly": ["dce9290ec3fe8834a293"],
+              "est": 194298,
+              "region_entity_id": 31817,
+              "region_entity_type": "project",
+              "uuid": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "eventId": "evt_demo_02",
+      "createdAt": "2026-02-06T10:00:01.000Z",
+      "eventType": "message",
+      "conversationId": "conv_1",
+      "sender": { "type": "user" },
+      "payload": {
+        "messageType": "text",
+        "content": { "text": "hi" }
+      }
+    },
+    {
+      "eventId": "evt_demo_03",
+      "createdAt": "2026-02-06T10:00:02.000Z",
+      "eventType": "message",
+      "conversationId": "conv_1",
+      "sender": { "type": "bot" },
+      "payload": {
+        "messageId": "msg_001",
+        "messageType": "markdown",
+        "content": {
+          "text": "Hey! I see you're looking for **residential properties** to **buy**. How can I help?"
+        }
+      }
+    },
+    {
+      "eventId": "evt_demo_04",
+      "createdAt": "2026-02-06T10:00:03.000Z",
+      "eventType": "message",
+      "conversationId": "conv_1",
+      "sender": { "type": "user" },
+      "payload": {
+        "messageType": "text",
+        "content": { "text": "show me properties" }
+      }
+    },
+    {
+      "eventId": "evt_demo_05",
+      "createdAt": "2026-02-06T10:00:04.000Z",
+      "eventType": "message",
+      "conversationId": "conv_1",
+      "sender": { "type": "bot" },
+      "payload": {
+        "messageId": "msg_002",
+        "messageType": "template",
+        "content": {
+          "preText": "### Properties you may like",
+          "templateId": "property_carousel",
+          "data": {
+            "properties": [
+              { "id": "p1", "title": "2BHK · 80L" },
+              { "id": "p2", "title": "3BHK · 70L" }
+            ]
+          },
+          "fallbackText": "**P1**: 2bhk indepedent House @ 80L  **P2**: 3bhk indepdent floor @ 70L",
+          "followUpText": "<i>Tap a card to take action</i>"
+        },
+        "actions": [
+          { "id": "shortlist", "label": "Shortlist", "replyType": "visible", "scope": "template_item" },
+          { "id": "contact", "label": "Contact Seller", "replyType": "visible", "scope": "template_item" }
+        ]
+      }
+    },
+    {
+      "eventId": "evt_demo_06",
+      "createdAt": "2026-02-06T10:00:05.000Z",
+      "eventType": "message",
+      "conversationId": "conv_1",
+      "sender": { "type": "user" },
+      "payload": {
+        "messageType": "user_action",
+        "content": {
+          "data": {
+            "actionId": "shortlist",
+            "propertyId": "p2",
+            "messageId": "msg_002"
+          },
+          "derivedLabel": "Shortlist P2: 2BHK · 90L"
+        }
+      }
+    },
+    {
+      "eventId": "evt_demo_07",
+      "createdAt": "2026-02-06T10:00:06.000Z",
+      "eventType": "message",
+      "conversationId": "conv_1",
+      "sender": { "type": "bot" },
+      "payload": {
+        "messageId": "msg_003",
+        "messageType": "template",
+        "content": {
+          "preText": "You need to login first.",
+          "templateId": "login_screen",
+          "data": {},
+          "fallbackText": "Please enter your phone number, so that I can sent otp for login"
+        }
+      }
+    },
+    {
+      "eventId": "evt_demo_08",
+      "createdAt": "2026-02-06T10:00:07.000Z",
+      "eventType": "info",
+      "conversationId": "conv_1",
+      "sender": { "type": "system" },
+      "payload": {
+        "messageType": "analytics",
+        "content": {
+          "data": {
+            "category": "login",
+            "action": "logged_in",
+            "label": "logged in using phone"
+          }
+        }
+      }
+    },
+    {
+      "eventId": "evt_demo_026",
+      "createdAt": "2026-02-06T10:00:07.010Z",
+      "eventType": "info",
+      "conversationId": "conv_1",
+      "sender": { "type": "bot" },
+      "payload": {
+        "messageId": "msg_026",
+        "messageType": "text",
+        "content": { "text": "Logged in successfully" }
+      }
+    },
+    {
+      "eventId": "evt_demo_09",
+      "createdAt": "2026-02-06T10:00:08.000Z",
+      "eventType": "message",
+      "conversationId": "conv_1",
+      "sender": { "type": "bot" },
+      "payload": {
+        "messageId": "msg_004",
+        "messageType": "text",
+        "content": { "text": "Shortlisted this property" }
+      }
+    },
+    {
+      "eventId": "evt_demo_10",
+      "createdAt": "2026-02-06T10:00:09.000Z",
+      "eventType": "message",
+      "conversationId": "conv_1",
+      "sender": { "type": "user" },
+      "payload": {
+        "messageType": "user_action",
+        "content": {
+          "data": {
+            "actionId": "contact",
+            "propertyId": "p1",
+            "messageId": "msg_002"
+          },
+          "derivedLabel": "Contact P1: 2BHK · 90L"
+        }
+      }
+    },
+    {
+      "eventId": "evt_demo_11",
+      "createdAt": "2026-02-06T10:00:10.000Z",
+      "eventType": "message",
+      "conversationId": "conv_1",
+      "sender": { "type": "bot" },
+      "payload": {
+        "messageId": "msg_005",
+        "messageType": "template",
+        "content": {
+          "preText": "### Here are contact details of **Nadeem**",
+          "templateId": "seller_info",
+          "data": {
+            "id": "s1",
+            "name": "Nadeem",
+            "image": "https://images.housing.com/s1.jpg"
+          },
+          "fallbackText": "**### Here are contact details of **Nadeem**.  📞 [Call +91-98989898](tel:+9198989898)"
+        },
+        "actions": [
+          { "id": "call_now", "label": "Call Now", "replyType": "hidden", "scope": "message" }
+        ]
+      }
+    },
+    {
+      "eventId": "evt_demo_12",
+      "createdAt": "2026-02-06T10:00:11.000Z",
+      "eventType": "info",
+      "conversationId": "conv_1",
+      "sender": { "type": "system" },
+      "payload": {
+        "messageType": "analytics",
+        "content": {
+          "data": {
+            "category": "crf_submit",
+            "action": "called",
+            "label": "called using phone"
+          }
+        }
+      }
+    },
+    {
+      "eventId": "evt_demo_13",
+      "createdAt": "2026-02-06T10:00:12.000Z",
+      "eventType": "message",
+      "conversationId": "conv_1",
+      "sender": { "type": "user" },
+      "payload": {
+        "messageType": "text",
+        "content": { "text": "can you tell me where this seller lives?" }
+      }
+    },
+    {
+      "eventId": "evt_demo_14",
+      "createdAt": "2026-02-06T10:00:13.000Z",
+      "eventType": "message",
+      "conversationId": "conv_1",
+      "sender": { "type": "bot" },
+      "payload": {
+        "messageId": "msg_006",
+        "messageType": "text",
+        "content": { "text": "Cant help you with that, do you need anything else?" }
+      }
+    },
+    {
+      "eventId": "evt_demo_15",
+      "createdAt": "2026-02-06T10:00:14.000Z",
+      "eventType": "message",
+      "conversationId": "conv_1",
+      "sender": { "type": "user" },
+      "payload": {
+        "messageType": "text",
+        "content": { "text": "can you tell me about sector 32?" }
+      }
+    },
+    {
+      "eventId": "evt_demo_16",
+      "createdAt": "2026-02-06T10:00:15.000Z",
+      "eventType": "message",
+      "conversationId": "conv_1",
+      "sender": { "type": "bot" },
+      "payload": {
+        "messageId": "msg_007",
+        "messageType": "template",
+        "content": {
+          "preText": "### Which sector 32 are you referring to?",
+          "templateId": "list_selection",
+          "data": {
+            "properties": [
+              { "id": "uuid1", "title": "sector 32 gurgaon" },
+              { "id": "uuid2", "title": "sector 32 faridabad" }
+            ]
+          },
+          "fallbackText": "**Which sector 32 are you referring to?**: sector 32 gurgaon or sector 32 faridabad",
+          "followUpText": "<i>Select a card to take action</i>"
+        },
+        "actions": []
+      }
+    },
+    {
+      "eventId": "evt_demo_17",
+      "createdAt": "2026-02-06T10:00:16.000Z",
+      "eventType": "message",
+      "conversationId": "conv_1",
+      "sender": { "type": "user" },
+      "payload": {
+        "messageType": "text",
+        "content": { "text": "faridabad" }
+      }
+    },
+    {
+      "eventId": "evt_demo_18",
+      "createdAt": "2026-02-06T10:00:17.000Z",
+      "eventType": "message",
+      "conversationId": "conv_1",
+      "sender": { "type": "bot" },
+      "payload": {
+        "messageId": "msg_008",
+        "messageType": "template",
+        "content": {
+          "preText": "### Are you looking for rent or buy? or dont care, and what a generic info about locality?",
+          "templateId": "list_selection",
+          "data": {
+            "properties": [
+              { "id": "rent_id", "title": "rent" },
+              { "id": "buy_id", "title": "buy" },
+              { "id": "dont_care", "title": "dont care" }
+            ]
+          },
+          "fallbackText": "**are you looking for rent or buy? or dont care, and what a generic info about locality?",
+          "followUpText": "<i>Select a card to take action</i>"
+        },
+        "actions": []
+      }
+    },
+    {
+      "eventId": "evt_demo_19",
+      "createdAt": "2026-02-06T10:00:18.000Z",
+      "eventType": "message",
+      "conversationId": "conv_1",
+      "sender": { "type": "user" },
+      "payload": {
+        "messageType": "user_action",
+        "content": {
+          "data": {
+            "selectedId": "rent_id",
+            "messageId": "msg_007"
+          },
+          "derivedLabel": "Rent"
+        }
+      }
+    },
+    {
+      "eventId": "evt_demo_20",
+      "createdAt": "2026-02-06T10:00:19.000Z",
+      "eventType": "message",
+      "conversationId": "conv_1",
+      "sender": { "type": "bot" },
+      "payload": {
+        "messageId": "msg_009",
+        "messageType": "template",
+        "content": {
+          "preText": "### Here's all you need to know about sector 32 faridabad",
+          "templateId": "locality_info",
+          "data": {
+            "id": "l1",
+            "name": "Sector 32",
+            "image": "https://images.housing.com/l1.jpg",
+            "description": "sector 32 is a bustling localtiy in faridabad with a population of 25K.",
+            "highlights": ["highlight 1", "highlight 2"],
+            "pros": ["pro1", "pro2"],
+            "cons": ["con1"]
+          },
+          "fallbackText": "**### Here's all you need to know about sector 32 faridabad.  sector 32 is a bustling localtiy in faridabad with a population of 25K. Few highlights: highlight 1, highlight 2. It has pro1, pro 2. but lacks: con1, con2"
+        },
+        "actions": [
+          { "id": "show_reviews", "label": "Show review", "replyType": "visible", "scope": "message" }
+        ]
+      }
+    },
+    {
+      "eventId": "evt_demo_28",
+      "createdAt": "2026-02-06T10:00:20.000Z",
+      "eventType": "message",
+      "conversationId": "conv_1",
+      "sender": { "type": "user" },
+      "payload": {
+        "messageType": "text",
+        "content": { "text": "price trends in sector 32 gurgaon" }
+      }
+    },
+    {
+      "conversationId": "conv_1",
+      "eventType": "message",
+      "sender": {
+          "type": "bot",
+          "id": "re_bot"
+      },
+      "payload": {
+          "messageId": "msg_0200",
+          "messageType": "template",
+          "content": {
+              "templateId": "price_trend",
+              "data": {
+                  "localityId": "uuid1",
+                  "localityName": "Sector 32",
+                  "city": "Gurgaon",
+                  "quarters": [
+                      {
+                          "quarter": "Q1 2024",
+                          "changePercent": 2.1
+                      },
+                      {
+                          "quarter": "Q2 2024",
+                          "changePercent": 1.5
+                      },
+                      {
+                          "quarter": "Q3 2024",
+                          "changePercent": -0.3
+                      },
+                      {
+                          "quarter": "Q4 2024",
+                          "changePercent": 3.2
+                      }
+                  ]
+              },
+              "fallbackText": "### Price trend — Sector 32, Gurgaon\n\n| Quarter | QoQ Change |\n| --- | --- |\n| Q1 2024 | ↑ 2.1% |\n| Q2 2024 | ↑ 1.5% |\n| Q3 2024 | ↓ 0.3% |\n| Q4 2024 | ↑ 3.2% |"
+          }
+      },
+      "eventId": "evt_demo_29",
+      "createdAt": "2026-02-06T10:00:21.000Z"
+  }
+  ]
+}

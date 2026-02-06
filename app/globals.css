@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0f1419;
+  --surface: #1a2332;
+  --border: #2d3a4d;
+  --text: #e6edf3;
+  --text-muted: #8b9cb8;
+  --accent: #3b82f6;
+  --user-bubble: #2563eb;
+  --bot-bubble: #1e293b;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.rich-text a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.rich-text a:hover {
+  opacity: 0.9;
+}
+.rich-text p {
+  margin: 0.25em 0;
+}
+.rich-text strong {
+  font-weight: 600;
+}
+.rich-text em {
+  font-style: italic;
+}
