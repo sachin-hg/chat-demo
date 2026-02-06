@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   getConversationId,
@@ -54,7 +54,10 @@ function buildContextEvent(conversationId: string): ChatEvent {
   };
 }
 
-export default function ChatPage() {
+function ChatPageContent() {
+  const searchParams = useSearchParams();
+  const isDemo = searchParams.get("demo") === "true";
+
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<StoredMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,9 +106,6 @@ export default function ChatPage() {
     setAwaitingElapsedSec(0);
     setReplyStatus("idle");
   }, []);
-
-  const searchParams = useSearchParams();
-  const isDemo = searchParams.get("demo") === "true";
 
   // Load conversation and initial history (BE prewarms store when demo=true and new chat)
   useEffect(() => {
@@ -664,5 +664,19 @@ export default function ChatPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <p className="text-[var(--text-muted)]">Loading chat...</p>
+        </div>
+      }
+    >
+      <ChatPageContent />
+    </Suspense>
   );
 }
