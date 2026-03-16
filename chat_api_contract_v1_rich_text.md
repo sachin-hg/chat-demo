@@ -4,8 +4,9 @@ This document defines the **final, frozen v1.0** contract for an LLM-powered rea
 It is intended to be committed directly into a repository and used as the single source of truth for **FE, BE, LLM, and Analytics**.
 
 > **Update Summary**
-> - `preText`, `fallbackText`, and `followUpText` are explicitly defined as **renderable rich text**.
-> - These fields may contain **plain text, Markdown, or HTML**. HTML is not preferred though. try limiting to markdown
+> - `preText` and `followUpText` have been **removed** from the contract.
+> - `fallbackText` and `actions` are **kept in schema and examples but deferred to Phase 2** — not implemented in Phase 1.
+> - `fallbackText` may contain **plain text, Markdown, or HTML**. HTML is not preferred — limit to Markdown where possible.
 > - Schema descriptions, examples, and FE renderer pseudocode have been updated accordingly.
 
 ---
@@ -18,7 +19,7 @@ It is intended to be committed directly into a repository and used as the single
 - **Every bot message MUST have `messageId`**
 - **Every user_action MUST reference the originating `messageId`**
 - **Templates are FE-owned** (custom rendering is allowed and expected)
-- **Templates MUST provide a `fallbackText`**
+- **Templates MUST provide a `fallbackText`** *(Phase 2 — not rendered in Phase 1)*
 - **Analytics & context are informational, not conversational**
 - **All future changes must be additive (v1.x)**
 
@@ -89,17 +90,10 @@ It is intended to be committed directly into a repository and used as the single
             "templateId": { "type": "string" },
             "data": { "type": "object" },
 
-            "preText": {
-              "type": "string",
-              "description": "Renderable rich text (plain text | Markdown | HTML)"
-            },
+            // [Phase 2] fallbackText — not implemented in Phase 1
             "fallbackText": {
               "type": "string",
-              "description": "Renderable rich text used when template is unsupported"
-            },
-            "followUpText": {
-              "type": "string",
-              "description": "Renderable rich text shown after main content"
+              "description": "[Phase 2] Renderable rich text used when template is unsupported (plain text | Markdown preferred)"
             },
 
             "derivedLabel": {
@@ -199,7 +193,7 @@ It is intended to be committed directly into a repository and used as the single
 | info + visibility != shown | Do not render |
 | context | Do not render |
 | template supported | Render template |
-| template unsupported | Render fallbackText (rich text) |
+| template unsupported | Render fallbackText (rich text) — **[Phase 2]** |
 | markdown/html | Safe render |
 | user_action | Render derivedLabel |
 | action scope = template_item | Render per item |
@@ -211,6 +205,8 @@ It is intended to be committed directly into a repository and used as the single
 ## 4. Examples
 
 ### 4.1 Context on Chat Open (SRP)
+
+> 📎 **Filter Reference:** See [`filterMap.js`](https://github.com/elarahq/housing.brahmand/blob/a17bf76ad06f0da180b270c840b1fb4ab14eb627/common/modules/filter-encoder/source/filterMap.js) for all possible filter keys.
 
 ```json
 {
@@ -244,7 +240,9 @@ It is intended to be committed directly into a repository and used as the single
           "est": 194298,
           "region_entity_id": 31817,
           "region_entity_type": "project",
-          "uuid": []
+          "uuid": [],
+          "qv_resale_id": 1234,
+          "qv_rent_id": 12345
         }
       }
     }
@@ -311,7 +309,6 @@ It is intended to be committed directly into a repository and used as the single
     "messageId": "msg_002",
     "messageType": "template",
     "content": {
-      "preText": "### Properties you may like",
       "templateId": "property_carousel",
       "data": {
         "properties": [
@@ -319,11 +316,11 @@ It is intended to be committed directly into a repository and used as the single
           { "id": "p2", "title": "3BHK · 70L" }
         ]
       },
-      // doubt, should preText, followUpText be rendered if template is not yet handled on UI, and fallback is being rendered?
-      "fallbackText": "**P1**: 2bhk indepedent House @ 80L  **P2**: 3bhk indepdent floor @ 70L",
-      "followUpText": "<i>Tap a card to take action</i>"
+      // [Phase 2] fallbackText — will be rendered when template is unsupported
+      "fallbackText": "**P1**: 2bhk indepedent House @ 80L  **P2**: 3bhk indepdent floor @ 70L"
     },
-    "actions": [ // might not be required on-platform, wherever we are using templates. we can work with actions hardcoded in templates, and use analytics to send info to ML. but required for off platform things
+    // [Phase 2] actions — will be implemented in Phase 2
+    "actions": [
       { "id": "shortlist", "label": "Shortlist", "replyType": "visible", "scope": "template_item" },
       { "id": "contact", "label": "Contact Seller", "replyType": "visible", "scope": "template_item" }
     ]
@@ -366,9 +363,9 @@ It is intended to be committed directly into a repository and used as the single
     "messageId": "msg_003",
     "messageType": "template",
     "content": {
-      "preText": "You need to login first.",
       "templateId": "login_screen", // shows phone number/whatsapp/truecaller login
       "data": {},
+      // [Phase 2] fallbackText — will be rendered when template is unsupported
       "fallbackText": "Please enter your phone number, so that I can sent otp for login"
     }
   }
@@ -450,17 +447,17 @@ It is intended to be committed directly into a repository and used as the single
     "messageId": "msg_005",
     "messageType": "template",
     "content": {
-      "preText": "### Here are contact details of **Nadeem**",
       "templateId": "seller_info",
       "data": {
         "id": "s1",
         "name": "Nadeem",
         "image": "https://images.housing.com/s1.jpg"
       },
-      // doubt, should preText, followUpText be rendered if template is not yet handled on UI, and fallback is being rendered?
+      // [Phase 2] fallbackText — will be rendered when template is unsupported
       "fallbackText": "**### Here are contact details of **Nadeem**.  📞 [Call +91-98989898](tel:+9198989898)"
     },
-    "actions": [ // might not be required on-platform, wherever we are using templates. we can work with actions hardcoded in templates, and use analytics to send info to ML. but required for off platform things
+    // [Phase 2] actions — will be implemented in Phase 2
+    "actions": [
       { "id": "call_now", "label": "Call Now", "replyType": "hidden", "scope": "message" }
     ]
   }
@@ -547,7 +544,6 @@ It is intended to be committed directly into a repository and used as the single
     "messageId": "msg_007",
     "messageType": "template",
     "content": {
-      "preText": "### Which sector 32 are you referring to?",
       "templateId": "list_selection",
       "data": {
         "properties": [
@@ -555,11 +551,11 @@ It is intended to be committed directly into a repository and used as the single
           { "id": "uuid2", "title": "sector 32 faridabad" }
         ]
       },
-      // doubt, should preText, followUpText be rendered if template is not yet handled on UI, and fallback is being rendered?
-      "fallbackText": "**Which sector 32 are you referring to?**: sector 32 gurgaon or sector 32 faridabad",
-      "followUpText": "<i>Select a card to take action</i>"
+      // [Phase 2] fallbackText — will be rendered when template is unsupported
+      "fallbackText": "**Which sector 32 are you referring to?**: sector 32 gurgaon or sector 32 faridabad"
     },
-    "actions": [     ]
+    // [Phase 2] actions — will be implemented in Phase 2
+    "actions": []
   }
 }
 ```
@@ -588,7 +584,6 @@ It is intended to be committed directly into a repository and used as the single
     "messageId": "msg_007",
     "messageType": "template",
     "content": {
-      "preText": "### Are you looking for rent or buy? or dont care, and what a generic info about locality?",
       "templateId": "list_selection",
       "data": {
         "properties": [
@@ -597,11 +592,11 @@ It is intended to be committed directly into a repository and used as the single
           { "id": "dont_care", "title": "dont care" }
         ]
       },
-      // doubt, should preText, followUpText be rendered if template is not yet handled on UI, and fallback is being rendered?
-      "fallbackText": "**are you looking for rent or buy? or dont care, and what a generic info about locality?",
-      "followUpText": "<i>Select a card to take action</i>"
+      // [Phase 2] fallbackText — will be rendered when template is unsupported
+      "fallbackText": "**are you looking for rent or buy? or dont care, and what a generic info about locality?"
     },
-    "actions": [     ]
+    // [Phase 2] actions — will be implemented in Phase 2
+    "actions": []
   }
 }
 ```
@@ -638,7 +633,6 @@ It is intended to be committed directly into a repository and used as the single
     "messageId": "msg_009",
     "messageType": "template",
     "content": {
-      "preText": "### Here's all you need to know about sector 32 faridabad",
       "templateId": "locality_info",
       "data": {
         "id": "l1",
@@ -649,10 +643,11 @@ It is intended to be committed directly into a repository and used as the single
         "pros": ["pro1", "pro2"],
         "cons": ["con1"]
       },
-      // doubt, should preText, followUpText be rendered if template is not yet handled on UI, and fallback is being rendered?
+      // [Phase 2] fallbackText — will be rendered when template is unsupported
       "fallbackText": "**### Here's all you need to know about sector 32 faridabad.  sector 32 is a bustling localtiy in faridabad with a population of 25K. Few highlights: highlight 1, highlight 2. It has pro1, pro 2. but lacks: con1, con2"
     },
-    "actions": [ // might not be required on-platform, wherever we are using templates. we can work with actions hardcoded in templates, and use analytics to send info to ML. but required for off platform things
+    // [Phase 2] actions — will be implemented in Phase 2
+    "actions": [
       { "id": "show_reviews", "label": "Show review", "replyType": "visible", "scope": "message" }
     ]
   }
@@ -679,9 +674,6 @@ function renderEvent(event) {
 
   if (payload.messageType === "context") return;
 
-  // should this be rendered if template is not supported?
-  if (payload.content?.preText) renderRichText(payload.content.preText);
-
   switch (payload.messageType) {
     case "text":
       renderText(payload.content.text);
@@ -700,9 +692,10 @@ function renderEvent(event) {
         renderTemplate(
           payload.content.templateId,
           payload.content.data,
-          payload.actions?.filter(a => a.scope === "template_item")
+          // [Phase 2] template_item-scoped actions not yet passed through
         );
       } else {
+        // [Phase 2] fallbackText rendering not yet implemented
         renderRichText(payload.content.fallbackText || "");
       }
       break;
@@ -712,10 +705,9 @@ function renderEvent(event) {
       break;
   }
 
+  // [Phase 2] message-scoped footer actions not yet implemented
   const footerActions = payload.actions?.filter(a => a.scope === "message") || [];
   if (footerActions.length) renderActions(footerActions);
-
-  if (payload.content?.followUpText) renderRichText(payload.content.followUpText);
 }
 ```
 
