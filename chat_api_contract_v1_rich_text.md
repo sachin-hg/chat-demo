@@ -5,6 +5,7 @@ It is intended to be committed directly into a repository and used as the single
 
 > **Update Summary**
 > - `preText` and `followUpText` have been **removed** from the contract.
+> - `eventType` has been **removed** — it was redundant; rendering intent is fully derivable from `sender.type` + `messageType`.
 > - `fallbackText` and `actions` are **kept in schema and examples but deferred to Phase 2** — not implemented in Phase 1.
 > - `fallbackText` may contain **plain text, Markdown, or HTML**. HTML is not preferred — limit to Markdown where possible.
 > - Schema descriptions, examples, and FE renderer pseudocode have been updated accordingly.
@@ -13,9 +14,7 @@ It is intended to be committed directly into a repository and used as the single
 
 ## 0. Core Principles (v1.0)
 
-- **Only two enums**
-  - `eventType`: `message | info`
-  - `messageType`: `context | text | template | user_action | markdown | html | analytics`
+- **One primary enum**: `messageType`: `context | text | template | user_action | markdown | html | analytics`
 - **Every bot message MUST have `messageId`**
 - **Every user_action MUST reference the originating `messageId`**
 - **Templates are FE-owned** (custom rendering is allowed and expected)
@@ -32,14 +31,10 @@ It is intended to be committed directly into a repository and used as the single
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "ChatEvent",
   "type": "object",
-  "required": ["eventType", "sender", "payload"],
+  "required": ["sender", "payload"],
   "properties": {
     "conversationId": { "type": "string" },
 
-    "eventType": {
-      "type": "string",
-      "enum": ["message", "info"]
-    },
     "loginAuthToken": {
       "type": "string"
     },
@@ -77,7 +72,7 @@ It is intended to be committed directly into a repository and used as the single
         "visibility": {
           "type": "string",
           "enum": ["shown", "hidden"],
-          "description": "Only applicable when eventType = info"
+          "description": "Controls rendering visibility. Applicable to any event where FE should suppress display."
         },
 
         "content": {
@@ -189,16 +184,16 @@ It is intended to be committed directly into a repository and used as the single
 
 | Condition | FE Behavior |
 |---------|-------------|
-| info + analytics | Never render |
-| info + visibility != shown | Do not render |
-| context | Do not render |
+| messageType = analytics | Never render |
+| visibility != shown | Do not render |
+| messageType = context | Do not render |
 | template supported | Render template |
 | template unsupported | Render fallbackText (rich text) — **[Phase 2]** |
 | markdown/html | Safe render |
 | user_action | Render derivedLabel |
 | action scope = template_item | Render per item |
 | action scope = message | Render once |
-| replyType = hidden | No echo, no LLM |
+| replyType = hidden | No echo, no LLM — **[Phase 2]**  |
 
 ---
 
@@ -210,7 +205,6 @@ It is intended to be committed directly into a repository and used as the single
 
 ```json
 {
-  "eventType": "info",
   "sender": { "type": "system" },
   "payload": {
     "messageType": "context",
@@ -252,26 +246,22 @@ It is intended to be committed directly into a repository and used as the single
 
 ---
 
-### 4.2 User Text
+### 4.1.1 Info Message
 
 ```json
 {
-  "eventType": "message",
-  "sender": { "type": "user" },
+  "sender": { "type": "system" },
   "payload": {
-    "messageType": "text",
-    "content": { "text": "hi" }
+    "messageType": "context",
+    "content": {
+    }
   }
 }
 ```
-
----
-
-### 4.3 Bot Greeting
+---### 4.2 Bot Greeting
 
 ```json
 {
-  "eventType": "message",
   "conversationId": "conv_1",
   "sender": { "type": "bot" },
   "payload": {
@@ -285,11 +275,26 @@ It is intended to be committed directly into a repository and used as the single
 ```
 ---
 
+### 4.3 User Text
+
+```json
+{
+  "sender": { "type": "user" },
+  "payload": {
+    "messageType": "text",
+    "content": { "text": "hi" }
+  }
+}
+```
+
+---
+
+
+
 ### 4.4 User Text
 
 ```json
 {
-  "eventType": "message",
   "sender": { "type": "user" },
   "payload": {
     "messageType": "text",
@@ -303,7 +308,6 @@ It is intended to be committed directly into a repository and used as the single
 
 ```json
 {
-  "eventType": "message",
   "sender": { "type": "bot" },
   "payload": {
     "messageId": "msg_002",
@@ -334,7 +338,6 @@ It is intended to be committed directly into a repository and used as the single
 
 ```json
 {
-  "eventType": "info",
   "sender": { "type": "user" },
   "payload": {
     "messageType": "user_action",
@@ -356,7 +359,6 @@ It is intended to be committed directly into a repository and used as the single
 
 ```json
 {
-  "eventType": "message",
   "conversationId": "conv_1",
   "sender": { "type": "bot" },
   "payload": {
@@ -378,7 +380,6 @@ It is intended to be committed directly into a repository and used as the single
 
 ```json
 {
-  "eventType": "info",
   "loginAuthToken": "", // should be here??
   "sender": { "type": "system" },
   "payload": {
@@ -399,7 +400,6 @@ It is intended to be committed directly into a repository and used as the single
 
 ```json
 {
-  "eventType": "message",
   "conversationId": "conv_1",
   "sender": { "type": "bot" },
   "payload": {
@@ -417,7 +417,6 @@ It is intended to be committed directly into a repository and used as the single
 
 ```json
 {
-  "eventType": "info",
   "loginAuthToken": "", // should be here??
   "sender": { "type": "user" },
   "payload": {
@@ -441,7 +440,6 @@ It is intended to be committed directly into a repository and used as the single
 
 ```json
 {
-  "eventType": "message",
   "sender": { "type": "bot" },
   "payload": {
     "messageId": "msg_005",
@@ -469,7 +467,6 @@ It is intended to be committed directly into a repository and used as the single
 
 ```json
 {
-  "eventType": "info",
   "loginAuthToken": "", // should be here??
   "sender": { "type": "system" },
   "payload": {
@@ -491,7 +488,6 @@ It is intended to be committed directly into a repository and used as the single
 
 ```json
 {
-  "eventType": "message",
   "sender": { "type": "user" },
   "payload": {
     "messageType": "text",
@@ -505,7 +501,6 @@ It is intended to be committed directly into a repository and used as the single
 
 ```json
 {
-  "eventType": "message",
   "conversationId": "conv_1",
   "sender": { "type": "bot" },
   "payload": {
@@ -524,7 +519,6 @@ It is intended to be committed directly into a repository and used as the single
 
 ```json
 {
-  "eventType": "message",
   "sender": { "type": "user" },
   "payload": {
     "messageType": "text",
@@ -538,7 +532,6 @@ It is intended to be committed directly into a repository and used as the single
 
 ```json
 {
-  "eventType": "message",
   "sender": { "type": "bot" },
   "payload": {
     "messageId": "msg_007",
@@ -564,7 +557,6 @@ It is intended to be committed directly into a repository and used as the single
 
 ```json
 {
-  "eventType": "message",
   "sender": { "type": "user" },
   "payload": {
     "messageType": "text",
@@ -578,7 +570,6 @@ It is intended to be committed directly into a repository and used as the single
 
 ```json
 {
-  "eventType": "message",
   "sender": { "type": "bot" },
   "payload": {
     "messageId": "msg_007",
@@ -605,7 +596,6 @@ It is intended to be committed directly into a repository and used as the single
 
 ```json
 {
-  "eventType": "info",
   "loginAuthToken": "", // should be here??
   "sender": { "type": "user" },
   "payload": {
@@ -627,7 +617,6 @@ It is intended to be committed directly into a repository and used as the single
 
 ```json
 {
-  "eventType": "message",
   "sender": { "type": "bot" },
   "payload": {
     "messageId": "msg_009",
@@ -665,14 +654,11 @@ function renderRichText(value: string) {
 }
 
 function renderEvent(event) {
-  const { eventType, payload } = event;
+  const { payload } = event;
 
-  if (eventType === "info") {
-    if (payload.messageType === "analytics") return;
-    if (payload.visibility !== "shown") return;
-  }
-
+  if (payload.messageType === "analytics") return;
   if (payload.messageType === "context") return;
+  if (payload.visibility !== "shown") return;
 
   switch (payload.messageType) {
     case "text":
