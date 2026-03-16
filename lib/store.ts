@@ -196,7 +196,7 @@ export function hasPendingRequest(conversationId: string): boolean {
 function broadcast(conversationId: string, event: StoredEvent) {
   
   const clients = sseClients.get(conversationId);
-  console.log("broadcast", "convId: ", conversationId, "eventId: ", event.eventId, "sender: ", event.sender.type, "messageType: ", event.payload.messageType, "eventType: ", event.eventType, "clients: ", clients?.size);
+  console.log("broadcast", "convId: ", conversationId, "eventId: ", event.eventId, "sender: ", event.sender.type, "messageType: ", event.payload.messageType, "clients: ", clients?.size);
   if (!clients?.size) return;
   const payload = JSON.stringify(event);
   const line = `id: ${event.eventId}\nevent: chat_event\ndata: ${payload}\n\n`;

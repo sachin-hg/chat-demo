@@ -36,27 +36,28 @@ export function ChatMessage({
   onCallNow,
   actionsDisabled = false,
 }: ChatMessageProps) {
-  const { eventType, sender, payload } = event;
+  const { sender, payload } = event;
   const { messageType, content, actions } = payload;
   const isBot = sender.type === "bot";
   const isUser = sender.type === "user";
 
-  // FE rules: don't render analytics, hidden info, context
-  if (eventType === "info") {
-    if (messageType === "analytics") return null;
-    if (payload.visibility && payload.visibility !== "shown") return null;
-  }
+  // FE rules: don't render analytics or context
+  if (messageType === "analytics") return null;
   if (messageType === "context") return null;
 
-  // Visible info events use load-more–style UI (centered, muted)
-  const isVisibleInfo = eventType === "info" && (payload.visibility === "shown" || !payload.visibility);
-  const infoWrap = (children: React.ReactNode) => (
-    <div className="flex justify-center mb-2">
-      <div className="text-xs px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] max-w-[85%]">
-        {children}
-      </div>
-    </div>
-  );
+  // user_action: only render as bubble when visibility === "shown" and derivedLabel is set
+  if (messageType === "user_action") {
+    if (payload.visibility === "shown" && content.derivedLabel) {
+      return (
+        <div className="flex justify-end mb-3">
+          <div className="max-w-[85%] px-4 py-2.5 ml-auto bg-[var(--user-bubble)] text-white rounded-2xl rounded-br-md">
+            <span className="text-sm">{content.derivedLabel}</span>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  }
 
   const bubbleClass = isUser
     ? "ml-auto bg-[var(--user-bubble)] text-white rounded-2xl rounded-br-md"
@@ -68,33 +69,17 @@ export function ChatMessage({
     </div>
   );
 
-  const containerWrap = isVisibleInfo ? infoWrap : wrap;
-
-  if (messageType === "user_action" && content.derivedLabel) {
-    return containerWrap(<span className="text-sm">{content.derivedLabel}</span>);
-  }
-
   if (messageType === "text" && content.text) {
-    return containerWrap(<span className="text-sm whitespace-pre-wrap">{content.text}</span>);
+    return wrap(<span className="text-sm whitespace-pre-wrap">{content.text}</span>);
   }
 
   if (messageType === "markdown" && content.text) {
-    return containerWrap(<RichText value={content.text} />);
-  }
-
-  if (messageType === "html" && content.text) {
-    return containerWrap(<RichText value={content.text} />);
+    return wrap(<RichText value={content.text} />);
   }
 
   if (messageType === "template") {
     const templateId = content.templateId ?? "";
     const data = (content.data ?? {}) as Record<string, unknown>;
-
-    const preTextEl = content.preText ? (
-      <div className="mb-2">
-        <RichText value={content.preText} />
-      </div>
-    ) : null;
 
     let body: React.ReactNode = null;
 
@@ -108,10 +93,11 @@ export function ChatMessage({
               messageId={payload.messageId ?? ""}
               onAction={(actionId, propertyId, msgId, derivedLabel) =>
                 onUserAction({
-                  eventType: "message",
                   sender: { type: "user" },
                   payload: {
                     messageType: "user_action",
+                    responseRequired: true,
+                    visibility: "shown",
                     content: {
                       data: { actionId, propertyId, messageId: msgId },
                       derivedLabel,
@@ -141,10 +127,11 @@ export function ChatMessage({
               messageId={payload.messageId ?? ""}
               onSelect={(selectedId, msgId, derivedLabel) =>
                 onUserAction({
-                  eventType: "message",
                   sender: { type: "user" },
                   payload: {
                     messageType: "user_action",
+                    responseRequired: true,
+                    visibility: "shown",
                     content: {
                       data: { selectedId, messageId: msgId },
                       derivedLabel,
@@ -167,9 +154,8 @@ export function ChatMessage({
     }
 
     const footerActions = actions?.filter((a) => a.scope === "message") ?? [];
-    return containerWrap(
+    return wrap(
       <div className="space-y-2">
-        {preTextEl}
         {body}
         {footerActions.length > 0 && (
           <div className="flex gap-2 mt-2">
@@ -184,10 +170,11 @@ export function ChatMessage({
                     onCallNow();
                   } else if (a.replyType === "visible") {
                     onUserAction({
-                      eventType: "message",
                       sender: { type: "user" },
                       payload: {
                         messageType: "user_action",
+                        responseRequired: true,
+                        visibility: "shown",
                         content: {
                           data: {
                             actionId: a.id,
@@ -204,11 +191,6 @@ export function ChatMessage({
                 {a.label}
               </button>
             ))}
-          </div>
-        )}
-        {content.followUpText && (
-          <div className="mt-2 text-xs text-[var(--text-muted)]">
-            <RichText value={content.followUpText} />
           </div>
         )}
       </div>

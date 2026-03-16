@@ -30,7 +30,6 @@ type ReplyStatus = "idle" | "sending" | "awaiting" | "timeout" | "error";
 // 4.1 Context on chat open — FE sends this via send-message when conversation is new (e.g. from SRP)
 function buildContextEvent(conversationId: string): ChatEvent {
   return {
-    eventType: "info",
     conversationId,
     sender: { type: "system" },
     payload: {
@@ -355,11 +354,11 @@ function ChatPageContent() {
       if (!conversationId || !text.trim() || sending || replyStatus === "awaiting") return;
       const trimmed = text.trim();
       const event: ChatEvent = {
-        eventType: "message",
         conversationId,
         sender: { type: "user" },
         payload: {
           messageType: "text",
+          responseRequired: true,
           content: { text: trimmed },
         },
       };
@@ -460,13 +459,13 @@ function ChatPageContent() {
       await syncHistory();
     } catch (_) {}
     const analyticsEvent: ChatEvent = {
-      eventType: "info",
       conversationId,
-      sender: { type: "system" },
+      sender: { type: "user" },
       payload: {
-        messageType: "analytics",
+        messageType: "user_action",
+        responseRequired: true,
         content: {
-          data: { category: "login", action: "logged_in", label: "logged in using phone" },
+          data: { actionId: "logged_in" },
         },
       },
     };
@@ -484,16 +483,15 @@ function ChatPageContent() {
   const handleCallNow = useCallback(async () => {
     if (!conversationId || sending || replyStatus === "awaiting") return;
     const analyticsEvent: ChatEvent = {
-      eventType: "info",
       conversationId,
-      sender: { type: "system" },
+      sender: { type: "user" },
       payload: {
-        messageType: "analytics",
+        messageType: "user_action",
+        responseRequired: false,
         content: {
           data: {
+            actionId: "call_now",
             category: "crf_submit",
-            action: "called",
-            label: "called using phone",
           },
         },
       },

@@ -19,16 +19,23 @@ function botMessage(
   messageId: string,
   messageType: "text" | "markdown" | "template",
   content: ChatPayloadContent,
-  eventType: "message" | "info" = "message",
-  actions?: ChatEvent["payload"]["actions"],
-  visibility?: "shown" | "hidden"
+  options: {
+    sourceMessageId?: string;
+    sequenceNumber?: number;
+    isFinal?: boolean;
+    actions?: ChatEvent["payload"]["actions"];
+    visibility?: "shown" | "hidden";
+  } = {}
 ): Omit<ChatEvent, "eventId" | "createdAt"> {
+  const { sourceMessageId, sequenceNumber = 0, isFinal = true, actions, visibility } = options;
   return {
     conversationId: CONV,
-    eventType,
     sender: BOT,
     payload: {
       messageId,
+      sourceMessageId,
+      sequenceNumber,
+      isFinal,
       messageType,
       visibility,
       content,
@@ -54,20 +61,21 @@ export function getNextBotEvents(
   userEvent: ChatEvent,
   recentEvents: ChatEvent[]
 ): Omit<ChatEvent, "eventId" | "createdAt">[] {
-  const { eventType, sender, payload } = userEvent;
+  const { sender, payload } = userEvent;
   const messageType = payload.messageType;
   const content = payload.content;
   const data = content?.data as Record<string, unknown> | undefined;
+  const sourceMessageId = payload.messageId;
 
   // Analytics: logged_in -> 4.7 shortlisted
   if (messageType === "analytics" && data?.action === "logged_in") {
     return [
       botMessage(generateMessageId(), "text", {
         text: "Logged in successfully",
-      }, "info", undefined, "shown"),
+      }, { sourceMessageId, sequenceNumber: 0, isFinal: false }),
       botMessage(generateMessageId(), "text", {
         text: "Shortlisted this property",
-      }),
+      }, { sourceMessageId, sequenceNumber: 1, isFinal: true }),
     ];
   }
 
@@ -75,10 +83,10 @@ export function getNextBotEvents(
     return [
       botMessage(generateMessageId(), "text", {
         text: "Logged in successfully",
-      }, "info", undefined, "shown"),
+      }, { sourceMessageId, sequenceNumber: 0, isFinal: false }),
       botMessage(generateMessageId(), "text", {
         text: "Shortlisted this property",
-      }),
+      }, { sourceMessageId, sequenceNumber: 1, isFinal: true }),
     ];
   }
 
@@ -86,17 +94,15 @@ export function getNextBotEvents(
   if (messageType === "user_action" && data?.actionId === "shortlist") {
     return [
       botMessage(generateMessageId(), "template", {
-        preText: "You need to login first.",
         templateId: "login_screen",
         data: {},
         fallbackText: "Please enter your phone number, so that I can send OTP for login",
-      }),
+      }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
     ];
   }
 
   // User action: contact (msg_002) -> 4.9 seller_info
   if (messageType === "user_action" && data?.actionId === "contact") {
-    const propertyId = (data.propertyId as string) || "p1";
     const seller = MOCK_SELLERS.s1;
     const phone = seller?.phone || "+9198989898";
     const name = seller?.name || "Nadeem";
@@ -105,7 +111,6 @@ export function getNextBotEvents(
         generateMessageId(),
         "template",
         {
-          preText: `### Here are contact details of **${name}**`,
           templateId: "seller_info",
           data: {
             id: "s1",
@@ -115,8 +120,12 @@ export function getNextBotEvents(
           },
           fallbackText: `**Here are contact details of ${name}.** 📞 [Call ${phone}](tel:${phone.replace(/\s/g, "")})`,
         },
-        "message",
-        [{ id: "call_now", label: "Call Now", replyType: "hidden", scope: "message" }]
+        {
+          sourceMessageId,
+          sequenceNumber: 0,
+          isFinal: true,
+          actions: [{ id: "call_now", label: "Call Now", replyType: "hidden", scope: "message" }],
+        }
       ),
     ];
   }
@@ -134,7 +143,6 @@ export function getNextBotEvents(
         generateMessageId(),
         "template",
         {
-          preText: `### Here's all you need to know about ${loc.name.toLowerCase()} ${loc.city.toLowerCase()}`,
           templateId: "locality_info",
           data: {
             id: loc.id,
@@ -150,14 +158,18 @@ export function getNextBotEvents(
           },
           fallbackText: `**Here's all you need to know about ${loc.name} ${loc.city}.** ${loc.description} Few highlights: ${loc.highlights.join(", ")}. Pros: ${loc.pros.join(", ")}. Cons: ${loc.cons.join(", ")}. Price trend: ${trendStr}.`,
         },
-        "message",
-        [{ id: "show_reviews", label: "Show review", replyType: "visible", scope: "message" }]
+        {
+          sourceMessageId,
+          sequenceNumber: 0,
+          isFinal: true,
+          actions: [{ id: "show_reviews", label: "Show review", replyType: "visible", scope: "message" }],
+        }
       ),
     ];
   }
 
   // User text
-  if (eventType !== "message" || messageType !== "text" || !content?.text) {
+  if (messageType !== "text" || !content?.text) {
     return [];
   }
   const text = content.text;
@@ -167,7 +179,7 @@ export function getNextBotEvents(
     return [
       botMessage(generateMessageId(), "markdown", {
         text: "Hey! I see you're looking for **residential properties** to **buy**. How can I help?",
-      }),
+      }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
     ];
   }
 
@@ -179,17 +191,19 @@ export function getNextBotEvents(
         generateMessageId(),
         "template",
         {
-          preText: "### Properties you may like",
           templateId: "property_carousel",
           data: { properties },
           fallbackText: `**P1**: ${MOCK_PROPERTIES[0]?.title}  **P2**: ${MOCK_PROPERTIES[1]?.title}`,
-          followUpText: "<i>Tap a card to take action</i>",
         },
-        "message",
-        [
-          { id: "shortlist", label: "Shortlist", replyType: "visible", scope: "template_item" },
-          { id: "contact", label: "Contact Seller", replyType: "visible", scope: "template_item" },
-        ]
+        {
+          sourceMessageId,
+          sequenceNumber: 0,
+          isFinal: true,
+          actions: [
+            { id: "shortlist", label: "Shortlist", replyType: "visible", scope: "template_item" },
+            { id: "contact", label: "Contact Seller", replyType: "visible", scope: "template_item" },
+          ],
+        }
       ),
     ];
   }
@@ -199,7 +213,7 @@ export function getNextBotEvents(
     return [
       botMessage(generateMessageId(), "text", {
         text: "Can't help you with that, do you need anything else?",
-      }),
+      }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
     ];
   }
 
@@ -220,7 +234,7 @@ export function getNextBotEvents(
           quarters: MOCK_PRICE_TREND_SECTOR_32_GURGAON,
         },
         fallbackText,
-      }),
+      }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
     ];
   }
 
@@ -231,12 +245,11 @@ export function getNextBotEvents(
         generateMessageId(),
         "template",
         {
-          preText: "### Which sector 32 are you referring to?",
           templateId: "list_selection",
           data: { properties: SECTOR_OPTIONS },
           fallbackText: "**Which sector 32 are you referring to?**: sector 32 gurgaon or sector 32 faridabad",
-          followUpText: "<i>Select a card to take action</i>",
-        }
+        },
+        { sourceMessageId, sequenceNumber: 0, isFinal: true }
       ),
     ];
   }
@@ -248,12 +261,11 @@ export function getNextBotEvents(
         generateMessageId(),
         "template",
         {
-          preText: "### Are you looking for rent or buy? or don't care, and what generic info about locality?",
           templateId: "list_selection",
           data: { properties: RENT_BUY_OPTIONS },
           fallbackText: "**Are you looking for rent or buy? or don't care?**",
-          followUpText: "<i>Select a card to take action</i>",
-        }
+        },
+        { sourceMessageId, sequenceNumber: 0, isFinal: true }
       ),
     ];
   }
@@ -262,6 +274,6 @@ export function getNextBotEvents(
   return [
     botMessage(generateMessageId(), "text", {
       text: "Can't help you with that, do you need anything else?",
-    }),
+    }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
   ];
 }

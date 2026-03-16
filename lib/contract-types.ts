@@ -1,13 +1,11 @@
 // Chat API Contract v1.0 types
 
-export type EventType = "message" | "info";
 export type MessageType =
   | "context"
   | "text"
   | "template"
   | "user_action"
   | "markdown"
-  | "html"
   | "analytics";
 export type SenderType = "user" | "bot" | "system";
 export type ReplyType = "visible" | "hidden";
@@ -29,15 +27,22 @@ export interface ChatPayloadContent {
   text?: string;
   templateId?: string;
   data?: Record<string, unknown>;
-  preText?: string;
   fallbackText?: string;
-  followUpText?: string;
   derivedLabel?: string;
 }
 
 export interface ChatPayload {
   messageId?: string;
+  /** BE-generated ID relayed to ML; ML echoes on all response messages for turn correlation. Required for bot. */
+  sourceMessageId?: string;
+  /** 0-based index within response sequence. Required for bot. */
+  sequenceNumber?: number;
+  /** true = last message in response sequence. Required for bot. */
+  isFinal?: boolean;
+  /** Applies to user text (always true) and user_action (conditional). */
+  responseRequired?: boolean;
   messageType: MessageType;
+  /** Only for user_action. Hidden by default; 'shown' renders derivedLabel as user bubble. */
   visibility?: "shown" | "hidden";
   content: ChatPayloadContent;
   actions?: ChatAction[];
@@ -46,7 +51,6 @@ export interface ChatPayload {
 export interface ChatEvent {
   eventId?: string;
   conversationId?: string;
-  eventType: EventType;
   loginAuthToken?: string;
   sender: Sender;
   payload: ChatPayload;
