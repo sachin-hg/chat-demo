@@ -23,7 +23,7 @@ It is intended to be committed directly into a repository and used as the single
 - **Every bot message MUST have `messageId`, `sourceMessageId`, `sequenceNumber`, and `isFinal`**
 - **`sourceMessageId`** ties all bot response messages back to the user message that triggered them
 - **`user_action` visibility**: hidden by default — only rendered when `visibility === "shown"` and `derivedLabel` is set
-- **`responseRequired`** on `user_action`: tells ML whether to generate a response for this action
+- **`responseRequired`** on `user_action` and user `text`: tells ML whether to generate a response — always `true` for user text, conditional for user_action
 - **Templates are FE-owned** (custom rendering is allowed and expected)
 - **Templates MUST provide a `fallbackText`** *(Phase 2 — not rendered in Phase 1)*
 - **Analytics & context are never rendered**
@@ -81,7 +81,7 @@ It is intended to be committed directly into a repository and used as the single
 
         "responseRequired": {
           "type": "boolean",
-          "description": "Only used on user_action messages. true = ML should generate a response to this action. false or absent = fire-and-forget, ML does not need to reply."
+          "description": "Applicable to user text messages and user_action messages. true = ML should generate a response. false or absent = fire-and-forget, ML does not need to reply. User text messages should always set this to true. For user_action, depends on whether the action requires ML to react."
         },
 
         "messageType": {
@@ -301,6 +301,7 @@ It is intended to be committed directly into a repository and used as the single
   "sender": { "type": "user" },
   "payload": {
     "messageType": "text",
+    "responseRequired": true,
     "content": { "text": "hi. tell me about modiji" }
   }
 }
@@ -335,6 +336,7 @@ It is intended to be committed directly into a repository and used as the single
   "sender": { "type": "user" },
   "payload": {
     "messageType": "text",
+    "responseRequired": true,
     "content": { "text": "show me properties" }
   }
 }
@@ -565,6 +567,7 @@ It is intended to be committed directly into a repository and used as the single
   "sender": { "type": "user" },
   "payload": {
     "messageType": "text",
+    "responseRequired": true,
     // "messageId": "msg_0023e423",
     "content": { "text": "shortlist this property as well" }
   }
@@ -607,6 +610,7 @@ It is intended to be committed directly into a repository and used as the single
   "sender": { "type": "user" },
   "payload": {
     "messageType": "text",
+    "responseRequired": true,
     "content": { "text": "can you tell me where this seller lives?" }
   }
 }
@@ -641,6 +645,7 @@ It is intended to be committed directly into a repository and used as the single
   "sender": { "type": "user" },
   "payload": {
     "messageType": "text",
+    "responseRequired": true,
     "content": { "text": "can you tell me about sector 32, sector 21?" }
   }
 }
@@ -771,6 +776,7 @@ It is intended to be committed directly into a repository and used as the single
   "sender": { "type": "user" },
   "payload": {
     "messageType": "text",
+    "responseRequired": true,
     "content": {
       "text": "buy"
     }
@@ -907,6 +913,7 @@ It is intended to be committed directly into a repository and used as the single
   "sender": { "type": "user" },
   "payload": {
     "messageType": "text",
+    "responseRequired": true,
     "content": {
       "text": "Can you show me the brochure of this property?"
     }
@@ -984,6 +991,7 @@ It is intended to be committed directly into a repository and used as the single
   "sender": { "type": "user" },
   "payload": {
     "messageType": "text",
+    "responseRequired": true,
     "content": {
       "text": "Can you show trending localities?"
     }
@@ -1108,6 +1116,7 @@ response will be same as ``4.5`` ```property_carousel```
   "sender": { "type": "user" },
   "payload": {
     "messageType": "text",
+    "responseRequired": true,
     "content": {
       "text": "show me properties around me?"
     }
