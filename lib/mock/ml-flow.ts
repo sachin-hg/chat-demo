@@ -53,58 +53,46 @@ function matchText(text: string, ...options: string[]): boolean {
   return options.some((o) => t.includes(normalizeText(o)) || normalizeText(o).includes(t));
 }
 
-/**
- * Given the latest user (or system) event and recent message history,
- * returns the next bot event(s) to append. Implements flow 4.1–4.18.
- */
 export function getNextBotEvents(
   userEvent: ChatEvent,
   recentEvents: ChatEvent[]
 ): Omit<ChatEvent, "eventId" | "createdAt">[] {
-  const { sender, payload } = userEvent;
+  const { payload } = userEvent;
   const messageType = payload.messageType;
   const content = payload.content;
   const data = content?.data as Record<string, unknown> | undefined;
   const sourceMessageId = payload.messageId;
 
-  // Analytics: logged_in -> 4.7 shortlisted
-  if (messageType === "analytics" && data?.action === "logged_in") {
+  // user_action: logged_in
+  if (
+    (messageType === "analytics" && data?.action === "logged_in") ||
+    (messageType === "user_action" && data?.actionId === "logged_in")
+  ) {
     return [
       botMessage(generateMessageId(), "text", {
-        text: "Logged in successfully",
+        text: "You have been logged in",
       }, { sourceMessageId, sequenceNumber: 0, isFinal: false }),
       botMessage(generateMessageId(), "text", {
-        text: "Shortlisted this property",
+        text: "Shortlisted this property for you!",
       }, { sourceMessageId, sequenceNumber: 1, isFinal: true }),
     ];
   }
 
-  if (messageType === "user_action" && data?.actionId === "logged_in") {
-    return [
-      botMessage(generateMessageId(), "text", {
-        text: "Logged in successfully",
-      }, { sourceMessageId, sequenceNumber: 0, isFinal: false }),
-      botMessage(generateMessageId(), "text", {
-        text: "Shortlisted this property",
-      }, { sourceMessageId, sequenceNumber: 1, isFinal: true }),
-    ];
-  }
-
-  // User action: shortlist (msg_002) -> 4.6 login_screen
+  // user_action: shortlist -> login_screen
   if (messageType === "user_action" && data?.actionId === "shortlist") {
     return [
       botMessage(generateMessageId(), "template", {
         templateId: "login_screen",
         data: {},
-        fallbackText: "Please enter your phone number, so that I can send OTP for login",
+        fallbackText: "Please enter your phone number to login and shortlist this property.",
       }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
     ];
   }
 
-  // User action: contact (msg_002) -> 4.9 seller_info
+  // user_action: contact -> seller_info + confirmation
   if (messageType === "user_action" && data?.actionId === "contact") {
     const seller = MOCK_SELLERS.s1;
-    const phone = seller?.phone || "+9198989898";
+    const phone = seller?.phone || "+91 98989 89898";
     const name = seller?.name || "Nadeem";
     return [
       botMessage(
@@ -123,21 +111,23 @@ export function getNextBotEvents(
         {
           sourceMessageId,
           sequenceNumber: 0,
-          isFinal: true,
+          isFinal: false,
           actions: [{ id: "call_now", label: "Call Now", replyType: "hidden", scope: "message" }],
         }
       ),
+      botMessage(generateMessageId(), "text", {
+        text: "The property owner has been contacted, someone will reach out to you soon!",
+      }, { sourceMessageId, sequenceNumber: 1, isFinal: true }),
     ];
   }
 
-  // User action: select pill (msg_007) -> 4.18 locality_info
+  // user_action: select pill from list_selection
   if (messageType === "user_action" && data?.selectedId) {
     const loc = MOCK_LOCALITIES[0];
     if (!loc) return [];
-    const trendStr =
-      loc.priceTrend >= 0
-        ? `+${loc.priceTrend}% in last 1 year`
-        : `${loc.priceTrend}% in last 1 year`;
+    const trendStr = loc.priceTrend >= 0
+      ? `+${loc.priceTrend}% YoY`
+      : `${loc.priceTrend}% YoY`;
     return [
       botMessage(
         generateMessageId(),
@@ -145,18 +135,23 @@ export function getNextBotEvents(
         {
           templateId: "locality_info",
           data: {
-            id: loc.id,
-            name: loc.name,
-            city: loc.city,
-            image: loc.image,
-            description: loc.description,
-            highlights: loc.highlights,
-            pros: loc.pros,
-            cons: loc.cons,
-            priceTrend: loc.priceTrend,
-            priceTrendLabel: trendStr,
+            localities: [
+              {
+                id: loc.id,
+                name: loc.name,
+                city: loc.city,
+                image: loc.image,
+                description: loc.description,
+                highlights: loc.highlights,
+                pros: loc.pros,
+                cons: loc.cons,
+                priceTrend: loc.priceTrend,
+                priceTrendLabel: trendStr,
+                rating: loc.rating,
+              },
+            ],
           },
-          fallbackText: `**Here's all you need to know about ${loc.name} ${loc.city}.** ${loc.description} Few highlights: ${loc.highlights.join(", ")}. Pros: ${loc.pros.join(", ")}. Cons: ${loc.cons.join(", ")}. Price trend: ${trendStr}.`,
+          fallbackText: `**${loc.name}, ${loc.city}** — ${loc.description} Price trend: ${trendStr}.`,
         },
         {
           sourceMessageId,
@@ -169,12 +164,10 @@ export function getNextBotEvents(
   }
 
   // User text
-  if (messageType !== "text" || !content?.text) {
-    return [];
-  }
+  if (messageType !== "text" || !content?.text) return [];
   const text = content.text;
 
-  // First message / hi -> 4.3
+  // hi/hello
   if (matchText(text, "hi", "hello", "hey")) {
     return [
       botMessage(generateMessageId(), "markdown", {
@@ -183,9 +176,18 @@ export function getNextBotEvents(
     ];
   }
 
-  // show me properties -> 4.5
-  if (matchText(text, "show me properties", "properties", "list")) {
-    const properties = MOCK_PROPERTIES.map((p) => ({ id: p.id, title: p.title }));
+  // show properties
+  if (matchText(text, "show me properties", "properties", "list", "show properties")) {
+    const properties = MOCK_PROPERTIES.slice(0, 2).map((p) => ({
+      id: p.id,
+      title: p.title,
+      projectName: p.projectName,
+      tags: p.tags,
+      image: p.image,
+      priceFormatted: p.priceFormatted,
+      builtUpArea: p.builtUpArea,
+      locationFormatted: p.locationFormatted,
+    }));
     return [
       botMessage(
         generateMessageId(),
@@ -193,7 +195,7 @@ export function getNextBotEvents(
         {
           templateId: "property_carousel",
           data: { properties },
-          fallbackText: `**P1**: ${MOCK_PROPERTIES[0]?.title}  **P2**: ${MOCK_PROPERTIES[1]?.title}`,
+          fallbackText: `**${MOCK_PROPERTIES[0]?.title}** — ${MOCK_PROPERTIES[0]?.priceFormatted}, ${MOCK_PROPERTIES[0]?.locationFormatted}`,
         },
         {
           sourceMessageId,
@@ -208,7 +210,7 @@ export function getNextBotEvents(
     ];
   }
 
-  // Random query (seller address etc.) -> 4.12
+  // random query
   if (matchText(text, "where this seller lives", "seller lives", "address")) {
     return [
       botMessage(generateMessageId(), "text", {
@@ -217,7 +219,7 @@ export function getNextBotEvents(
     ];
   }
 
-  // price trend (locality) -> price_trend template (not implemented in FE; fallback only)
+  // price trend
   if (matchText(text, "price trend", "price trends") && matchText(text, "sector 32 gurgaon", "gurgaon", "32 gurgaon")) {
     const localityName = "Sector 32, Gurgaon";
     const rows = MOCK_PRICE_TREND_SECTOR_32_GURGAON.map(
@@ -238,7 +240,7 @@ export function getNextBotEvents(
     ];
   }
 
-  // sector 32 -> 4.14
+  // sector 32
   if (matchText(text, "sector 32", "sector 32?")) {
     return [
       botMessage(
@@ -246,15 +248,19 @@ export function getNextBotEvents(
         "template",
         {
           templateId: "list_selection",
-          data: { properties: SECTOR_OPTIONS },
-          fallbackText: "**Which sector 32 are you referring to?**: sector 32 gurgaon or sector 32 faridabad",
+          data: {
+            title: "Did you mean one of these?",
+            items: SECTOR_OPTIONS,
+            canSkip: true,
+          },
+          fallbackText: "Which Sector 32 are you referring to? Gurgaon or Faridabad?",
         },
         { sourceMessageId, sequenceNumber: 0, isFinal: true }
       ),
     ];
   }
 
-  // faridabad (user types instead of selection) -> 4.16
+  // faridabad
   if (matchText(text, "faridabad")) {
     return [
       botMessage(
@@ -262,18 +268,43 @@ export function getNextBotEvents(
         "template",
         {
           templateId: "list_selection",
-          data: { properties: RENT_BUY_OPTIONS },
-          fallbackText: "**Are you looking for rent or buy? or don't care?**",
+          data: {
+            title: "Are you looking to rent or buy?",
+            items: RENT_BUY_OPTIONS,
+            canSkip: false,
+          },
+          fallbackText: "Are you looking for rent or buy?",
         },
         { sourceMessageId, sequenceNumber: 0, isFinal: true }
       ),
     ];
   }
 
-  // Default / unknown -> 4.12 style
+  // localities / trending
+  if (matchText(text, "localities", "locality", "trending", "top localities")) {
+    return [
+      botMessage(
+        generateMessageId(),
+        "template",
+        {
+          templateId: "locality_info",
+          data: {
+            localities: MOCK_LOCALITIES.map((loc) => ({
+              ...loc,
+              priceTrendLabel: loc.priceTrend >= 0 ? `+${loc.priceTrend}% YoY` : `${loc.priceTrend}% YoY`,
+            })),
+          },
+          fallbackText: `Top localities: ${MOCK_LOCALITIES.map(l => l.name).join(", ")}`,
+        },
+        { sourceMessageId, sequenceNumber: 0, isFinal: true }
+      ),
+    ];
+  }
+
+  // Default
   return [
     botMessage(generateMessageId(), "text", {
-      text: "Can't help you with that, do you need anything else?",
+      text: "I can help you find properties! Try asking me to 'show me properties' or ask about localities.",
     }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
   ];
 }
