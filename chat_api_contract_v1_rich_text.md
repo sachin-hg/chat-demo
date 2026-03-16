@@ -6,6 +6,7 @@ It is intended to be committed directly into a repository and used as the single
 > **Update Summary**
 > - `preText` and `followUpText` have been **removed** from the contract.
 > - `eventType` has been **removed** — it was redundant; rendering intent is fully derivable from `sender.type` + `messageType`.
+> - `info` messageType added — hidden by default; rendered only when `visibility === "shown"` is explicitly set.
 > - `fallbackText` and `actions` are **kept in schema and examples but deferred to Phase 2** — not implemented in Phase 1.
 > - `fallbackText` may contain **plain text, Markdown, or HTML**. HTML is not preferred — limit to Markdown where possible.
 > - Schema descriptions, examples, and FE renderer pseudocode have been updated accordingly.
@@ -14,7 +15,7 @@ It is intended to be committed directly into a repository and used as the single
 
 ## 0. Core Principles (v1.0)
 
-- **One primary enum**: `messageType`: `context | text | template | user_action | markdown | html | analytics`
+- **One primary enum**: `messageType`: `context | text | template | user_action | markdown | html | analytics | info`
 - **Every bot message MUST have `messageId`**
 - **Every user_action MUST reference the originating `messageId`**
 - **Templates are FE-owned** (custom rendering is allowed and expected)
@@ -65,14 +66,15 @@ It is intended to be committed directly into a repository and used as the single
             "user_action",
             "markdown",
             "html",
-            "analytics"
+            "analytics",
+            "info"
           ]
         },
 
         "visibility": {
           "type": "string",
           "enum": ["shown", "hidden"],
-          "description": "Controls rendering visibility. Applicable to any event where FE should suppress display."
+          "description": "Only meaningful for messageType = info. info messages are hidden by default; set to 'shown' to render them."
         },
 
         "content": {
@@ -177,6 +179,7 @@ It is intended to be committed directly into a repository and used as the single
 | template | ❌ | ✅ | ❌ |
 | user_action | ✅ | ❌ | ❌ |
 | analytics | ❌ | ⚠️ | ✅ |
+| info | ❌ | ✅ | ✅ |
 
 ---
 
@@ -185,8 +188,9 @@ It is intended to be committed directly into a repository and used as the single
 | Condition | FE Behavior |
 |---------|-------------|
 | messageType = analytics | Never render |
-| visibility != shown | Do not render |
 | messageType = context | Do not render |
+| messageType = info AND visibility != shown | Do not render (hidden by default) |
+| messageType = info AND visibility = shown | Render as rich text |
 | template supported | Render template |
 | template unsupported | Render fallbackText (rich text) — **[Phase 2]** |
 | markdown/html | Safe render |
@@ -246,14 +250,33 @@ It is intended to be committed directly into a repository and used as the single
 
 ---
 
-### 4.1.1 Info Message
+### 4.1.1 Info Message (hidden by default)
 
 ```json
 {
-  "sender": { "type": "system" },
+  "sender": { "type": "bot" },
   "payload": {
-    "messageType": "context",
+    "messageId": "msg_info_01",
+    "messageType": "info",
+    // no visibility field → hidden by default, FE does not render
     "content": {
+      "text": "User has already seen this locality before."
+    }
+  }
+}
+```
+
+### 4.1.2 Info Message (explicitly shown)
+
+```json
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageId": "msg_info_02",
+    "messageType": "info",
+    "visibility": "shown", // explicitly shown → FE renders as rich text
+    "content": {
+      "text": "**Heads up:** You've shortlisted 5 properties. [View shortlist](#)"
     }
   }
 }
@@ -658,7 +681,7 @@ function renderEvent(event) {
 
   if (payload.messageType === "analytics") return;
   if (payload.messageType === "context") return;
-  if (payload.visibility !== "shown") return;
+  if (payload.messageType === "info" && payload.visibility !== "shown") return;
 
   switch (payload.messageType) {
     case "text":
@@ -688,6 +711,11 @@ function renderEvent(event) {
 
     case "user_action":
       renderUserBubble(payload.content.derivedLabel);
+      break;
+
+    case "info":
+      // only reached if visibility === "shown" (guarded above)
+      renderRichText(payload.content.text);
       break;
   }
 
