@@ -6,6 +6,10 @@ export default {
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
-  theme: { extend: {} },
+  theme: {
+    extend: {
+      fontFamily: { rubik: ["var(--font-rubik)", "Rubik", "sans-serif"] },
+    },
+  },
   plugins: [],
 } satisfies Config;

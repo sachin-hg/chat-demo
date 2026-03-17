@@ -18,10 +18,12 @@ interface Locality {
 
 interface Props {
   data: Record<string, unknown>;
+  messageId?: string;
+  onAction?: (actionId: string, localityId: string, messageId: string, derivedLabel: string) => void;
+  disabled?: boolean;
 }
 
-export function LocalityInfo({ data }: Props) {
-  // Support both {localities: [...]} and single locality object
+export function LocalityInfo({ data, messageId = "", onAction, disabled = false }: Props) {
   const localities: Locality[] = Array.isArray((data as { localities?: unknown[] }).localities)
     ? ((data as { localities: Locality[] }).localities)
     : [data as Locality];
@@ -29,59 +31,67 @@ export function LocalityInfo({ data }: Props) {
   return (
     <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4" style={{ scrollSnapType: "x mandatory" }}>
       {localities.map((loc, idx) => {
+        const locId = loc.id ?? `loc_${idx}`;
         const name = loc.name ?? "";
         const city = loc.city ?? "";
         const image = loc.image ?? "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=400";
         const trend = loc.priceTrend ?? 0;
         const rating = loc.rating ?? 4;
         const isUp = trend >= 0;
+        const displayName = name || city || "Locality";
 
         return (
           <div
-            key={loc.id ?? idx}
-            className="flex-shrink-0 w-[200px] rounded-2xl bg-white border border-[#E8E8E8] overflow-hidden"
+            key={locId}
+            className="flex-shrink-0 w-[262px] rounded-[24px] bg-white border border-[#e1e2e8] overflow-hidden"
             style={{ scrollSnapAlign: "start" }}
           >
-            <div className="relative h-[110px] bg-gray-100">
-              <Image src={image} alt={name} fill className="object-cover" unoptimized sizes="200px" />
+            <div className="relative h-[160px] bg-gray-100 rounded-t-[24px] overflow-hidden">
+              <Image src={image} alt={name} fill className="object-cover" unoptimized sizes="262px" />
             </div>
-            <div className="p-3">
-              <p className="font-semibold text-sm text-[#111]">{name}</p>
-              <p className="text-xs text-[#767676]">{city}</p>
+            <div className="p-4">
+              <p className="font-semibold text-sm text-[#111]">{name || "Locality"}</p>
 
-              <div className="flex gap-4 mt-2">
-                <div>
-                  <p className="text-[10px] text-[#767676] mb-0.5">Rating</p>
+              <div className="flex gap-3 mt-3">
+                <div className="flex-1 min-w-0 rounded-xl bg-[#FAFAFA] border border-[#e1e2e8] p-2.5">
+                  <p className="text-[11px] font-normal text-[#767676] mb-1">Rating</p>
                   <div className="flex items-center gap-0.5">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="#F59E0B">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="#F59E0B" className="shrink-0">
                       <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                     </svg>
-                    <span className="text-xs font-semibold text-[#111]">{rating}/5</span>
+                    <span className="text-sm font-normal text-[#111]">{rating}/5</span>
                   </div>
                 </div>
-                <div>
-                  <p className="text-[10px] text-[#767676] mb-0.5">Growth</p>
-                  <p className={`text-xs font-semibold flex items-center gap-0.5 ${isUp ? "text-green-600" : "text-red-500"}`}>
+                <div className="flex-1 min-w-0 rounded-xl bg-[#FAFAFA] border border-[#e1e2e8] p-2.5">
+                  <p className="text-[11px] font-normal text-[#767676] mb-1">Growth</p>
+                  <div className="flex items-center gap-0.5">
                     {isUp ? (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 14l5-5 5 5z" /></svg>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="#2E7D32" className="shrink-0">
+                        <path d="M12 4L4 20h16L12 4z" />
+                      </svg>
                     ) : (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z" /></svg>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="#C62828" className="shrink-0">
+                        <path d="M12 20L4 4h16l-8 16z" />
+                      </svg>
                     )}
-                    {Math.abs(trend)}% YoY
-                  </p>
+                    <span className="text-sm font-normal text-[#111]">{Math.abs(trend)}% YoY</span>
+                  </div>
                 </div>
               </div>
-
-              <div className="flex flex-col gap-1.5 mt-3">
+              <div className="flex flex-col gap-2 mt-4">
                 <button
                   type="button"
-                  className="w-full py-2 rounded-xl bg-[#6033EE] text-white text-xs font-semibold hover:bg-[#4f27d4] transition-colors"
+                  disabled={disabled}
+                  onClick={() => onAction?.("show_properties_in_locality", locId, messageId, `Show properties in ${displayName}`)}
+                  className="w-full h-12 rounded-lg bg-[#5E23DC] text-white text-sm font-medium hover:bg-[#4a1bb5] transition-colors disabled:opacity-40 flex items-center justify-center"
                 >
                   Show properties
                 </button>
                 <button
                   type="button"
-                  className="w-full py-2 rounded-xl border border-[#6033EE] text-[#6033EE] text-xs font-semibold hover:bg-[#EDE8FF] transition-colors"
+                  disabled={disabled}
+                  onClick={() => onAction?.("learn_more_about_locality", locId, messageId, `Learn more about ${displayName}`)}
+                  className="w-full h-12 rounded-lg border border-[#5E23DC] text-[#5E23DC] text-sm font-medium hover:bg-[#5E23DC]/[0.06] transition-colors disabled:opacity-40 flex items-center justify-center"
                 >
                   Learn more
                 </button>

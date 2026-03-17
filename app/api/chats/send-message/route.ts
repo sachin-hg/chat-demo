@@ -46,6 +46,5 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     eventId: stored.eventId,
     requestId: requestRecord.requestId,
-    expectResponse: event?.payload?.responseRequired === true,
   });
 }

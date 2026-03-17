@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import type { ChatAction } from "@/lib/contract-types";
 import { MOCK_PROPERTIES } from "@/lib/mock/data";
 
 interface PropertyItem {
@@ -18,22 +17,19 @@ interface PropertyItem {
 
 interface Props {
   properties: PropertyItem[];
-  actions?: ChatAction[];
   onAction: (actionId: string, propertyId: string, messageId: string, derivedLabel: string) => void;
   messageId: string;
   disabled?: boolean;
   onToast?: (message: string) => void;
 }
 
-export function PropertyCarousel({ properties, actions, onAction, messageId, disabled = false, onToast }: Props) {
+export function PropertyCarousel({ properties, onAction, messageId, disabled = false, onToast }: Props) {
   const [shortlisted, setShortlisted] = useState<Set<string>>(new Set());
 
   const items = properties.map((p) => {
     const full = MOCK_PROPERTIES.find((x) => x.id === p.id);
     return { ...full, ...p } as PropertyItem & { id: string };
   });
-
-  const contactAction = actions?.find((a) => a.id === "contact");
 
   return (
     <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4" style={{ scrollSnapType: "x mandatory" }}>
@@ -44,15 +40,15 @@ export function PropertyCarousel({ properties, actions, onAction, messageId, dis
         return (
           <div
             key={p.id}
-            className="flex-shrink-0 w-[240px] rounded-2xl bg-white border border-[#E8E8E8] overflow-hidden"
+            className="flex-shrink-0 w-[262px] rounded-[24px] bg-white border border-[#e1e2e8] overflow-hidden"
             style={{ scrollSnapAlign: "start" }}
           >
-            {/* Image + heart */}
-            <div className="relative h-[150px] bg-gray-100">
-              <Image src={imgSrc} alt={p.title ?? "Property"} fill className="object-cover" sizes="240px" unoptimized />
+            {/* Image – scout 262×160, radius top only */}
+            <div className="relative h-[160px] bg-gray-100 rounded-t-[24px] overflow-hidden">
+              <Image src={imgSrc} alt={p.title ?? "Property"} fill className="object-cover" sizes="262px" unoptimized />
               <button
                 type="button"
-                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-white/90 flex items-center justify-center shadow-sm"
+                className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white border border-[#e1e2e8] flex items-center justify-center"
                 onClick={() => {
                   if (disabled) return;
                   setShortlisted((prev) => {
@@ -62,7 +58,7 @@ export function PropertyCarousel({ properties, actions, onAction, messageId, dis
                     } else {
                       next.add(p.id);
                       onToast?.("Property has been shortlisted");
-                      onAction("shortlist", p.id, messageId, `Shortlist ${p.title ?? p.projectName ?? ""}`);
+                      onAction("shortlist", p.id, messageId, "You've shortlisted this property. Check it out in User Profile → Saved properties");
                     }
                     return next;
                   });
@@ -80,16 +76,26 @@ export function PropertyCarousel({ properties, actions, onAction, messageId, dis
               </button>
             </div>
 
-            {/* Card body */}
-            <div className="p-3">
-              {/* Tags */}
+            {/* Card body – scout 16px padding */}
+            <div className="p-4">
+              {/* Tags – scout: RERA #edfff8 #0f8458, status #f2f3f8 #656565 */}
               {p.tags && p.tags.length > 0 && (
-                <div className="flex gap-1 mb-2 flex-wrap">
-                  {p.tags.map((tag) => (
-                    <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded border border-green-600 text-green-700 font-medium leading-tight">
-                      {tag}
-                    </span>
-                  ))}
+                <div className="flex gap-2 mb-4 flex-wrap">
+                  {p.tags.map((tag) => {
+                    const isRera = /rera/i.test(tag);
+                    return (
+                      <span
+                        key={tag}
+                        className={`h-5 px-2 rounded-md text-[10px] font-medium flex items-center ${
+                          isRera
+                            ? "bg-[#edfff8] text-[#0f8458]"
+                            : "bg-[#f2f3f8] text-[#656565]"
+                        }`}
+                      >
+                        {tag}
+                      </span>
+                    );
+                  })}
                 </div>
               )}
 
@@ -119,28 +125,26 @@ export function PropertyCarousel({ properties, actions, onAction, messageId, dis
                 <p className="text-[15px] font-bold text-[#111] mt-2">{p.priceFormatted}</p>
               )}
 
-              <div className="flex gap-2 mt-3">
+              <div className="flex gap-2 mt-4">
                 <button
                   type="button"
                   disabled={disabled}
-                  onClick={() => !disabled && onAction("learn_more", p.id, messageId, `Learn more about ${p.projectName ?? p.title ?? ""}`)}
-                  className="flex-1 py-2 rounded-xl border border-[#6033EE] text-[#6033EE] text-xs font-semibold hover:bg-[#EDE8FF] transition-colors disabled:opacity-40"
+                  onClick={() => !disabled && onAction("learn_more_about_property", p.id, messageId, `Learn more about ${p.projectName ?? p.title ?? "this property"}`)}
+                  className="flex-1 h-12 min-w-0 rounded-lg border border-[#5E23DC] text-[#5E23DC] text-sm font-medium hover:bg-[#5E23DC]/[0.06] transition-colors disabled:opacity-40"
                 >
                   Learn more
                 </button>
-                {contactAction && (
-                  <button
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => !disabled && onAction("contact", p.id, messageId, `Contact Seller for ${p.projectName ?? p.title ?? ""}`)}
-                    className="flex-1 py-2 rounded-xl bg-[#6033EE] text-white text-xs font-semibold flex items-center justify-center gap-1 hover:bg-[#4f27d4] transition-colors disabled:opacity-40"
-                  >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
-                    </svg>
-                    Contact
-                  </button>
-                )}
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => !disabled && onAction("contact", p.id, messageId, "The seller has been contacted, someone will reach out to you soon!")}
+                  className="flex-1 h-12 min-w-0 rounded-lg bg-[#5E23DC] text-white text-sm font-medium flex items-center justify-center gap-1 hover:bg-[#4a1bb5] transition-colors disabled:opacity-40"
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
+                  </svg>
+                  Contact
+                </button>
               </div>
             </div>
           </div>

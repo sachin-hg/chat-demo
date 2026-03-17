@@ -6,19 +6,37 @@ import { RichText } from "./RichText";
 import { PropertyCarousel } from "./templates/PropertyCarousel";
 import { LoginScreen } from "./templates/LoginScreen";
 import { SellerInfo } from "./templates/SellerInfo";
-import { ListSelection } from "./templates/ListSelection";
+import { NestedQna } from "./templates/NestedQna";
+import type { NestedQnaSelection } from "./templates/NestedQna";
 import { LocalityInfo } from "./templates/LocalityInfo";
+import { PriceTrend } from "./templates/PriceTrend";
+import { DownloadBrochure } from "./templates/DownloadBrochure";
+import { ShareLocation } from "./templates/ShareLocation";
+import { ShortlistProperty } from "./templates/ShortlistProperty";
 
 interface ChatMessageProps {
   event: ChatEvent & { eventId?: string };
   onUserAction: (event: ChatEvent) => void;
   onLoginSuccess: () => void;
   onCallNow?: () => void;
+  onShareLocation?: () => void;
+  onDenyLocation?: () => void;
   actionsDisabled?: boolean;
   onToast?: (message: string) => void;
 }
 
-const TEMPLATES = ["property_carousel", "login_screen", "seller_info", "list_selection", "locality_info"] as const;
+const TEMPLATES = [
+  "property_carousel",
+  "login_screen",
+  "seller_info",
+  "locality_info",
+  "locality_carousel",
+  "price_trend",
+  "download_brochure",
+  "share_location",
+  "shortlist_property",
+  "nested_qna",
+] as const;
 function isTemplateSupported(id: string): id is (typeof TEMPLATES)[number] {
   return TEMPLATES.includes(id as (typeof TEMPLATES)[number]);
 }
@@ -153,11 +171,13 @@ export function ChatMessage({
   onUserAction,
   onLoginSuccess,
   onCallNow,
+  onShareLocation,
+  onDenyLocation,
   actionsDisabled = false,
   onToast,
 }: ChatMessageProps) {
   const { sender, payload } = event;
-  const { messageType, content, actions } = payload;
+  const { messageType, content } = payload;
   const isBot = sender.type === "bot";
   const isUser = sender.type === "user";
 
@@ -169,9 +189,9 @@ export function ChatMessage({
   if (messageType === "user_action") {
     if (payload.visibility === "shown" && content.derivedLabel) {
       return (
-        <div className="flex justify-end mb-2 px-4">
-          <div className="max-w-[80%] px-4 py-2.5 bg-white border border-[#E8E8E8] rounded-2xl rounded-br-sm shadow-sm">
-            <span className="text-sm text-[#111]">{content.derivedLabel}</span>
+        <div className="flex justify-end mb-2">
+          <div className="max-w-[75%] px-4 py-3 pl-3 bg-[var(--user-bubble)] border border-[var(--user-bubble-border)] rounded-[24px] shadow-sm">
+            <span className="text-sm text-[#222] leading-[1.35]">{content.derivedLabel}</span>
           </div>
         </div>
       );
@@ -179,13 +199,13 @@ export function ChatMessage({
     return null;
   }
 
-  // User text bubble (right-aligned, white pill)
+  // User text bubble (scout-bot: white, border #f5f5f5, radius 24px)
   if (isUser) {
     if (messageType === "text" && content.text) {
       return (
-        <div className="flex justify-end mb-2 px-4">
-          <div className="max-w-[80%] px-4 py-2.5 bg-white border border-[#E8E8E8] rounded-2xl rounded-br-sm shadow-sm">
-            <span className="text-sm text-[#111] whitespace-pre-wrap">{content.text}</span>
+        <div className="flex justify-end mb-2">
+          <div className="max-w-[75%] px-4 py-3 pl-3 bg-[var(--user-bubble)] border border-[var(--user-bubble-border)] rounded-[24px] shadow-sm">
+            <span className="text-sm text-[#222] leading-[1.35] whitespace-pre-wrap">{content.text}</span>
           </div>
         </div>
       );
@@ -199,17 +219,17 @@ export function ChatMessage({
   // Bot text
   if (messageType === "text" && content.text) {
     return (
-      <div className="mb-2 px-4">
-        <p className="text-sm text-[#111] leading-relaxed">{content.text}</p>
+      <div className="mb-2">
+        <p className="text-sm text-[#0a0a0a] leading-[1.35]">{content.text}</p>
         {showFeedback && <FeedbackRow onToast={onToast} />}
       </div>
     );
   }
 
-  // Bot markdown
+  // Bot markdown — no bubble per design; plain content with .rich-text typography
   if (messageType === "markdown" && content.text) {
     return (
-      <div className="mb-2 px-4">
+      <div className="mb-2">
         <RichText value={content.text} />
         {showFeedback && <FeedbackRow onToast={onToast} />}
       </div>
@@ -228,7 +248,6 @@ export function ChatMessage({
           body = (
             <PropertyCarousel
               properties={(data.properties as { id: string; title: string }[]) ?? []}
-              actions={actions}
               messageId={payload.messageId ?? ""}
               onAction={(actionId, propertyId, msgId, derivedLabel) =>
                 onUserAction({
@@ -237,7 +256,13 @@ export function ChatMessage({
                     messageType: "user_action",
                     responseRequired: true,
                     visibility: "shown",
-                    content: { data: { actionId, propertyId, messageId: msgId }, derivedLabel },
+                    content: {
+                      data:
+                        actionId === "learn_more_about_property"
+                          ? { action: actionId, messageId: msgId, property: { propertyId, service: "buy", category: "residential", type: "project" } }
+                          : { actionId, propertyId, messageId: msgId },
+                      derivedLabel,
+                    },
                   },
                 } as ChatEvent)
               }
@@ -257,39 +282,45 @@ export function ChatMessage({
             />
           );
           break;
-        case "list_selection": {
-          // Support both new format {title, items, canSkip} and old format {properties}
-          const listTitle = (data.title as string) ?? undefined;
-          const listItems = (data.items as { id: string; name: string; type: string; city: string }[]) ?? undefined;
+        case "nested_qna": {
+          const selections = (data as { selections?: NestedQnaSelection[] }).selections;
+          if (!Array.isArray(selections) || selections.length === 0) break;
           const canSkip = (data.canSkip as boolean) ?? false;
-          const legacyProps = (data.properties as { id: string; title: string }[]) ?? undefined;
           body = (
-            <ListSelection
-              title={listTitle}
-              items={listItems}
-              properties={legacyProps}
+            <NestedQna
+              selections={selections}
               canSkip={canSkip}
               messageId={payload.messageId ?? ""}
-              onSelect={(selectedId, msgId, derivedLabel) =>
+              onComplete={(payloadData, derivedLabel) =>
                 onUserAction({
                   sender: { type: "user" },
                   payload: {
                     messageType: "user_action",
                     responseRequired: true,
                     visibility: "shown",
-                    content: { data: { selectedId, messageId: msgId }, derivedLabel },
+                    content: {
+                      data: {
+                        action: payloadData.action,
+                        selections: payloadData.selections,
+                        messageId: payload.messageId,
+                      },
+                      derivedLabel,
+                    },
                   },
                 } as ChatEvent)
               }
-              onSkip={() =>
-                onUserAction({
-                  sender: { type: "user" },
-                  payload: {
-                    messageType: "user_action",
-                    responseRequired: false,
-                    content: { data: { actionId: "skip_list" } },
-                  },
-                } as ChatEvent)
+              onSkip={
+                canSkip
+                  ? () =>
+                      onUserAction({
+                        sender: { type: "user" },
+                        payload: {
+                          messageType: "user_action",
+                          responseRequired: false,
+                          content: { data: { actionId: "skip_list" } },
+                        },
+                      } as ChatEvent)
+                  : undefined
               }
               disabled={actionsDisabled}
             />
@@ -297,54 +328,61 @@ export function ChatMessage({
           break;
         }
         case "locality_info":
-          body = <LocalityInfo data={data} />;
+        case "locality_carousel":
+          body = (
+            <LocalityInfo
+              data={templateId === "locality_carousel" && data.localities != null ? { localities: data.localities } : data}
+              messageId={payload.messageId ?? ""}
+              onAction={(actionId, localityId, msgId, derivedLabel) =>
+                onUserAction({
+                  sender: { type: "user" },
+                  payload: {
+                    messageType: "user_action",
+                    responseRequired: true,
+                    visibility: "shown",
+                    content: {
+                      data: { action: actionId, locality: { localityUuid: localityId } },
+                      derivedLabel,
+                    },
+                  },
+                } as ChatEvent)
+              }
+              disabled={actionsDisabled}
+            />
+          );
+          break;
+        case "price_trend":
+          body = <PriceTrend data={data} />;
+          break;
+        case "download_brochure":
+          body = <DownloadBrochure data={data} />;
+          break;
+        case "share_location":
+          body = (
+            <ShareLocation
+              data={data}
+              onShareLocation={onShareLocation}
+              onDenyLocation={onDenyLocation}
+            />
+          );
+          break;
+        case "shortlist_property":
+          body = <ShortlistProperty data={data} />;
           break;
         default:
-          body = content.fallbackText ? <RichText value={content.fallbackText} /> : null;
+          body = null;
       }
     } else {
-      body = content.fallbackText ? <RichText value={content.fallbackText} /> : null;
+      body = null;
     }
-
-    const footerActions = actions?.filter((a) => a.scope === "message") ?? [];
 
     return (
       <div className="mb-2">
         <div className="px-0">
           {body}
         </div>
-        {footerActions.length > 0 && (
-          <div className="flex gap-2 mt-2 px-4 flex-wrap">
-            {footerActions.map((a) => (
-              <button
-                key={a.id}
-                type="button"
-                disabled={actionsDisabled}
-                onClick={() => {
-                  if (actionsDisabled) return;
-                  if (a.replyType === "hidden" && onCallNow) {
-                    onCallNow();
-                  } else if (a.replyType === "visible") {
-                    onUserAction({
-                      sender: { type: "user" },
-                      payload: {
-                        messageType: "user_action",
-                        responseRequired: true,
-                        visibility: "shown",
-                        content: { data: { actionId: a.id, messageId: payload.messageId ?? "" }, derivedLabel: a.label },
-                      },
-                    } as ChatEvent);
-                  }
-                }}
-                className="text-xs px-4 py-2 rounded-xl bg-[#6033EE] text-white font-medium disabled:opacity-50"
-              >
-                {a.label}
-              </button>
-            ))}
-          </div>
-        )}
         {showFeedback && (
-          <div className="px-4">
+          <div>
             <FeedbackRow onToast={onToast} />
           </div>
         )}

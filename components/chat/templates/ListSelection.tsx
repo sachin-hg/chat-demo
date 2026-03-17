@@ -9,20 +9,17 @@ interface SelectionItem {
 }
 
 interface Props {
-  // New format (from data.canSkip, data.items, data.title)
   title?: string;
   items?: SelectionItem[];
   canSkip?: boolean;
   onSkip?: () => void;
-  // Old format backward compat
-  properties?: SelectionItem[];
   onSelect: (selectedId: string, messageId: string, derivedLabel: string) => void;
   messageId: string;
   disabled?: boolean;
 }
 
-export function ListSelection({ title, items, canSkip, onSkip, properties, onSelect, messageId, disabled = false }: Props) {
-  const allItems = items ?? properties ?? [];
+export function ListSelection({ title, items, canSkip, onSkip, onSelect, messageId, disabled = false }: Props) {
+  const allItems = items ?? [];
   const cardTitle = title ?? "Did you mean one of these?";
 
   return (
@@ -58,14 +55,17 @@ export function ListSelection({ title, items, canSkip, onSkip, properties, onSel
         })}
       </div>
       {canSkip && (
-        <div className="border-t border-[#E8E8E8] px-4 py-3">
+        <div className="border-t border-[#E8E8E8] px-4 py-3 flex items-center justify-between">
           <button
             type="button"
             onClick={onSkip}
             disabled={disabled}
-            className="text-sm font-semibold text-[#6033EE] hover:opacity-80 disabled:opacity-40"
+            className="text-sm font-medium text-[#767676] hover:text-[#111] disabled:opacity-40 flex items-center gap-2"
           >
-            Skip
+            Something else
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+            </svg>
           </button>
         </div>
       )}

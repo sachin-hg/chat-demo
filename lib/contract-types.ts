@@ -8,26 +8,17 @@ export type MessageType =
   | "markdown"
   | "analytics";
 export type SenderType = "user" | "bot" | "system";
-export type ReplyType = "visible" | "hidden";
-export type ActionScope = "message" | "template_item";
 
 export interface Sender {
   type: SenderType;
   id?: string;
 }
 
-export interface ChatAction {
-  id: string;
-  label: string;
-  replyType: ReplyType;
-  scope: ActionScope;
-}
-
 export interface ChatPayloadContent {
   text?: string;
   templateId?: string;
   data?: Record<string, unknown>;
-  fallbackText?: string;
+  /** Set by FE when sending user_action; displayed as user bubble when visibility === "shown". */
   derivedLabel?: string;
 }
 
@@ -45,7 +36,6 @@ export interface ChatPayload {
   /** Only for user_action. Hidden by default; 'shown' renders derivedLabel as user bubble. */
   visibility?: "shown" | "hidden";
   content: ChatPayloadContent;
-  actions?: ChatAction[];
 }
 
 export interface ChatEvent {
@@ -61,8 +51,8 @@ export interface ChatEvent {
 export interface SendMessageResponse {
   eventId: string;
   requestId: string;
-  expectResponse: boolean;
-  timeoutMs?: number; // optional; FE may use fixed 60s when expectResponse is true
+  /** @deprecated No longer used. For text: response is always expected until isFinal. For user_action: response expected when responseRequired === true, until isFinal. */
+  timeoutMs?: number;
 }
 
 export interface GetHistoryResponse {
