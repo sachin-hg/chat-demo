@@ -75,11 +75,14 @@ Returns the active conversation ID (single chat in Phase 1).
 }
 ```
 
+`isNew` is a demo-app convenience flag and is not required in production contract responses.
+
 ---
 
 ### 4.2 `GET /chats/get-chats`
 
 Returns all chats for the user.
+Ordering: **latest chat first** (descending by `lastActivityAt`).
 
 ```json
 {
@@ -169,6 +172,15 @@ If `Accept` is not `text/event-stream`, the BE returns JSON:
 ```json
 { "eventId": "evt_301", "requestId": "req_901" }
 ```
+
+**Message payload enrichment**
+- Each persisted message may include `payload.requestState` with one of:
+  - `PENDING`
+  - `COMPLETED`
+  - `ERRORED_AT_ML`
+  - `TIMED_OUT_BY_BE`
+  - `CANCELLED_BY_USER`
+- FE uses this to decide rendering behavior per message.
 
 ---
 
@@ -448,6 +460,7 @@ This section records how the **chat-demo** implementation diverges from or exten
   - **`messages_before`** + **`page_size`**: returns up to `page_size` messages *before* the given event ID (for “Load older messages”).
   - **`last`**: returns the last N messages (e.g. initial load with `last=6`).
 - **Soft-deleted events**: Events that are the user request event for a request in state **CANCELLED_BY_USER** are excluded from history (soft-deleted per §3). No other event types are filtered.
+- This filtering is done in BE `get-history` itself before response payload is returned to FE.
 
 ### A.2 FE reply timeout and UI
 
@@ -467,6 +480,13 @@ This section records how the **chat-demo** implementation diverges from or exten
 ### A.4 Cancel
 
 - **Cancel button**: A **Cancel** button is shown next to **Send** while awaiting a reply. It calls `POST /chats/cancel` with the current `requestId` and then clears the awaiting state so the user can send again.
+- **Advisory cancellation, strict BE gate**: cancellation signal to ML is advisory, but BE strictly ignores late updates for cancelled/non-pending requests (`isPending` gate before append/broadcast).
+
+### A.7 UI behavior for requestState
+
+- `PENDING`, `COMPLETED`: render as usual.
+- `ERRORED_AT_ML`, `TIMED_OUT_BY_BE`: FE renders generic error text (“Something went wrong. Please try again.”).
+- `CANCELLED_BY_USER`: FE does not render that message.
 
 ### A.5 Template and action handling
 

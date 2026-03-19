@@ -57,7 +57,7 @@ export function LocalityInfo({ data, onAction, disabled = false }: Props) {
               <Image src={image} alt={name} fill className="object-cover" unoptimized sizes="262px" />
             </div>
             <div className="p-4">
-              <p className="font-semibold text-sm text-[#111]">{name || "Locality"}</p>
+              <p className="font-semibold text-sm text-[#111] truncate">{name || "Locality"}</p>
 
               <div className="flex gap-3 mt-3">
                 <div className="flex-1 min-w-0 rounded-xl bg-[#FAFAFA] border border-[#e1e2e8] p-2.5">

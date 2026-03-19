@@ -54,16 +54,6 @@ function getAction(data: Record<string, unknown> | undefined): string | undefine
   return typeof a === "string" ? a : undefined;
 }
 
-function getPropertyId(data: Record<string, unknown> | undefined): string | undefined {
-  if (!data) return undefined;
-  const p = data.property;
-  if (p && typeof p === "object" && p !== null && "propertyId" in p) {
-    return (p as { propertyId?: string }).propertyId;
-  }
-  const id = data.propertyId;
-  return typeof id === "string" ? id : undefined;
-}
-
 function getLocalityId(data: Record<string, unknown> | undefined): string | undefined {
   if (!data) return undefined;
   const loc = data.locality;
@@ -119,10 +109,7 @@ export function getNextBotEvents(
       botMessage(generateMessageId(), "template", {
         templateId: "contact_seller",
         data: {
-          "propertyId": "p2",
-            "service": "buy",
-            "category": "residential",
-            "type": "project"
+          "property": { "id": "p2", "type": "project" }
         },
       }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
     ];
@@ -315,7 +302,7 @@ export function getNextBotEvents(
     return [
       botMessage(generateMessageId(), "template", {
         templateId: "shortlist_property",
-        data: { propertyId: "p2", service: "buy", category: "residential", type: "project" },
+        data: { property: { id: "p2", type: "project" } },
       }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
     ];
   }
@@ -597,18 +584,7 @@ export function getNextBotEvents(
       botMessage(generateMessageId(), "template", {
         templateId: "download_brochure",
         data: {
-          propertyId: "p2",
-          service: p.type === "rent" ? "rent" : "buy",
-          category: "residential",
-          type: p.type,
-          projectName: p.name ?? "",
-          priceRange:
-            p.type === "rent"
-              ? p.formatted_price ?? ""
-              : p.type === "resale"
-                ? p.formatted_min_price ?? ""
-                : `${p.formatted_min_price ?? ""} - ${p.formatted_max_price ?? ""}`.trim(),
-          brochureUrl: `https://example.com/brochures/${p.id}.pdf`,
+          property: p,
         },
       }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
     ];

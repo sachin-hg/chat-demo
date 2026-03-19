@@ -1,4 +1,4 @@
-import type { ChatEvent } from "./contract-types";
+import type { ChatEvent, SenderType } from "./contract-types";
 
 const CONV_ID = "conv_1";
 
@@ -129,9 +129,10 @@ export function getHistory(
   const hasMore = options?.page !== undefined && options?.pageSize !== undefined && list.length > options.pageSize;
   const messages = hasMore ? list.slice(0, options!.pageSize!) : list;
 
+  const messagesWithState = messages.map((e) => withRequestState(e));
   return {
     conversationId: CONV_ID,
-    messages: messages as StoredEvent[],
+    messages: messagesWithState as StoredEvent[],
     hasMore,
   };
 }
@@ -139,9 +140,15 @@ export function getHistory(
 export function appendEvent(
   event: Omit<StoredEvent, "eventId" | "createdAt"> & { eventId?: string; createdAt?: string }
 ): StoredEvent {
+  const generatedEventId = event.eventId ?? nextEventId();
   const stored: StoredEvent = {
     ...event,
-    eventId: event.eventId ?? nextEventId(),
+    eventId: generatedEventId,
+    payload: {
+      ...event.payload,
+      // BE guarantees a messageId on all persisted events.
+      messageId: event.payload?.messageId ?? generatedEventId,
+    },
     createdAt: event.createdAt ?? now(),
   };
   events.push(stored);
@@ -186,6 +193,10 @@ export function isPending(requestId: string): boolean {
   return r ? r.state === "PENDING" : false;
 }
 
+export function getRequestState(requestId: string): RequestState | undefined {
+  return requests.find((x) => x.requestId === requestId)?.state;
+}
+
 export function hasPendingRequest(conversationId: string): boolean {
   return requests.some(
     (r) => (r.conversationId === conversationId || !r.conversationId) && r.state === "PENDING"
@@ -223,4 +234,41 @@ export function getAllEvents(): StoredEvent[] {
 export function resetStore() {
   events.length = 0;
   requests.length = 0;
+}
+
+function getRequestByUserEventId(userEventId: string): ChatRequest | undefined {
+  return requests.find((r) => r.userEventId === userEventId);
+}
+
+function getRequestBySourceMessageId(sourceMessageId?: string): ChatRequest | undefined {
+  if (!sourceMessageId) return undefined;
+  const userEvent = events.find(
+    (e) => e.sender.type === "user" && e.payload?.messageId === sourceMessageId
+  );
+  if (!userEvent?.eventId) return undefined;
+  return getRequestByUserEventId(userEvent.eventId);
+}
+
+function resolveRequestState(event: StoredEvent): RequestState | undefined {
+  // user-originated request event
+  const direct = getRequestByUserEventId(event.eventId);
+  if (direct) return direct.state;
+
+  // bot responses tied through sourceMessageId
+  const fromSource = getRequestBySourceMessageId(event.payload?.sourceMessageId);
+  if (fromSource) return fromSource.state;
+
+  return undefined;
+}
+
+function withRequestState(event: StoredEvent): StoredEvent {
+  const resolved = resolveRequestState(event);
+  if (!resolved) return event;
+  return {
+    ...event,
+    payload: {
+      ...event.payload,
+      requestState: resolved,
+    },
+  };
 }

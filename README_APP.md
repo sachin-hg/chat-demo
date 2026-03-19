@@ -23,7 +23,7 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
 
 ## Current Flow Coverage
 
-- **Context on open**: first-time conversation sends a hidden `context` event (fire-and-forget).
+- **Context on open**: each chat-open sends a hidden `context` event (fire-and-forget).
 - **Greeting and non-real-estate intent**:
   - `hi`/`hello`/`hey` (word-level match) → greeting markdown.
   - `tell me about modiji`/generic off-domain prompts → fallback response.
@@ -57,7 +57,7 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
 
 ## API (aligned with spec)
 
-- `GET /api/chats/get-conversation-id` → `{ conversationId, isNew }`
+- `GET /api/chats/get-conversation-id` → `{ conversationId, isNew }` (`isNew` is demo-app convenience; not required for production clients)
 - `GET /api/chats/get-history?conversationId=...` with `page` + `page_size`, or `messages_after=evt_xxx`, or `messages_before=evt_xxx` + `page_size`, or `last=N`.
 - `POST /api/chats/send-message` body `{ event: ChatEvent }`
   - If `Accept: text/event-stream`, the response is an SSE stream:

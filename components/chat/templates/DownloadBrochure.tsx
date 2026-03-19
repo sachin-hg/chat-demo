@@ -1,10 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { MOCK_PROPERTIES } from "@/lib/mock/data";
 import { useState } from "react";
 import type { ChatEvent } from "@/lib/contract-types";
 import { useAuth } from "@/components/auth/AuthProvider";
+import type { PropertyCarouselCard } from "@/lib/mock/data";
 
 interface Props {
   data: Record<string, unknown>;
@@ -13,35 +13,32 @@ interface Props {
   disabled?: boolean;
 }
 
-type PropertyMeta = { propertyId: string; service: string; category: string; type: string };
+type PropertyMeta = { id: string; type: string };
 
 export function DownloadBrochure({ data, messageId, onUserAction, disabled = false }: Props) {
   const [open, setOpen] = useState(false);
   const auth = useAuth();
 
-  const propertyId = (data.propertyId as string) ?? "";
-  const service = (data.service as string | undefined) ?? "buy";
-  const category = (data.category as string | undefined) ?? "residential";
-  const type = (data.type as string | undefined) ?? "project";
-  const propertyMeta: PropertyMeta = { propertyId, service, category, type };
+  const property = (data.property as PropertyCarouselCard | undefined) ?? undefined;
+  if (!property) return null;
+  const type = property.type ?? "project";
+  const propertyMeta: PropertyMeta = { id: property.id, type };
 
-  // ML can provide copy-friendly metadata (project name, price range, brochure URL).
-  const projectNameFromMl = (data.projectName as string | undefined) ?? undefined;
-  const priceRangeFromMl = (data.priceRange as string | undefined) ?? undefined;
-  const brochureUrlFromMl = (data.brochureUrl as string | undefined) ?? undefined;
-
-  const property = MOCK_PROPERTIES.find((p) => p.id === propertyId) ?? MOCK_PROPERTIES[0];
   const imgSrc = property.thumb_image_url;
   const brochureImages = [imgSrc, imgSrc, imgSrc];
 
-  const displayName = projectNameFromMl ?? property.name ?? "";
+  const displayName = property.name ?? "";
   const displayPriceRange =
-    priceRangeFromMl ??
-    (property.type === "rent"
+    property.type === "rent"
       ? property.formatted_price ?? ""
       : property.type === "resale"
         ? property.formatted_min_price ?? ""
-        : `${property.formatted_min_price ?? ""} - ${property.formatted_max_price ?? ""}`.trim());
+        : `${property.formatted_min_price ?? ""} - ${property.formatted_max_price ?? ""}`.trim();
+  const displayPriceText = displayPriceRange.trim().startsWith("₹")
+    ? displayPriceRange.trim()
+    : displayPriceRange
+      ? `₹${displayPriceRange.trim()}`
+      : "";
 
   return (
     <>
@@ -64,7 +61,7 @@ export function DownloadBrochure({ data, messageId, onUserAction, disabled = fal
         </div>
         <div className="h-px bg-[#e1e2e8] brochure-card__divider" />
         <div className="text-base font-medium text-[#222] brochure-card__price">
-          {displayPriceRange}
+          {displayPriceText}
         </div>
         <button
           type="button"
@@ -148,16 +145,21 @@ export function DownloadBrochure({ data, messageId, onUserAction, disabled = fal
 }
 
 export function getClipboardTextForDownloadBrochure(templateData: Record<string, unknown>): string | null {
-  const projectName = (templateData.projectName as string | undefined) ?? "";
-  const priceRange = (templateData.priceRange as string | undefined) ?? "";
-  const brochureUrl = (templateData.brochureUrl as string | undefined) ?? "";
+  const property = (templateData.property as PropertyCarouselCard | undefined) ?? undefined;
+  if (!property) return null;
+  const projectName = property?.name ?? "";
+  const priceRange =
+    property.type === "rent"
+      ? property.formatted_price ?? ""
+      : property.type === "resale"
+        ? property.formatted_min_price ?? ""
+        : `${property.formatted_min_price ?? ""} - ${property.formatted_max_price ?? ""}`.trim();
 
-  if (!projectName && !priceRange && !brochureUrl) return null;
+  if (!projectName && !priceRange) return null;
 
   const parts = [
     projectName || undefined,
     priceRange ? ` - ${priceRange}` : undefined,
-    brochureUrl ? ` - ${brochureUrl}` : undefined,
   ].filter(Boolean);
 
   return parts.join("").trim();

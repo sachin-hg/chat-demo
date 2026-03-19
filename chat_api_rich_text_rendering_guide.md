@@ -1,263 +1,107 @@
-# Chat API Contract — **Frozen v1.0**
-## Rich Text Rendering Guide (Web, Android, iOS)
+# Chat API Contract — Frozen v1.0 (Phase 1)
+## Rich Text Rendering Guide (Markdown Only)
 
-This document extends the **Chat API Contract v1.0** with **platform-specific implementations**
-for rendering rich text fields:
-- `content.text`
+This guide documents **Phase 1 rendering** for chat rich text in this repository.
+
+## 1) Scope (Phase 1)
+
+Only these payload fields are used for rich text rendering:
+
+- `payload.content.text` for `messageType: "text"` and `messageType: "markdown"`
+
+The following are **not used in Phase 1** and should be ignored in renderers:
+
 - `preText`
 - `fallbackText`
 - `followUpText`
 
-These fields may contain **plain text, Markdown, or HTML**.
+HTML rendering support is dropped for Phase 1; treat content as markdown/plain text only.
 
 ---
 
-## 1. Rendering Strategy (All Platforms)
+## 2) Web/FE Current Strategy
 
-### Detection Rules
-1. If the content **looks like HTML** → sanitize & render as HTML
-2. Otherwise → treat as **Markdown**
-3. Markdown renderer must gracefully handle plain text
+### Message-type handling
 
-### Security Rules
-- HTML **must be sanitized**
-- JavaScript execution is **never allowed**
-- Allowed link schemes:
-  - `https:`
-  - `http:`
-  - `tel:`
-  - `whatsapp:`
+- `context` and `analytics`: never rendered.
+- `text`:
+  - user sender -> user bubble with plain text.
+  - bot/system sender -> bot-side text block.
+- `markdown`:
+  - bot/system sender -> rendered through markdown renderer (`RichText` component).
+- `user_action`:
+  - render only when `visibility === "shown"` and `derivedLabel` exists.
+  - sender `system`/`bot` -> bot-side text style.
+  - sender `user` -> user bubble.
+- `template`:
+  - template components render FE-owned UI (carousel, nested_qna, location, brochure, etc.).
+  - some transient templates render only for latest message.
+
+### Markdown-only rendering behavior
+
+- Input is treated as markdown (plain text is valid markdown and renders naturally).
+- No HTML detection branch.
+- No HTML sanitization branch in Phase 1 rendering guide.
 
 ---
 
-## 2. Web (React / TypeScript)
+## 3) Current Web Implementation Notes
 
-### Dependencies
+### Feedback row integration
 
-```bash
-npm install dompurify marked
-```
+For final bot/system messages, FE may render a `FeedbackRow` (thumbs up/down + optional copy), based on message/template eligibility.
 
-### Implementation
+### Copy content source
+
+- text/markdown: copy `content.text`
+- property carousel: computed summary lines from property data
+- locality carousel: computed locality summary lines
+- download brochure: project/price/url summary string
+
+### Sticky nested-qna behavior
+
+- While latest message is `templateId: "nested_qna"`, the main composer is hidden.
+- User completes nested selection flow in template UI.
+
+---
+
+## 4) Minimal Web Pseudocode
 
 ```ts
-import DOMPurify from "dompurify";
-import { marked } from "marked";
+function renderEvent(event: ChatEvent) {
+  const { sender, payload } = event;
 
-function looksLikeHTML(value: string): boolean {
-  return /<\/?[a-z][\s\S]*>/i.test(value);
-}
+  if (payload.messageType === "context" || payload.messageType === "analytics") return null;
 
-export function renderRichText(value: string) {
-  if (!value) return null;
-
-  if (looksLikeHTML(value)) {
-    const safeHTML = DOMPurify.sanitize(value, {
-      USE_PROFILES: { html: true },
-      ADD_ATTR: ["target", "rel"]
-    });
-
-    return (
-      <div
-        className="rich-text"
-        dangerouslySetInnerHTML={{ __html: safeHTML }}
-      />
-    );
+  if (payload.messageType === "user_action") {
+    if (payload.visibility !== "shown" || !payload.content.derivedLabel) return null;
+    return sender.type === "user"
+      ? renderUserBubble(payload.content.derivedLabel)
+      : renderBotText(payload.content.derivedLabel);
   }
 
-  const html = marked.parse(value, {
-    breaks: true,
-    mangle: false,
-    headerIds: false
-  });
+  if (sender.type === "user" && payload.messageType === "text") {
+    return renderUserBubble(payload.content.text ?? "");
+  }
 
-  const safeMarkdownHTML = DOMPurify.sanitize(html, {
-    USE_PROFILES: { html: true }
-  });
+  if (payload.messageType === "text") {
+    return renderBotText(payload.content.text ?? "");
+  }
 
-  return (
-    <div
-      className="rich-text"
-      dangerouslySetInnerHTML={{ __html: safeMarkdownHTML }}
-    />
-  );
+  if (payload.messageType === "markdown") {
+    return renderMarkdown(payload.content.text ?? "");
+  }
+
+  if (payload.messageType === "template") {
+    return renderTemplate(payload.content.templateId, payload.content.data);
+  }
+
+  return null;
 }
 ```
-
----
-
-## 3. Android (Native Kotlin)
-
-### Dependencies
-
-```gradle
-implementation "io.noties.markwon:core:4.6.2"
-implementation "org.jsoup:jsoup:1.16.1"
-```
-
-### Implementation
-
-```kotlin
-import android.content.Context
-import android.text.Spanned
-import android.text.method.LinkMovementMethod
-import android.widget.TextView
-import io.noties.markwon.Markwon
-import org.jsoup.Jsoup
-import org.jsoup.safety.Safelist
-
-fun looksLikeHtml(value: String): Boolean {
-    return Regex("</?[a-z][\s\S]*>", RegexOption.IGNORE_CASE)
-        .containsMatchIn(value)
-}
-
-fun renderRichText(
-    context: Context,
-    textView: TextView,
-    value: String
-) {
-    if (value.isBlank()) {
-        textView.text = ""
-        return
-    }
-
-    val markwon = Markwon.create(context)
-
-    val rendered: Spanned = if (looksLikeHtml(value)) {
-        val safeHtml = Jsoup.clean(
-            value,
-            Safelist.basic()
-                .addProtocols("a", "href", "tel", "https", "http")
-        )
-        markwon.toMarkdown(safeHtml)
-    } else {
-        markwon.toMarkdown(value)
-    }
-
-    textView.text = rendered
-    textView.movementMethod = LinkMovementMethod.getInstance()
-}
-```
-
----
-
-## 4. iOS (Native Swift)
-
-### HTML Detection
-
-```swift
-func looksLikeHTML(_ value: String) -> Bool {
-    let pattern = "</?[a-z][\s\S]*>"
-    return value.range(of: pattern, options: .regularExpression) != nil
-}
-```
-
----
-
-### Markdown Rendering (iOS 15+)
-
-```swift
-func renderMarkdown(label: UILabel, markdown: String) {
-    if let attributed = try? AttributedString(
-        markdown: markdown,
-        options: AttributedString.MarkdownParsingOptions(
-            allowsExtendedAttributes: false,
-            interpretedSyntax: .full
-        )
-    ) {
-        label.attributedText = NSAttributedString(attributed)
-    } else {
-        label.text = markdown
-    }
-}
-```
-
----
-
-### HTML Sanitization
-
-```swift
-func sanitizeHTML(_ html: String) -> String {
-    return html
-        .replacingOccurrences(
-            of: "<script[\s\S]*?</script>",
-            with: "",
-            options: .regularExpression
-        )
-        .replacingOccurrences(
-            of: "on\w+="[^"]*"",
-            with: "",
-            options: .regularExpression
-        )
-}
-```
-
----
-
-### HTML Rendering
-
-```swift
-func renderHTML(label: UILabel, html: String) {
-    let sanitized = sanitizeHTML(html)
-
-    guard let data = sanitized.data(using: .utf8) else {
-        label.text = sanitized
-        return
-    }
-
-    let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
-        .documentType: NSAttributedString.DocumentType.html,
-        .characterEncoding: String.Encoding.utf8.rawValue
-    ]
-
-    if let attributed = try? NSAttributedString(
-        data: data,
-        options: options,
-        documentAttributes: nil
-    ) {
-        label.attributedText = attributed
-    } else {
-        label.text = sanitized
-    }
-}
-```
-
----
-
-### Unified Entry Point (iOS)
-
-```swift
-func renderRichText(label: UILabel, value: String) {
-    guard !value.isEmpty else {
-        label.text = ""
-        return
-    }
-
-    label.isUserInteractionEnabled = true
-    label.numberOfLines = 0
-
-    if looksLikeHTML(value) {
-        renderHTML(label: label, html: value)
-    } else {
-        renderMarkdown(label: label, markdown: value)
-    }
-}
-```
-
----
-
-## 5. Link Handling Notes
-
-- Markdown:
-  ```md
-  [Call +91-98989898](tel:+9198989898)
-  ```
-- Works across Web, Android, iOS
-- Android requires `LinkMovementMethod`
-- iOS: prefer `UITextView` for automatic link handling
 
 ---
 
 ## Status
 
-**Rich Text Rendering Guide — FINAL (Aligned with Chat API Contract v1.0) ✅**
+**Phase 1 Rich Text Guide — Markdown-only ✅**

@@ -21,9 +21,7 @@ function emitLoginFailed(onUserAction: (event: ChatEvent) => void) {
 }
 
 type PropertyMeta = {
-  propertyId?: string;
-  service?: string;
-  category?: string;
+  id?: string;
   type?: string;
 };
 
@@ -47,10 +45,9 @@ async function postAck(path: string, body: unknown): Promise<{ success: true }> 
 export function ShortlistProperty({ data, messageId, onUserAction, disabled = false }: Props) {
   const toast = useToast();
   const auth = useAuth();
-  const propertyId = (data.propertyId as string | undefined) ?? "";
-  const service = (data.service as string | undefined) ?? "buy";
-  const category = (data.category as string | undefined) ?? "residential";
-  const type = (data.type as string | undefined) ?? "project";
+  const property = (data.property as PropertyMeta | undefined) ?? undefined;
+  const propertyId = property?.id ?? "";
+  const type = property?.type ?? "project";
 
   const startedRef = useRef(false);
 
@@ -84,14 +81,14 @@ export function ShortlistProperty({ data, messageId, onUserAction, disabled = fa
             data: {
               action: "shortlist",
               messageId,
-              property: { propertyId, service, category, type },
+              property: { id: propertyId, type } as PropertyMeta,
             },
             derivedLabel: "You've shortlisted this property. check it out in User Profile -> Saved properties",
           },
         },
       } as ChatEvent);
     })();
-  }, [auth, category, disabled, messageId, onUserAction, propertyId, service, toast, type]);
+  }, [auth, disabled, messageId, onUserAction, propertyId, toast, type]);
 
   return null;
 }

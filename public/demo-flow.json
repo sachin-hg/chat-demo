@@ -113,7 +113,7 @@
         "content": {
           "data": {
             "actionId": "shortlist",
-            "propertyId": "p2",
+            "id": "p2",
             "messageId": "msg_002"
           },
           "derivedLabel": "Shortlist P2: 2BHK · 90L"
@@ -189,7 +189,7 @@
         "content": {
           "data": {
             "actionId": "contact",
-            "propertyId": "p1",
+            "id": "p1",
             "messageId": "msg_002"
           },
           "derivedLabel": "Contact P1: 2BHK · 90L"

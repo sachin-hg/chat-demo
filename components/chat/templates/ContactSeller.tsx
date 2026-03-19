@@ -20,9 +20,7 @@ function emitLoginFailed(onUserAction: (event: ChatEvent) => void) {
 }
 
 type PropertyMeta = {
-  propertyId?: string;
-  service?: string;
-  category?: string;
+  id?: string;
   type?: string;
 };
 
@@ -50,10 +48,9 @@ export function ContactSeller({
   disabled = false,
 }: Props) {
   const auth = useAuth();
-  const propertyId = (data.propertyId as string | undefined) ?? "";
-  const service = (data.service as string | undefined) ?? "buy";
-  const category = (data.category as string | undefined) ?? "residential";
-  const type = (data.type as string | undefined) ?? "project";
+  const property = (data.property as PropertyMeta | undefined) ?? undefined;
+  const propertyId = property?.id ?? "";
+  const type = property?.type ?? "project";
 
   const startedRef = useRef(false);
 
@@ -85,14 +82,14 @@ export function ContactSeller({
             data: {
               action: "crf_submitted",
               messageId,
-              property: { propertyId, service, category, type },
+              property: { id: propertyId, type } as PropertyMeta,
             },
             derivedLabel: "The seller has been contacted, someone will reach out to you soon!",
           },
         },
       } as ChatEvent);
     })();
-  }, [auth, category, disabled, messageId, onUserAction, propertyId, service, type]);
+  }, [auth, disabled, messageId, onUserAction, propertyId, type]);
 
   return null;
 }

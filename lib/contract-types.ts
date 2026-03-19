@@ -8,6 +8,12 @@ export type MessageType =
   | "markdown"
   | "analytics";
 export type SenderType = "user" | "bot" | "system";
+export type RequestState =
+  | "PENDING"
+  | "COMPLETED"
+  | "ERRORED_AT_ML"
+  | "TIMED_OUT_BY_BE"
+  | "CANCELLED_BY_USER";
 
 export interface Sender {
   type: SenderType;
@@ -30,6 +36,8 @@ export interface ChatPayload {
   sequenceNumber?: number;
   /** true = last message in response sequence. Required for bot. */
   isFinal?: boolean;
+  /** Request lifecycle state for this turn/message as resolved by BE. */
+  requestState?: RequestState;
   /** Applies to user text (always true) and user_action (conditional). */
   responseRequired?: boolean;
   messageType: MessageType;

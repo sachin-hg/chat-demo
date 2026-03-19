@@ -30,6 +30,7 @@ export function PropertyCarousel({ properties, messageId, onUserAction, disabled
   const toast = useToast();
   const auth = useAuth();
   const shortlistInFlightRef = useRef<Set<string>>(new Set());
+  const hasProjectCard = properties.some((p) => p.type === "project");
 
   const formatInt = (n?: number | null): string => {
     if (typeof n !== "number" || Number.isNaN(n)) return "";
@@ -44,15 +45,19 @@ export function PropertyCarousel({ properties, messageId, onUserAction, disabled
     return "";
   };
 
+  const withRupee = (value: string): string => {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    return trimmed.startsWith("₹") ? trimmed : `₹${trimmed}`;
+  };
+
   return (
     <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4" style={{ scrollSnapType: "x mandatory" }} data-demo="property-carousel">
       {properties.map((p, idx) => {
         const isShortlisted = shortlisted.has(p.id);
         const imgSrc = p.thumb_image_url?.replace("version", "large") ?? "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600";
         const propertyForMl = {
-          propertyId: p.id,
-          service: p.type === "rent" ? "rent" : "buy",
-          category: "residential",
+          id: p.id,
           type: p.type,
         };
         const addressText = (p.short_address ?? []).map((x) => x.display_name).filter(Boolean).join(", ");
@@ -62,6 +67,7 @@ export function PropertyCarousel({ properties, messageId, onUserAction, disabled
             : p.type === "resale"
               ? p.formatted_min_price ?? ""
               : `${p.formatted_min_price ?? ""} - ${p.formatted_max_price ?? ""}`.trim();
+        const displayPriceText = withRupee(priceText);
 
         const areaText =
           p.type === "project"
@@ -112,7 +118,7 @@ export function PropertyCarousel({ properties, messageId, onUserAction, disabled
                   }
 
                   try {
-                      await postAck("/api/properties/shortlist", { propertyId: propertyForMl.propertyId });
+                      await postAck("/api/properties/shortlist", { propertyId: p.id });
                   } catch (e) {
                     console.error(e);
                     toast.show("Could not shortlist. Please try again.");
@@ -174,21 +180,27 @@ export function PropertyCarousel({ properties, messageId, onUserAction, disabled
               </div>
 
               {p.type !== "project" ? (
-                <p className="text-[18px] leading-[1.15] font-semibold text-[#111] whitespace-pre-line">{p.title}</p>
+                <>
+                  <p className="text-[18px] leading-[1.15] font-semibold text-[#111] truncate">{p.title}</p>
+                  {/* Keep subtitle row spacing only for mixed card sets (project + rent/resale). */}
+                  {hasProjectCard && (
+                    <p className="text-[15px] leading-[1.2] font-semibold text-[#111] mt-1 truncate invisible">.</p>
+                  )}
+                </>
               ) : (
                 <>
-                  <p className="text-[20px] leading-[1.15] font-semibold text-[#111] whitespace-pre-line">{p.name}</p>
-                  {p.title && <p className="text-[15px] leading-[1.2] font-semibold text-[#111] mt-1">{p.title}</p>}
+                  <p className="text-[20px] leading-[1.15] font-semibold text-[#111] truncate">{p.name}</p>
+                  <p className="text-[15px] leading-[1.2] font-semibold text-[#111] mt-1 truncate">{p.title ?? ""}</p>
                 </>
               )}
 
               {addressText && (
-                <div className="flex items-center gap-2 text-[16px] text-[#767676] mt-3">
+                <div className="flex items-center gap-2 text-[16px] text-[#767676] mt-3 min-w-0">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
                     <circle cx="12" cy="10" r="3" />
                   </svg>
-                  <span>{addressText}</span>
+                  <span className="truncate">{addressText}</span>
                 </div>
               )}
 
@@ -203,7 +215,7 @@ export function PropertyCarousel({ properties, messageId, onUserAction, disabled
                 </div>
               )}
 
-              {priceText && <p className="text-[18px] font-bold text-[#111] mt-2">{priceText}</p>}
+              {displayPriceText && <p className="text-[18px] font-bold text-[#111] mt-2">{displayPriceText}</p>}
 
               <div className="flex gap-2 mt-4">
                 <button
@@ -242,7 +254,7 @@ export function PropertyCarousel({ properties, messageId, onUserAction, disabled
                     const ok = await auth.requireLogin("contact");
                     if (!ok) return;
                     try {
-                      await postAck("/api/properties/contact-seller", { propertyId: propertyForMl.propertyId });
+                      await postAck("/api/properties/contact-seller", { propertyId: p.id });
                     } catch (e) {
                       console.error(e);
                       return;

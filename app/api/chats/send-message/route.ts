@@ -6,6 +6,7 @@ import {
   getAllEvents,
   isPending,
   cancelRequest,
+  getRequestState,
 } from "@/lib/store";
 import { getNextBotEvents } from "@/lib/mock/ml-flow";
 import type { ChatEvent } from "@/lib/contract-types";
@@ -36,6 +37,8 @@ export async function POST(request: NextRequest) {
     conversationId: event.conversationId ?? "conv_1",
   });
   const requestRecord = createRequest(stored.eventId!);
+  // Expose initial state for the just-created user event.
+  stored.payload.requestState = "PENDING";
 
   const accept = request.headers.get("accept") ?? "";
   const wantsEventStream = accept.includes("text/event-stream");
@@ -53,10 +56,16 @@ export async function POST(request: NextRequest) {
   // Legacy JSON mode (keeps old behavior for non-streaming clients).
   if (!wantsEventStream) {
     setTimeout(() => {
+      if (!isPending(requestRecord.requestId)) return;
       const recentEvents = getAllEvents();
-      const botEvents = getNextBotEvents(event, recentEvents);
+      const botEvents = getNextBotEvents(stored, recentEvents);
       for (const ev of botEvents) {
-        appendEvent({ ...ev, conversationId: "conv_1" });
+        const state = ev.payload.isFinal === true ? "COMPLETED" : "PENDING";
+        appendEvent({
+          ...ev,
+          conversationId: "conv_1",
+          payload: { ...ev.payload, requestState: state },
+        });
       }
       completeRequest(requestRecord.requestId);
     }, delayMs);
@@ -97,7 +106,11 @@ export async function POST(request: NextRequest) {
       // 1) Ack immediately
       writeSse({
         event: "connection_ack",
-        data: { eventId: stored.eventId, requestId: requestRecord.requestId },
+        data: {
+          eventId: stored.eventId,
+          requestId: requestRecord.requestId,
+          requestState: getRequestState(requestRecord.requestId) ?? "PENDING",
+        },
       });
 
       if (!shouldExpectResponse) {
@@ -116,11 +129,16 @@ export async function POST(request: NextRequest) {
         }
 
         const recentEvents = getAllEvents();
-        const botEvents = getNextBotEvents(event, recentEvents);
+        const botEvents = getNextBotEvents(stored, recentEvents);
 
         for (const ev of botEvents) {
           if (!isPending(requestRecord.requestId)) break;
-          const storedBot = appendEvent({ ...ev, conversationId: "conv_1" });
+          const state = ev.payload.isFinal === true ? "COMPLETED" : "PENDING";
+          const storedBot = appendEvent({
+            ...ev,
+            conversationId: "conv_1",
+            payload: { ...ev.payload, requestState: state },
+          });
 
           writeSse({ event: "chat_event", id: storedBot.eventId, data: storedBot });
 

@@ -401,16 +401,15 @@ function ChatPageContent() {
     let cancelled = false;
     (async () => {
       try {
-        const { conversationId: cid, isNew } = await getConversationId(isDemo);
+        const { conversationId: cid } = await getConversationId(isDemo);
         if (cancelled) return;
         setConversationId(cid);
-        if (isNew) {
-          // Context is fire-and-forget in Phase 1 (no response expected).
-          sendMessageStream(
-            buildContextEvent(cid),
-            { onAck: () => {}, onChatEvent: () => {} },
-          ).catch(() => {});
-        }
+        // Context is fire-and-forget in Phase 1 (no response expected).
+        // Sent on each chat open to keep ML context fresh.
+        sendMessageStream(
+          buildContextEvent(cid),
+          { onAck: () => {}, onChatEvent: () => {} },
+        ).catch(() => {});
         const hist = await getHistory(cid, { last: INITIAL_PAGE_SIZE });
         if (cancelled) return;
         const list = hist.messages as StoredMessage[];

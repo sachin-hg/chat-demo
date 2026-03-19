@@ -62,6 +62,7 @@ export function ChatMessage({
 }: ChatMessageProps) {
   const { sender, payload } = event;
   const { messageType, content } = payload;
+  const requestState = payload.requestState;
   const isBot = sender.type === "bot";
   const isSystemOrBot = sender.type === "bot" || sender.type === "system";
   const isUser = sender.type === "user";
@@ -69,6 +70,14 @@ export function ChatMessage({
   // Never render analytics or context
   if (messageType === "analytics") return null;
   if (messageType === "context") return null;
+  if (requestState === "CANCELLED_BY_USER") return null;
+  if (requestState === "ERRORED_AT_ML" || requestState === "TIMED_OUT_BY_BE") {
+    return (
+      <div className="mb-2">
+        <p className="text-sm text-[#0a0a0a] leading-[1.35]">Something went wrong. Please try again.</p>
+      </div>
+    );
+  }
 
   // user_action: only render if visibility === "shown" and derivedLabel set
   if (messageType === "user_action") {
