@@ -1,6 +1,6 @@
 # Chat Demo App
 
-Next.js demo implementing the **Chat System Architecture v1.0** and **Chat API Contract v1.0** (rich text) for the real-estate chat flow (examples 4.1–4.18).
+Next.js demo implementing the **Chat System Architecture v1.0** and **Chat API Contract v1.0** (rich text), with a richer mock flow covering property discovery, locality QnA, location permission, and brochure download.
 
 ## Run
 
@@ -11,26 +11,49 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000), then **Open Chat** to go to `/chat`.
 
-## Flow (4.1–4.18)
+### Demo Mode
 
-- **4.1** Context is injected when you first open the chat (get-conversation-id with new conversation).
-- **4.2–4.3** Type **hi** → bot greeting (markdown).
-- **4.4–4.5** Type **show me properties** → property carousel (2 cards: 2BHK · 80L, 3BHK · 70L) with Shortlist / Contact Seller.
-- **4.6** Click **Shortlist** on a property → user action + bot **login_screen** (phone/OTP).
-- **4.6 analytics** After entering phone and OTP and **Verify & Login** → analytics `logged_in` is sent; bot reply **4.7** arrives via SSE (“Shortlisted this property”).
-- **4.8–4.9** Click **Contact Seller** on a property → user action + bot **seller_info** (Nadeem, Call link). **Call Now** sends analytics **4.10** (no visible bot reply).
-- **4.11–4.12** Type e.g. “can you tell me where this seller lives?” → bot “Can’t help you with that…”.
-- **4.13–4.14** Type **can you tell me about sector 32?** → list_selection (sector 32 gurgaon / sector 32 faridabad).
-- **4.15–4.16** Type **faridabad** → list_selection (rent / buy / dont care).
-- **4.17–4.18** Click a pill (e.g. **Rent**) → user action + bot **locality_info** (Sector 32 Faridabad, highlights, pros/cons, price trend).
+Use `/chat?demo=true` to run an auto-played scripted demo.
+
+- One step at a time with 2s spacing.
+- Mix of user text and real UI clicks (heart/contact/learn more/locality actions/nested-qna/brochure).
+- Handles auth popup auto-fill (phone + OTP) when login is required.
+- Pauses on location-permission steps and resumes after user interaction (deny/allow).
+- Emits `[demo] ...` logs in browser console for traceability.
+
+## Current Flow Coverage
+
+- **Context on open**: first-time conversation sends a hidden `context` event (fire-and-forget).
+- **Greeting and non-real-estate intent**:
+  - `hi`/`hello`/`hey` (word-level match) → greeting markdown.
+  - `tell me about modiji`/generic off-domain prompts → fallback response.
+- **Property discovery**:
+  - `show me properties` / `show me properties according to my preference` → intro text + `property_carousel`.
+  - Carousel cards support shortlist, contact, and learn-more actions.
+- **Shortlist/contact/brochure**:
+  - Shortlist and contact actions are primarily FE-driven (with hidden/shown `user_action` events).
+  - Text fallback `shortlist this property` returns `shortlist_property`.
+  - Text `contact seller ...` returns `contact_seller`.
+  - `show me brochure` returns `download_brochure`; brochure click sends hidden `brochure_downloaded`.
+- **Locality and nested QnA**:
+  - `locality comparison` → `locality_carousel` (except explicit `sector 32/21` ambiguity).
+  - `sector 32 + sector 21` (or explicit ambiguity) → `nested_qna`.
+  - `learn more about sector 32` (without sector 21) → single-question `nested_qna`.
+  - `nested_qna_selection` returns locality learn-more markdown in mock flow.
+- **Locality analytics/info requests**:
+  - `price trend`, `rating reviews`, `transaction data` return markdown report templates.
+- **Near-me flow**:
+  - `near me`/`3bhk properties near me` → always `share_location` from ML.
+  - `ShareLocation` FE auto-sends `location_shared` when permission already granted (template hidden).
+  - `location_denied` and `location_shared` are both handled by mock ML.
 
 ## Stack (Phase 1)
 
 - **BE/ML**: Co-located in the same service (method calls; **no Kafka** in Phase 1).
 - **BE**: Next.js API routes (`/api/chats/*`): get-conversation-id, get-chats, get-history, **send-message (streaming)**, cancel.
-- **FE**: Single chat page; opens a **new streaming connection per message** (no long-lived SSE subscription).
+- **FE**: Single chat page; opens a **new stream per message** via `sendMessageStream` (no long-lived SSE subscription).
 - **Mock**: In-memory event log and request state; mock “ML” in `lib/mock/ml-flow.ts` returns the next bot message(s) per contract examples.
-- **Data**: Mock properties (image, price, built-up area, seller, BHK, type) and locality (image, name, city, highlights, pros/cons, price trend %) in `lib/mock/data.ts`.
+- **Data**: Mock properties/localities and derived markdown data in `lib/mock/data.ts`.
 
 ## API (aligned with spec)
 
@@ -43,6 +66,13 @@ Open [http://localhost:3000](http://localhost:3000), then **Open Chat** to go to
     - **`event: connection_close`** — emitted when the response is complete (`isFinal: true`) or early-closed when no response is expected.
   - Otherwise returns JSON `{ eventId, requestId }` (legacy / non-streaming clients).
 
-## Implementation diversions
+## UI Notes
 
-See **Appendix A** in `chat_system_architecture_v1.md` for how this app diverges from the frozen spec: get-history params (`messages_before`, `last`) and soft-deleted CANCELLED_BY_USER events; FE 25s reply timeout and awaiting UI; SSE `connection_close` and liveness; Cancel button next to Send.
+- Transient templates (`share_location`, `shortlist_property`, `contact_seller`, `nested_qna`) are rendered only for the latest bot message.
+- `context` and `analytics` messages are never rendered.
+- Input is hidden while sticky `nested_qna` is active.
+- Reply timeout is 25s with Retry/Dismiss.
+
+## Implementation divergences
+
+See **Appendix A** in `chat_system_architecture_v1.md` for implementation-specific behavior that diverges from frozen v1.0.

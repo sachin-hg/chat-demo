@@ -1242,6 +1242,64 @@ function renderEvent(event) {
 
 ---
 
+## Appendix A: Implementation Notes (chat-demo)
+
+This section documents current behavior in this repository where it differs from or extends the frozen v1.0 examples.
+
+### A.1 Transport and request lifecycle
+
+- FE uses `POST /api/chats/send-message` with `Accept: text/event-stream` **per outbound message/action**.
+- Stream sequence is:
+  - `connection_ack` (immediate),
+  - `chat_event` (0..N),
+  - `connection_close` (`reason: "response_complete"`).
+- FE reply timeout is 25s (`replyStatus: timeout`), with Retry and Dismiss.
+
+### A.2 Rendering behavior
+
+- `context` and `analytics` are never rendered.
+- `user_action` is rendered only when `visibility === "shown"` and `derivedLabel` exists.
+- Transient templates are rendered only for latest bot message:
+  - `share_location`, `shortlist_property`, `contact_seller`, `nested_qna`.
+- Input composer is hidden while sticky `nested_qna` is active.
+
+### A.3 Template/action behavior in current app
+
+- Property carousel actions are FE-owned:
+  - shortlist sends hidden `user_action` (`action: "shortlist"`) after FE/API success.
+  - contact sends shown `user_action` (`action: "crf_submitted"`).
+  - learn more sends shown `user_action` (`action: "learn_more_about_property"`).
+- `download_brochure` click emits hidden `user_action` (`action: "brochure_downloaded"`).
+- `nested_qna` uses `data.selections[]`; submit emits:
+  - `action: "nested_qna_selection"`,
+  - `selections: [{ questionId, selection? | text? | skipped? }]`.
+
+### A.4 Location flow (important)
+
+- ML always responds to near-me prompts with `templateId: "share_location"`.
+- FE `ShareLocation` checks permission state:
+  - if already granted, it auto-sends `user_action` `location_shared` and does not render CTA.
+  - otherwise user may send `location_shared` or `location_denied` via template interaction.
+
+### A.5 Current mock-trigger notes (`lib/mock/ml-flow.ts`)
+
+- Greeting uses **whole-word** matching for `hi|hello|hey` (avoids false positives from words like `this`).
+- `locality comparison` returns locality carousel unless text explicitly contains sector ambiguity (`sector 32` / `sector 21`), in which case nested QnA route handles it.
+- Additional text triggers supported in implementation include:
+  - `show me properties according to my preference`,
+  - shortlist/contact via text fallbacks,
+  - price trend / ratings & reviews / transaction data markdown reports.
+
+### A.6 Demo mode (`/chat?demo=true`)
+
+- Auto-play script runs one step at a time with 2s delay.
+- Uses real DOM clicks for templates, nested_qna typing/selection, and brochure CTA.
+- Auth popup is auto-filled (phone + OTP) when shown.
+- Near-me steps intentionally pause for user deny/allow actions.
+- Debug logs are emitted with `[demo]` prefix in browser console.
+
+---
+
 ## Status
 
 **Chat API Contract v1.0 — FROZEN (Rich Text Clarified) ✅**

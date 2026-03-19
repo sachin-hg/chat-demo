@@ -451,17 +451,34 @@ This section records how the **chat-demo** implementation diverges from or exten
 
 ### A.2 FE reply timeout and UI
 
-- **FE timeout**: The FE uses a 25s reply timeout (spec does not define FE timeout). After 25s without a bot reply, the FE shows “Request timed out” with **Retry** and **Dismiss**.
-- **Awaiting phases**: While awaiting, the FE shows phased messages: 0–5s “thinking”, 5–10s “Still Thinking”, 10–15s “Analysing”, 15–25s “It’s taking longer than usual, but I’m trying.”
-- **Input and CTAs disabled**: While `replyStatus === "awaiting"`, the text input and template CTAs (e.g. Shortlist, Contact Seller, list pills) are disabled; only **Cancel** (in the form) and **Retry** / **Dismiss** (after timeout/error) are allowed.
+- **FE timeout**: The FE uses a 25s reply timeout (spec does not define FE timeout). After 25s without a bot final reply, the FE shows “Request timed out” with **Retry** and **Dismiss**.
+- **Awaiting indicator**: While awaiting, FE shows a single inline status (“Running through the details...”).
+- **Input/CTA behavior**:
+  - While `sending`, input submit is disabled.
+  - While `awaiting`, template actions are disabled and **Cancel** is shown in the composer.
+  - On timeout/error, Retry/Dismiss actions are shown.
 
 ### A.3 SSE
 
-- **connection_close**: The BE sends `event: connection_close` with `data: {"reason":"lifecycle"}` immediately before closing the stream when closing due to lifecycle rules (§7). Not sent when the client aborts.
-- **Liveness**: The FE does not rely on application-level keepalive events; it uses `EventSource.readyState` (e.g. periodic check for `CLOSED`) and the native `error` event to detect a closed connection.
+- **Per-message stream**: FE uses `POST /chats/send-message` with `Accept: text/event-stream` per request (no long-lived `GET /chats/stream`).
+- **connection_close**: BE emits `event: connection_close` with `{"reason":"response_complete"}` when final response is sent.
+- **Ack + events**: stream starts with `connection_ack`, followed by `chat_event` entries until final.
 
 ### A.4 Cancel
 
 - **Cancel button**: A **Cancel** button is shown next to **Send** while awaiting a reply. It calls `POST /chats/cancel` with the current `requestId` and then clears the awaiting state so the user can send again.
+
+### A.5 Template and action handling
+
+- **Transient templates**: `share_location`, `shortlist_property`, `contact_seller`, and `nested_qna` are rendered only when they are the latest message.
+- **nested_qna contract shape**: `template.data.selections[]` with per-question `questionId` and options; FE submits `user_action` with `action: "nested_qna_selection"` and `selections`.
+- **Share location behavior**: ML always returns `share_location` for near-me queries; FE `ShareLocation` auto-sends `location_shared` when permission is already granted, and may not render the permission template in that case.
+- **Auth gating for actions**: shortlist/contact/brochure actions are FE-gated behind login bottom sheet; successful action posts send hidden/shown `user_action` events back to BE/ML.
+
+### A.6 Demo mode (`/chat?demo=true`)
+
+- On demo mode, FE runs a scripted sequence (text + real UI clicks) with 2s pacing.
+- Includes login auto-fill (phone/OTP), nested_qna option/text flows, brochure click, and location-permission pauses.
+- Debug tracing is available in browser console with `[demo]` log prefix.
 
 ---
