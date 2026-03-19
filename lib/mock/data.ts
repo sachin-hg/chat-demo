@@ -4,20 +4,6 @@ export type BHKType = 1 | 2 | 3 | 4;
 export type PropertyType = "flat" | "independent_house" | "villa" | "plot";
 export type PropertyCategory = "buy" | "rent";
 
-export interface Property {
-  id: string;
-  title: string;            // "3 BHK flat"
-  projectName: string;      // "M3M Solitude Ralph Estate"
-  tags: string[];           // ["RERA", "Ready to move"]
-  image: string;
-  price: number;            // raw INR
-  priceFormatted: string;   // "₹3 Cr"
-  builtUpArea: number;      // sqft
-  locationFormatted: string; // "Sector 33, Sohna, Gurgaon"
-  sellerName: string;
-  category: PropertyCategory;
-}
-
 export interface Seller {
   id: string;
   name: string;
@@ -34,6 +20,7 @@ export interface LocalityData {
   highlights: string[];
   pros: string[];
   cons: string[];
+  link?: string; // link to locality details page
   priceTrend: number; // % change in last 1 year, e.g. 26.7 = +26.7%
   rating: number;     // 1-5
 }
@@ -45,83 +32,163 @@ export interface SelectionItem {
   city: string;
 }
 
-export const MOCK_PROPERTIES: Property[] = [
+// Note: legacy `MOCK_PROPERTIES` is now represented by `PropertyCarouselCard` below.
+
+// Property card schema for `property_carousel`.
+// Keep it minimal: only fields needed by the UI/design.
+export type InventoryPropertyType = "rent" | "project" | "resale";
+
+export interface ShortAddressLite {
+  display_name: string;
+}
+
+export interface RegionEntityLite {
+  name?: string | null;
+}
+
+export interface InventoryConfigLite {
+  // rent: 1 furnished, 2 semi-furnished, 3 unfurnished
+  furnish_type_id?: number | null | undefined;
+  area_value_in_unit?: number | null | undefined;
+}
+
+export interface PropertyCarouselCard {
+  id: string;
+  type: InventoryPropertyType;
+
+  title: string; // e.g. "3 BHK flat"
+  name?: string | null | undefined; // project name
+
+  short_address: ShortAddressLite[]; // address = short_address.map(x => x.display_name)
+  region_entities?: RegionEntityLite[] | null | undefined;
+
+  is_rera_verified: boolean | null | undefined;
+  is_verified?: boolean | null | undefined;
+
+  inventory_canonical_url: string;
+  thumb_image_url: string; // thumb_image_url.replace('version','large')
+
+  property_tags: string[]; // resale/project second pill
+
+  // price: rent/resale/project
+  formatted_price?: string | null | undefined;
+  formatted_min_price?: string | null | undefined;
+  formatted_max_price?: string | null | undefined;
+
+  // area: rent/resale/project
+  unit_of_area: string; // e.g. "sq.ft."
+  display_area_type: string; // e.g. "Built up area"
+  min_selected_area_in_unit?: number | null | undefined; // project
+  max_selected_area_in_unit?: number | null | undefined; // project
+  inventory_configs: InventoryConfigLite[]; // rent/resale: inventory_configs[0].*
+}
+
+export const MOCK_PROPERTY_CAROUSEL_CARDS: PropertyCarouselCard[] = [
+  // Project (RERA)
   {
     id: "p1",
-    title: "3 BHK flat",
-    projectName: "M3M Solitude Ralph Estate",
-    tags: ["RERA", "Ready to move"],
-    image: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
-    price: 3_00_00_000,
-    priceFormatted: "₹3 Cr",
-    builtUpArea: 4750,
-    locationFormatted: "Sector 33, Sohna, Gurgaon",
-    sellerName: "Nadeem",
-    category: "buy",
+    type: "project",
+    title: "2, 3 BHK Apartments",
+    name: "Godrej Air",
+    short_address: [{ display_name: "Sector 85" }, { display_name: "Gurgaon" }],
+
+    is_rera_verified: true,
+    inventory_canonical_url: "https://example.com/property/p1",
+    thumb_image_url: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
+    property_tags: ["Ready to move"],
+    formatted_min_price: "3 Cr",
+    formatted_max_price: "3.5 Cr",
+    unit_of_area: "sq.ft.",
+    display_area_type: "Built up area",
+    min_selected_area_in_unit: 2500,
+    max_selected_area_in_unit: 4750,
+    inventory_configs: [],
   },
+  // Rent (Verified + furnish type)
   {
     id: "p2",
+    type: "rent",
     title: "3 BHK flat",
-    projectName: "Godrej Nature Plus",
-    tags: ["RERA", "Possession by March, 2026"],
-    image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=600",
-    price: 2_80_00_000,
-    priceFormatted: "₹2.8 Cr",
-    builtUpArea: 4200,
-    locationFormatted: "Sector 85, Gurgaon",
-    sellerName: "Rahul",
-    category: "buy",
+    short_address: [
+      { display_name: "Sector 33" },
+      { display_name: "Sohna" },
+      { display_name: "Gurgaon" },
+    ],
+    region_entities: [{ name: "M3M Solitude Ralph Estate" }],
+    is_rera_verified: false,
+    is_verified: true,
+    inventory_canonical_url: "https://example.com/property/p2",
+    thumb_image_url: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
+    property_tags: [],
+    formatted_price: "30,000",
+    unit_of_area: "sq.ft.",
+    display_area_type: "Built up area",
+    inventory_configs: [{ furnish_type_id: 2, area_value_in_unit: 4750 }],
   },
+  {
+    id: "p4",
+    type: "rent",
+    title: "2 BHK independent floor",
+    short_address: [
+      { display_name: "Sector 23" },
+      { display_name: "Sohna" },
+      { display_name: "Gurgaon" },
+    ],
+    is_rera_verified: true,
+    is_verified: false,
+    inventory_canonical_url: "https://example.com/property/p4",
+    thumb_image_url: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
+    property_tags: [],
+    formatted_price: "12,000",
+    unit_of_area: "sq.ft.",
+    display_area_type: "Built up area",
+    inventory_configs: [{ furnish_type_id: 3, area_value_in_unit: 750 }],
+  },
+  // Resale (Verified + possession)
   {
     id: "p3",
-    title: "3 BHK flat",
-    projectName: "DLF The Camellias",
-    tags: ["Verified", "Semi-furnished"],
-    image: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=600",
-    price: 28_000,
-    priceFormatted: "₹28,000/mo",
-    builtUpArea: 3800,
-    locationFormatted: "DLF Phase 5, Gurgaon",
-    sellerName: "Priya",
-    category: "rent",
+    type: "resale",
+    title: "3 BHK apartment",
+    short_address: [
+      { display_name: "Sector 33" },
+      { display_name: "Sohna" },
+      { display_name: "Gurgaon" },
+    ],
+    is_rera_verified: false,
+    is_verified: true,
+    region_entities: [{ name: "M3M Solitude Ralph Estate" }],
+    inventory_canonical_url: "https://example.com/property/p3",
+    thumb_image_url: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=600",
+    property_tags: ["Possession by March, 2026"],
+    formatted_min_price: "3 Cr",
+    unit_of_area: "sq.ft.",
+    display_area_type: "Built up area",
+    inventory_configs: [{ furnish_type_id: null, area_value_in_unit: 4750 }],
+  },
+  {
+    id: "p5",
+    type: "resale",
+    title: "3 BHK apartment",
+    short_address: [
+      { display_name: "Sector 32" },
+      { display_name: "Sohna" },
+      { display_name: "Gurgaon" },
+    ],
+    is_rera_verified: true,
+    is_verified: false,
+    inventory_canonical_url: "https://example.com/property/p3",
+    thumb_image_url: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=600",
+    property_tags: ["Ready to move"],
+    formatted_min_price: "3.5 Cr",
+    unit_of_area: "sq.ft.",
+    display_area_type: "Built up area",
+    inventory_configs: [{ furnish_type_id: 2, area_value_in_unit: 1200 }],
   },
 ];
 
-export const MOCK_SELLERS: Record<string, Seller> = {
-  s1: {
-    id: "s1",
-    name: "Nadeem",
-    image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100",
-    phone: "+91 98989 89898",
-  },
-};
+// Kept for backward compatibility with templates that import `MOCK_PROPERTIES`.
+export const MOCK_PROPERTIES: PropertyCarouselCard[] = MOCK_PROPERTY_CAROUSEL_CARDS;
 
-export const MOCK_LOCALITIES: LocalityData[] = [
-  {
-    id: "l1",
-    name: "DLF City Phase 4",
-    city: "Gurgaon",
-    image: "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=600",
-    description: "DLF City Phase 4 is a premium locality in Gurgaon with excellent connectivity and top-tier amenities.",
-    highlights: ["Near Metro", "Top schools nearby", "MG Road 5 min"],
-    pros: ["Great connectivity", "Premium infrastructure"],
-    cons: ["High price point"],
-    priceTrend: 26.7,
-    rating: 4,
-  },
-  {
-    id: "l2",
-    name: "Sector 32",
-    city: "Faridabad",
-    image: "https://images.unsplash.com/photo-1486325212027-8081e485255e?w=600",
-    description: "Sector 32 is a well-established locality in Faridabad with good infrastructure.",
-    highlights: ["Near Metro", "Schools & Hospitals nearby"],
-    pros: ["Affordable", "Good connectivity"],
-    cons: ["Traffic in peak hours"],
-    priceTrend: 5.2,
-    rating: 3,
-  },
-];
 
 export const SECTOR_OPTIONS: SelectionItem[] = [
   { id: "uuid1", name: "Sector 32, Gurgaon", type: "Locality", city: "Gurgaon" },
@@ -139,11 +206,7 @@ export const MOCK_LOCALITY_SECTOR_32_GURGAON = {
   id: "l1",
   name: "Sector 32",
   city: "Gurgaon",
-  image: "https://images.housing.com/l1.jpg",
-  description: "Sector 32 is a bustling locality in Gurgaon with a population of 25K.",
-  highlights: ["highlight 1", "highlight 2"],
-  pros: ["pro1", "pro2"],
-  cons: ["con1"],
+  image: "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=1200&auto=format&fit=crop&q=80",
   priceTrend: 26.7,
   rating: 4,
 };
@@ -151,32 +214,17 @@ export const MOCK_LOCALITY_SECTOR_21_GURGAON = {
   id: "l3",
   name: "Sector 21",
   city: "Gurgaon",
-  image: "https://images.housing.com/l1.jpg",
-  description: "Sector 21 is a bustling locality in Gurgaon with a population of 25K.",
-  highlights: ["highlight 1", "highlight 2"],
-  pros: ["pro1", "pro2"],
-  cons: ["con1"],
+  image: "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1200&auto=format&fit=crop&q=80",
   priceTrend: 22,
   rating: 4,
 };
 
-export const RENT_BUY_OPTIONS: SelectionItem[] = [
-  { id: "rent_id", name: "Rent", type: "Category", city: "" },
-  { id: "buy_id", name: "Buy", type: "Category", city: "" },
-  { id: "dont_care", name: "Don't care", type: "Category", city: "" },
-];
 
 export interface PriceTrendQoQ {
   quarter: string;
   changePercent: number;
 }
 
-export const MOCK_PRICE_TREND_SECTOR_32_GURGAON: PriceTrendQoQ[] = [
-  { quarter: "Q1 2024", changePercent: 2.1 },
-  { quarter: "Q2 2024", changePercent: 1.5 },
-  { quarter: "Q3 2024", changePercent: -0.3 },
-  { quarter: "Q4 2024", changePercent: 3.2 },
-];
 
 // Property learn more (design: property learn more.png)
 export interface PropertyDetailsData {

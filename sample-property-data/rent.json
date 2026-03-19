@@ -1,0 +1,892 @@
+{
+    "freshness_score": 0.9548416,
+    "medium_address": [
+        {
+            "polygon_uuid": "496dee59973e0548ac9f",
+            "display_name": "Sector 80"
+        }
+    ],
+    "floor_number": 9,
+    "type": "rent",
+    "video_tour": false,
+    "is_uc_property": false,
+    "property_category_id": 1,
+    "score": 1,
+    "formatted_per_sqft_rate": null,
+    "price": 36000,
+    "ad_deficit": 41.05,
+    "show_building_name": true,
+    "collection_ids": [],
+    "featured_type": "locality",
+    "id": 19721523,
+    "ctr": 0,
+    "featured_video_thumbnail_url": null,
+    "date_added": "2026-03-13T18:42:27Z",
+    "region_entities": [
+        {
+            "inventory_canonical_url": "/rent-godrej-frontier-flats-in-sector-80-gurgaon-rpid-AGojtAH0",
+            "is_rera_verified": false,
+            "duplicate_project_id": "null",
+            "latitude": 28.375673,
+            "initiation_date": 1285871400,
+            "type": "project",
+            "has_transaction": false,
+            "review_rating": 4.17,
+            "entity_url": "/in/buy/projects/page/31817-godrej-frontier-by-godrej-properties-ltd-in-sector-80",
+            "is_post_rera": true,
+            "name": "Godrej Frontier",
+            "paid": true,
+            "show_project_name": true,
+            "completion_date": 1430438400,
+            "id": "31817",
+            "status": "ACTIVE",
+            "longitude": 76.957603
+        }
+    ],
+    "inventory_amenities": {
+        "has_tv": true,
+        "has_ac": true,
+        "has_power_backup": true,
+        "has_washing_machine": null,
+        "is_gated_community": true,
+        "has_kids_area": true,
+        "has_stove": null,
+        "has_sports_facility": true,
+        "has_fridge": null,
+        "has_geyser": true,
+        "has_community_hall": true,
+        "pet_allowed": null,
+        "has_garden": true,
+        "has_gas_pipeline": true,
+        "has_parking": true,
+        "has_lift": true,
+        "has_attached_balcony": true,
+        "has_regular_water_supply": true,
+        "has_gym": true,
+        "has_clubhouse": true,
+        "has_cctv": true,
+        "has_swimming_pool": true,
+        "has_intercom": true
+    },
+    "status": "ACTIVE",
+    "short_address": [
+        {
+            "polygon_uuid": "496dee59973e0548ac9f",
+            "display_name": "Sector 80"
+        },
+        {
+            "polygon_uuid": "3c69d8421a77f8f8b611",
+            "display_name": "Gurgaon"
+        }
+    ],
+    "credit_score": null,
+    "unit_of_area": "sq.ft.",
+    "media_details": {
+        "listing_videos": []
+    },
+    "freshness_score_v1": 0.9548416,
+    "polygon_data": {
+        "primary_polygon_uuid": "496dee59973e0548ac9f",
+        "primary_polygon_name": "Sector 80"
+    },
+    "prime_location_factor": null,
+    "updated_at": 1773482014,
+    "total_relevance_score_other_source_web": 5190.9474208,
+    "polygons_hash": {
+        "h_district": {
+            "url_name": null,
+            "name": null,
+            "display_name": null,
+            "uuid": null,
+            "is_proxy": null
+        },
+        "city": {
+            "url_name": "gurgaon",
+            "name": "Gurgaon",
+            "display_name": [
+                "Gurgaon",
+                "Haryana"
+            ],
+            "uuid": "3c69d8421a77f8f8b611",
+            "is_proxy": true
+        },
+        "hotspot": {
+            "url_name": null,
+            "name": null,
+            "display_name": null,
+            "uuid": null,
+            "is_proxy": null
+        },
+        "neighbourhood": {
+            "url_name": null,
+            "name": null,
+            "display_name": null,
+            "uuid": null,
+            "is_proxy": null
+        },
+        "housing_region": {
+            "url_name": "new_gurgaon",
+            "name": "New Gurgaon",
+            "display_name": [
+                "NH 8",
+                "Gurgaon"
+            ],
+            "uuid": "6961c8876d6de65d6f37",
+            "is_proxy": null
+        },
+        "locality": {
+            "url_name": "sector_80_gurgaon",
+            "name": "Sector 80",
+            "display_name": [
+                "Sector 80",
+                "Gurgaon"
+            ],
+            "uuid": "496dee59973e0548ac9f",
+            "is_proxy": null
+        },
+        "sublocality": {
+            "url_name": null,
+            "name": null,
+            "display_name": null,
+            "uuid": null,
+            "is_proxy": null
+        },
+        "state": {
+            "url_name": "haryana",
+            "name": "Haryana",
+            "display_name": [
+                "Haryana",
+                "India"
+            ],
+            "uuid": "793f17ce2d8d4bfcd6f6",
+            "is_proxy": null
+        },
+        "region": {
+            "url_name": "gurgaon_district",
+            "name": "Gurgaon District",
+            "display_name": [
+                "Gurgaon District",
+                "Haryana"
+            ],
+            "uuid": "cdbadacafda35b98d359",
+            "is_proxy": null
+        },
+        "housing_state": {
+            "url_name": null,
+            "name": null,
+            "display_name": null,
+            "uuid": null,
+            "is_proxy": null
+        }
+    },
+    "offers_segregated_data": {},
+    "selective_boost_factor": 1,
+    "promotion_relevance_score": 5190,
+    "age_of_property": 10,
+    "is_virtual_tour_available": false,
+    "images_hash": {
+        "project_images": [
+            {
+                "images": [
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Elevation",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-3.housingcdn.com/4f2250e8/984c41e4b37f8d6a257e01c9c57a310d/v0/version.jpeg",
+                        "tag_names": [
+                            "Elevation"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Tower B Ground Cluster Plan",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/091969a20ee53a2416773956bdb8abb7/v0/version.jpeg",
+                        "tag_names": [
+                            "Cluster Plan"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Tower E, F, G, H, J Upper Penthouse Cluster Plan",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/1271d84822f27c8da7a6f914eefda22e/v0/version.jpeg",
+                        "tag_names": [
+                            "Cluster Plan"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Elevation",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-3.housingcdn.com/012c1500/132e3a55a759a613cd90010ee2deb7a5/v0/version.jpeg",
+                        "tag_names": [
+                            "Elevation"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Elevation",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/13486c27890f28cf86a816c5ed076fff/v0/version.jpeg",
+                        "tag_names": [
+                            "Elevation"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Tower B Typical Cluster Plan",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/13ec4dc949a203052e2f05229c6ba948/v0/version.jpeg",
+                        "tag_names": [
+                            "Cluster Plan"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Tower A Typical Cluster Plan",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/1ee31bcc73267175d64a5071d4ead494/v0/version.jpeg",
+                        "tag_names": [
+                            "Cluster Plan"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Elevation",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-3.housingcdn.com/012c1500/21804182bdd6de3632ae36bbf2e4bd68/v0/version.jpeg",
+                        "tag_names": [
+                            "Elevation"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Tower B Cluster Plan For 1st Floor",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-3.housingcdn.com/012c1500/29b082b30135fd639f1165050f1a3a6f/v0/version.jpeg",
+                        "tag_names": [
+                            "Cluster Plan"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": 235,
+                            "is_real_image": null,
+                            "image_width": 400
+                        },
+                        "caption": "Godrej-Frontier-Sec-80-Gurgaon - Rohit Chaudhary.jpg",
+                        "sv_or_dc_approved": false,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/37c803f6586ebb11e698d0de5880290a/v0/version.jpg",
+                        "tag_names": [
+                            "Amenities"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Tower K Typical Cluster Plan",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/392842a707bfc096a0e896391a191ba8/v0/version.jpeg",
+                        "tag_names": [
+                            "Cluster Plan"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Tower D Lower Penthouse Cluster Plan",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-3.housingcdn.com/012c1500/41106f87905948be6f0c63968344c30b/v0/version.jpeg",
+                        "tag_names": [
+                            "Cluster Plan"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Tower C Cluster Plan For 1st Floor",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/4db62e3f28a859c56327357861b3e6cd/v0/version.jpeg",
+                        "tag_names": [
+                            "Cluster Plan"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Tower C Ground Cluster Plan",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/57844a6865ee99d646e48fd4deb48309/v0/version.jpeg",
+                        "tag_names": [
+                            "Cluster Plan"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Tower A Cluster Plan For 1st Floor",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/59aa608282df62b066cd67b504d80d5f/v0/version.jpeg",
+                        "tag_names": [
+                            "Cluster Plan"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Landscaped Gardens",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-3.housingcdn.com/012c1500/6b7680dde119a85cae2502049d2990c6/v0/version.jpeg",
+                        "tag_names": [
+                            "Amenities"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": 300,
+                            "is_real_image": null,
+                            "image_width": 225
+                        },
+                        "caption": "Jogging Track",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-3.housingcdn.com/012c1500/736dc92b7ec3b0add4b30f1de90c3fb4/v0/version.jpeg",
+                        "tag_names": [
+                            "Amenities"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Tower C Typical Cluster Plan",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-3.housingcdn.com/012c1500/7a7627a77f99056f569cf63e0738d554/v0/version.jpeg",
+                        "tag_names": [
+                            "Cluster Plan"
+                        ]
+                    }
+                ],
+                "alt_tag": "Project Image of 1716 Sq.ft 3 BHK Apartment / Flat for rent in Sector 80 for Rs. 36000",
+                "master_tag": "Project Images"
+            }
+        ],
+        "flat_images": [
+            {
+                "images": [
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": 1920
+                        },
+                        "caption": "Bedroom One",
+                        "sv_or_dc_approved": true,
+                        "absolute_url": "https://is1-3.housingcdn.com/01c16c28/071322379f524cd1831cb8952b80ce0a/v0/version/3_bhk_apartment-for-rent-sector_80_gurgaon-Gurgaon-bedroom_one.jpg",
+                        "image_type": "images"
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": 1920
+                        },
+                        "caption": "Bedroom Two",
+                        "sv_or_dc_approved": true,
+                        "absolute_url": "https://is1-3.housingcdn.com/01c16c28/4f03ffd872054351a2aa39d9ce65da70/v0/version/3_bhk_apartment-for-rent-sector_80_gurgaon-Gurgaon-bedroom_two.jpg",
+                        "image_type": "images"
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": 1920
+                        },
+                        "caption": "Bedroom Three",
+                        "sv_or_dc_approved": true,
+                        "absolute_url": "https://is1-2.housingcdn.com/01c16c28/aaf1fd930fc44a5dabb6410f0398447c/v0/version/3_bhk_apartment-for-rent-sector_80_gurgaon-Gurgaon-bedroom_three.jpg",
+                        "image_type": "images"
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": 1920
+                        },
+                        "caption": "Bedroom",
+                        "sv_or_dc_approved": true,
+                        "absolute_url": "https://is1-3.housingcdn.com/01c16c28/46a7feb4f36e4ebd9842418c049cfee2/v0/version/3_bhk_apartment-for-rent-sector_80_gurgaon-Gurgaon-bedroom.jpg",
+                        "image_type": "images"
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": 1920
+                        },
+                        "caption": "Bedroom",
+                        "sv_or_dc_approved": true,
+                        "absolute_url": "https://is1-3.housingcdn.com/01c16c28/97643ce9eba54d799d544ecf962a7f54/v0/version/3_bhk_apartment-for-rent-sector_80_gurgaon-Gurgaon-bedroom.jpg",
+                        "image_type": "images"
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": 1920
+                        },
+                        "caption": "Bedroom",
+                        "sv_or_dc_approved": true,
+                        "absolute_url": "https://is1-3.housingcdn.com/01c16c28/c776687420a54536be6dbe6adec34fa6/v0/version/3_bhk_apartment-for-rent-sector_80_gurgaon-Gurgaon-bedroom.jpg",
+                        "image_type": "images"
+                    }
+                ],
+                "alt_tag": "Bedroom Image of 1716 Sq.ft 3 BHK Apartment / Flat for rent in Godrej Frontier, Sector 80 Gurgaon for Rs. 36000",
+                "master_tag": "Bedroom"
+            },
+            {
+                "images": [
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": 1920
+                        },
+                        "caption": "Living Room",
+                        "sv_or_dc_approved": true,
+                        "absolute_url": "https://is1-2.housingcdn.com/01c16c28/6fe0cec265a045d7baa746a3c33fa77a/v0/version/3_bhk_apartment-for-rent-sector_80_gurgaon-Gurgaon-living_room.jpg",
+                        "image_type": "images"
+                    }
+                ],
+                "alt_tag": "Living Room Image of 1716 Sq.ft 3 BHK Apartment / Flat for rent in Godrej Frontier, Sector 80 Gurgaon for Rs. 36000",
+                "master_tag": "Living Room"
+            },
+            {
+                "images": [
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": 1920
+                        },
+                        "caption": "Kitchen",
+                        "sv_or_dc_approved": true,
+                        "absolute_url": "https://is1-2.housingcdn.com/01c16c28/4a993e8db5494b16b7928145430db9e7/v0/version/3_bhk_apartment-for-rent-sector_80_gurgaon-Gurgaon-kitchen.jpg",
+                        "image_type": "images"
+                    }
+                ],
+                "alt_tag": "Kitchen Image of 1716 Sq.ft 3 BHK Apartment / Flat for rent in Godrej Frontier, Sector 80 Gurgaon for Rs. 36000",
+                "master_tag": "Kitchen"
+            }
+        ],
+        "building_images": [],
+        "project_vimeo_videos": [],
+        "project_videos": [
+            {
+                "src": "https://img.youtube.com/vi/1TgPtMK2uzI/hqdefault.jpg",
+                "alt": "3D Tour Of Godrej Frontier",
+                "caption": "Project Tour",
+                "type": "video",
+                "uuid": "1TgPtMK2uzI",
+                "url": "https://www.youtube.com/embed/1TgPtMK2uzI"
+            }
+        ]
+    },
+    "address": [
+        "Godrej Frontier",
+        "Sector 80",
+        "New Gurgaon",
+        "Gurgaon"
+    ],
+    "ml_selected_url": null,
+    "quality_score": 9.41,
+    "long_address": [
+        {
+            "region_entity_type": "project",
+            "region_entity_id": 31817,
+            "display_name": "Godrej Frontier"
+        },
+        {
+            "polygon_uuid": "496dee59973e0548ac9f",
+            "display_name": "Sector 80"
+        },
+        {
+            "polygon_uuid": "6961c8876d6de65d6f37",
+            "display_name": "New Gurgaon"
+        },
+        {
+            "polygon_uuid": "3c69d8421a77f8f8b611",
+            "display_name": "Gurgaon"
+        }
+    ],
+    "distribution_factor": 1,
+    "featured_video_url": null,
+    "impressions": 0,
+    "ad_satisfaction": 6.81,
+    "is_verified": true,
+    "is_corner_property": false,
+    "filter_title": null,
+    "property_tags": [
+        "Apartment"
+    ],
+    "normalized_churn_score": 0,
+    "region_entity": {
+        "inventory_canonical_url": "/rent-godrej-frontier-flats-in-sector-80-gurgaon-rpid-AGojtAH0",
+        "is_rera_verified": false,
+        "duplicate_project_id": "null",
+        "latitude": 28.375673,
+        "type": "project",
+        "has_transaction": false,
+        "review_rating": 4.17,
+        "entity_url": "/in/buy/projects/page/31817-godrej-frontier-by-godrej-properties-ltd-in-sector-80",
+        "is_post_rera": true,
+        "name": "Godrej Frontier",
+        "paid": true,
+        "show_project_name": true,
+        "completion_date": 1430438400,
+        "id": "31817",
+        "status": "ACTIVE",
+        "longitude": 76.957603
+    },
+    "extra_soft_deficit": 0,
+    "is_certified": false,
+    "total_relevance_score_paid_source_web": 5190.9474208,
+    "profile_uuids": [
+        "f58e843d-54f0-4be0-adae-d4ca571f9fea"
+    ],
+    "date_added_in_seconds": 1773407547,
+    "show_loan_option": true,
+    "boosted_as": "HOUSING_EXPERT_PRO",
+    "developer_name": "",
+    "is_titanium": false,
+    "family_friendly_property_factor": 1,
+    "location_coordinates": "28.375673,76.957603",
+    "nearby_establishments": {
+        "bus_station": 1.7,
+        "school": 0.37,
+        "restaurant": 0.1,
+        "hospital": 0.39
+    },
+    "nearby_landmarks": [
+        {
+            "establishment_type": "school",
+            "distance": 3.4145200470314876,
+            "name": "Delhi Public School, Sector 84",
+            "canonical": "/landmarks/sector-84-gurgaon-overview/schools-ESdP3vidvqx6uu31gzb4"
+        },
+        {
+            "establishment_type": "hospital",
+            "distance": 1.9351756361106442,
+            "name": "Miracles Apollo Cradle/Spectra Sec 82 - Hospital",
+            "canonical": ""
+        },
+        {
+            "establishment_type": "restaurant",
+            "distance": 0.4714403912349652,
+            "name": "McDonald's India Gurugram",
+            "canonical": "/landmarks/sector-80-gurgaon-overview/restaurants-ES5P21dk14p6brnwctjz"
+        },
+        {
+            "establishment_type": "shopping_mall",
+            "distance": 1.8588329953545992,
+            "name": "Vatika Town Square-INXT",
+            "canonical": ""
+        },
+        {
+            "duration": 4,
+            "establishment_type": "bus_station",
+            "distance": 1.701962158293973,
+            "name": "I.M.T Manesar Bus Stop",
+            "canonical": "",
+            "travel_distance": 2.147
+        }
+    ],
+    "seo_address": [
+        {
+            "name": "Godrej Frontier",
+            "href": "/in/buy/projects/page/31817-godrej-frontier-by-godrej-properties-ltd-in-sector-80",
+            "type": "project"
+        },
+        {
+            "name": "Sector 80,Gurgaon",
+            "href": "/rent/flats-for-rent-in-sector-80-gurgaon-P21dk14p6brnwctjz",
+            "type": "locality"
+        }
+    ],
+    "total_relevance_score_other_source_ios": 5190.9474208,
+    "total_relevance_score_paid_source_mobile": 5190.9474208,
+    "inventory_canonical_url": "/rent/19721523-1716-sqft-3-bhk-apartment-on-rent-in-sector-80-gurgaon",
+    "paid_benefit": 1,
+    "bounding_box": {
+        "url_name": "gurgaon",
+        "name": "Gurgaon",
+        "display_name": null,
+        "uuid": "526acdc6c33455e9e4e9",
+        "is_proxy": null
+    },
+    "monetization_factor": 0.07,
+    "parking_count": 1,
+    "floor_count": 17,
+    "inventory_configs": [
+        {
+            "formatted_price": "36.0k",
+            "seller": [
+                1
+            ],
+            "area_in_sq_ft": 1716,
+            "is_parking_chargeable": false,
+            "facing": "south-east",
+            "is_painting_chargeable": false,
+            "is_rent_maintenance_chargeable": false,
+            "open_parking_count": 0,
+            "is_security_deposit_chargeable": true,
+            "area_value_in_unit": 1716,
+            "property_type_id": 1,
+            "property_category_id": 1,
+            "flat_config_id": 19721523,
+            "furnish_type_id": 2,
+            "actual_property_type_id": 1,
+            "property_category": "residential",
+            "lock_in_period": 4,
+            "price": 36000,
+            "property_category_type_mapping_id": "1",
+            "property_type": "Apartment",
+            "is_brokerage_chargeable": true,
+            "price_on_request": false,
+            "parking_charges": null,
+            "pitch": "3BHK Semi Furnished Apartment for Rent in Godrej Frontier, Sector 80 Gurgaon\n\nA well maintained semi furnished 3BHK apartment available for rent in Godrej Frontier located in Sector 80 Gurgaon. Developed by Godrej Properties, the project is known for its quality construction, spacious layouts and premium lifestyle environment.\n\nThe apartment is situated on the 9th floor and offers comfortable living with good natural light, ventilation and a practical floor plan. The flat comes with semi furnished fittings suitable for families looking for a ready to move rental home in a premium gated community.\n\nResidents of the society enjoy access to a wide range of modern lifestyle amenities including clubhouse, swimming pool, gymnasium, landscaped gardens, children play area, lifts, power backup and 24x7 security. The project is well connected to major roads and employment hubs of Gurgaon.\n\nThe location offers smooth connectivity to National Highway 48 making daily commuting convenient for working professionals.\n\nRental Details\nConfiguration: 3BHK\nFurnishing: Semi Furnished\nFloor: 9th Floor\nMonthly Rent: ₹36,000 (All Amenities Included)\nSuitable For: Families\n\nKey Highlights\n3BHK semi furnished apartment in Godrej Frontier\nLocated in Sector 80 Gurgaon\nPremium project by Godrej Properties\nClubhouse, gymnasium, swimming pool and landscaped greens\nPower backup, lifts and gated security\nClose connectivity to NH48 and major Gurgaon business hubs\nIdeal for comfortable family living",
+            "id": 19721523,
+            "covered_parking_count": 1,
+            "number_of_toilets": 3,
+            "area": 1716,
+            "is_brokerage_negotiable": false,
+            "brokerage": 18000,
+            "number_of_bedrooms": 3,
+            "security_deposit": 72000,
+            "is_lock_in_period_chargeable": true,
+            "maintenance_charges_rent": null,
+            "apartment_type_id": 4,
+            "parking_count": 1,
+            "maintenance_charges_buy": null,
+            "is_available": true,
+            "apartment_type": "3 BHK",
+            "carpet_area": 1270,
+            "seat_count": null,
+            "total_balcony_count": 3,
+            "completion_date": 1458047547,
+            "cabin_count": null,
+            "painting_charges": 0
+        }
+    ],
+    "currently_leased_out": null,
+    "polygon_uuids": [
+        "f7f5d7f50dde9452144e",
+        "526acdc6c33455e9e4e9",
+        "3c69d8421a77f8f8b611",
+        "3c69d8421a77f8f8b611",
+        "496dee59973e0548ac9f",
+        "6961c8876d6de65d6f37",
+        "6961c8876d6de65d6f37",
+        "6961c8876d6de65d6f37",
+        "6961c8876d6de65d6f37",
+        "793f17ce2d8d4bfcd6f6",
+        "cdbadacafda35b98d359"
+    ],
+    "total_relevance_score_paid_source_default": 5190.9474208,
+    "_id": "19721523_rent",
+    "absolute_churn_score": 0,
+    "total_relevance_score_other_source_default": 5190.9474208,
+    "titanium_highlights": null,
+    "formatted_price": "36.0k",
+    "listing_reports_flag": 0,
+    "listing_highlights": [
+        "Power Backup",
+        "Lift",
+        "Club House",
+        "Swimming Pool"
+    ],
+    "thumb_image_alt_tag": "Gallery Cover Image of 1716 Sq.ft 3 BHK Apartment / Flat for rent in Godrej Frontier, Sector 80 for Rs. 36000",
+    "description": "3BHK Semi Furnished Apartment for Rent in Godrej Frontier, Sector 80 Gurgaon\n\nA well maintained semi furnished 3BHK apartment available for rent in Godrej Frontier located in Sector 80 Gurgaon. Developed by Godrej Properties, the project is known for its quality construction, spacious layouts and premium lifestyle environment.\n\nThe apartment is situated on the 9th floor and offers comfortable living with good natural light, ventilation and a practical floor plan. The flat comes with semi furnished fittings suitable for families looking for a ready to move rental home in a premium gated community.\n\nResidents of the society enjoy access to a wide range of modern lifestyle amenities including clubhouse, swimming pool, gymnasium, landscaped gardens, children play area, lifts, power backup and 24x7 security. The project is well connected to major roads and employment hubs of Gurgaon.\n\nThe location offers smooth connectivity to National Highway 48 making daily commuting convenient for working professionals.\n\nRental Details\nConfiguration: 3BHK\nFurnishing: Semi Furnished\nFloor: 9th Floor\nMonthly Rent: ₹36,000 (All Amenities Included)\nSuitable For: Families\n\nKey Highlights\n3BHK semi furnished apartment in Godrej Frontier\nLocated in Sector 80 Gurgaon\nPremium project by Godrej Properties\nClubhouse, gymnasium, swimming pool and landscaped greens\nPower backup, lifts and gated security\nClose connectivity to NH48 and major Gurgaon business hubs\nIdeal for comfortable family living<br><br> <b>More About This Property</b> <br><br>Check out this Apartment available for rent in Sector 80 in Gurgaon. It is a 3 BHK unit that comes at an affordable rent, with modern features and premium amenities to suit your lifestyle needs. The unit is Semi Furnished. It is an South-East facing property that has been constructed as per Vastu principles. With numerous new-age amenities and green surroundings, this Apartment provides a convenient lifestyle for residents. A spacious house for your family, this unit includes 3 bedrooms. There are 3 bathroom and 3 balcony. It has a built-up area of 1716 Square feet. The carpet area is 1270 Square feet. The Apartment is built on 9 floor. The building has a total of 17 floors. The monthly rent is Rs 36000 and the security deposit to be paid by residents is Rs 72000. <br><br><b>Project Highlights</b><br><br> This Apartment is constructed within Godrej Frontier. The developer also provides other units of 3 BHK configuration. Many amenities have been provided for the residents of this Apartment. The amenities include Gym, Garden, Sports Facility, Swimming Pool, Intercom, Clubhouse, Community Hall. There is also provision for power backup facility. There is a modern lift facility. The availability of cctv facility promises safety and security for the residents. This property also includes gymnasium for those who prefer to follow a fitness routine. The locality Sector 80 enjoys good connectivity to different parts of the city. The residents of this Apartment will find many reputed healthcare centres in the neighborhood. There are hospitals like Miracles Apollo Cradle/Spectra Sec 82 - Hospital, Aarvy Healthcare Pvt Ltd., and Medeor Hospital, Manesar",
+    "video": null,
+    "title": "3 BHK Flat",
+    "verification_status": "SELLER_VERIFIED",
+    "platform": null,
+    "listing_deboost_flag": 0,
+    "sellers_info": [
+        {
+            "extra_soft_deficit": 0,
+            "absolute_monetization_factor_ab": 0,
+            "monetization_factor_ab": 0,
+            "is_certified": false,
+            "operating_localities": [
+                {
+                    "name": "Manesar",
+                    "uuid": "2a52e859cd4a6bbe9188"
+                },
+                {
+                    "name": "Milakpur Goojar",
+                    "uuid": "6043703a2e004712cefc"
+                },
+                {
+                    "name": "Sector 77",
+                    "uuid": "2f3e266bc6a6937a2e01"
+                },
+                {
+                    "name": "Madhosinghpura",
+                    "uuid": "3005a7a2959183ff15b0"
+                },
+                {
+                    "name": "Sector 82",
+                    "uuid": "687fcb5c47fc02d36f16"
+                },
+                {
+                    "name": "Sector 78",
+                    "uuid": "80de3be8e9ffe90c0cb3"
+                },
+                {
+                    "name": "Sector 81",
+                    "uuid": "a8888c394dbcc6108569"
+                },
+                {
+                    "name": "Sector 86",
+                    "uuid": "fe5388b6cc76451a5b11"
+                }
+            ],
+            "profile_picture_url": "https://is1-2.housingcdn.com/fb15c03b/071e4a8ab3936fb06a74f9db59b49a6c/v0/version.jpg",
+            "is_titanium": false,
+            "brand_color": "",
+            "seller_classification": "Housing Expert Pro",
+            "experience": 21,
+            "rent": 36000,
+            "seller_badge": "HE Pro",
+            "uuid": "f58e843d-54f0-4be0-adae-d4ca571f9fea",
+            "parent_profile_name": null,
+            "avg_leads_per_day": 0.5,
+            "ad_deficit": 41.05,
+            "is_brokerage_chargeable": true,
+            "is_brokerage_negotiable": false,
+            "brokerage": 18000,
+            "seller_badge_products": [
+                "Housing Expert Pro"
+            ],
+            "listing_order_subscription_type": null,
+            "contact_person_id": 1,
+            "canonical": "/buy-property-by-vaibhav-tayal-aid-730346-Alk2w8d52rezrpg085okehdn8q",
+            "show_firm_name": true,
+            "formatted_customer_served_count": "900+",
+            "is_escalated": false,
+            "name": "Vaibhav Tayal",
+            "text_color": "#FFFFFF",
+            "parent_package_subscription_type": null,
+            "profile_url": "vaibhav-tayal-aid-730346",
+            "profile_color": "#153456",
+            "chat_enabled": true,
+            "partial_contact_number": "98991xxxxx",
+            "profile_category": null,
+            "seller_label": "Agent",
+            "is_certified_pro": true,
+            "housing_chat_disabled": null,
+            "soft_deficit": 0,
+            "is_housing_ultra": false,
+            "parent_profile_uuid": null,
+            "brand_logo_url": "",
+            "nrr_rank": 12,
+            "profile_uuid": "f58e843d-54f0-4be0-adae-d4ca571f9fea",
+            "security_deposit": 72000,
+            "show_agent_name": false,
+            "broker_rera_details": [],
+            "event_ids": [],
+            "firm_name": "Tayal Estates",
+            "paid": true,
+            "opt_in": true
+        }
+    ],
+    "city_select_uuid": [
+        "526acdc6c33455e9e4e9"
+    ],
+    "video_url": null,
+    "verified_at": 1773482013,
+    "soft_deficit": 0,
+    "display_area_type": "Builtup Area",
+    "is_recently_added": true,
+    "price_on_request": false,
+    "total_relevance_score_paid_source_ios": 5190.9474208,
+    "similar_listings": [],
+    "result_type": "PAID_LISTINGS",
+    "display_neighbourhood": [
+        "Gurgaon",
+        "Sector 80"
+    ],
+    "floor_plan_alt_tag": "Floor Plan Image of 1716 Sq.ft 3 BHK Apartment / Flat for rent in Godrej Frontier, Sector 80 Gurgaon for Rs. 36000",
+    "thumb_image_url": "https://is1-3.housingcdn.com/01c16c28/071322379f524cd1831cb8952b80ce0a/v0/version/3_bhk_apartment-for-rent-sector_80_gurgaon-Gurgaon-bedroom_one.jpg",
+    "offers_data": [],
+    "social_factors_display": [],
+    "total_relevance_score_other_source_mobile": 5190.9474208,
+    "street_info": "Godrej Frontier Sector 80 Gurgaon",
+    "available_from": "2026-03-14T00:00:00Z",
+    "relevance_score": 0.4774,
+    "is_blocked": false,
+    "is_exclusive_property": null,
+    "total_relevance_score_other_source_android": 5190.9474208,
+    "area_unit": "square_feet",
+    "paid": true,
+    "photo_under_review": false,
+    "total_relevance_score_paid_source_android": 5190.9474208,
+    "overidden_address_value": null
+}

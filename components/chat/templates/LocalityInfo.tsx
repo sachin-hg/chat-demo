@@ -14,22 +14,28 @@ interface Locality {
   priceTrend?: number;
   priceTrendLabel?: string;
   rating?: number;
+  link?: string;
 }
 
 interface Props {
   data: Record<string, unknown>;
-  messageId?: string;
-  onAction?: (actionId: string, localityId: string, messageId: string, derivedLabel: string) => void;
+  onAction?: (args: {
+    action: "show_properties_in_locality" | "learn_more_about_locality";
+    responseRequired: boolean;
+    visibility: "shown" | "hidden";
+    derivedLabel: string;
+    locality: { localityUuid: string };
+  }) => void;
   disabled?: boolean;
 }
 
-export function LocalityInfo({ data, messageId = "", onAction, disabled = false }: Props) {
+export function LocalityInfo({ data, onAction, disabled = false }: Props) {
   const localities: Locality[] = Array.isArray((data as { localities?: unknown[] }).localities)
     ? ((data as { localities: Locality[] }).localities)
     : [data as Locality];
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4" style={{ scrollSnapType: "x mandatory" }}>
+    <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4" style={{ scrollSnapType: "x mandatory" }} data-demo="locality-carousel">
       {localities.map((loc, idx) => {
         const locId = loc.id ?? `loc_${idx}`;
         const name = loc.name ?? "";
@@ -45,6 +51,7 @@ export function LocalityInfo({ data, messageId = "", onAction, disabled = false 
             key={locId}
             className="flex-shrink-0 w-[262px] rounded-[24px] bg-white border border-[#e1e2e8] overflow-hidden"
             style={{ scrollSnapAlign: "start" }}
+            data-demo-locality-index={idx}
           >
             <div className="relative h-[160px] bg-gray-100 rounded-t-[24px] overflow-hidden">
               <Image src={image} alt={name} fill className="object-cover" unoptimized sizes="262px" />
@@ -82,7 +89,16 @@ export function LocalityInfo({ data, messageId = "", onAction, disabled = false 
                 <button
                   type="button"
                   disabled={disabled}
-                  onClick={() => onAction?.("show_properties_in_locality", locId, messageId, `Show properties in ${displayName}`)}
+                  data-demo-action="show-properties"
+                  onClick={() =>
+                    onAction?.({
+                      action: "show_properties_in_locality",
+                      responseRequired: true,
+                      visibility: "shown",
+                      derivedLabel: `Show properties in ${displayName}`,
+                      locality: { localityUuid: locId },
+                    })
+                  }
                   className="w-full h-12 rounded-lg bg-[#5E23DC] text-white text-sm font-medium hover:bg-[#4a1bb5] transition-colors disabled:opacity-40 flex items-center justify-center"
                 >
                   Show properties
@@ -90,7 +106,16 @@ export function LocalityInfo({ data, messageId = "", onAction, disabled = false 
                 <button
                   type="button"
                   disabled={disabled}
-                  onClick={() => onAction?.("learn_more_about_locality", locId, messageId, `Learn more about ${displayName}`)}
+                  data-demo-action="learn-more"
+                  onClick={() =>
+                    onAction?.({
+                      action: "learn_more_about_locality",
+                      responseRequired: true,
+                      visibility: "shown",
+                      derivedLabel: `Learn more about ${displayName}`,
+                      locality: { localityUuid: locId },
+                    })
+                  }
                   className="w-full h-12 rounded-lg border border-[#5E23DC] text-[#5E23DC] text-sm font-medium hover:bg-[#5E23DC]/[0.06] transition-colors disabled:opacity-40 flex items-center justify-center"
                 >
                   Learn more
@@ -102,4 +127,25 @@ export function LocalityInfo({ data, messageId = "", onAction, disabled = false 
       })}
     </div>
   );
+}
+
+export function getClipboardTextForLocalityCarousel(templateData: Record<string, unknown>): string | null {
+  const localities: Locality[] = Array.isArray((templateData as { localities?: unknown[] }).localities)
+    ? ((templateData as { localities: Locality[] }).localities)
+    : [(templateData as unknown) as Locality];
+
+  if (!Array.isArray(localities) || localities.length === 0) return null;
+
+  const lines = localities
+    .map((loc) => {
+      const name = loc.name ?? loc.city ?? "Locality";
+      const rating = loc.rating ?? 4;
+      const trend = loc.priceTrend ?? 0;
+      const growth = `${Math.abs(trend)}% YoY`;
+      const linkPart = loc.link ? ` - ${loc.link}` : "";
+      return `${name} (${rating}/5, ${growth})${linkPart}`;
+    })
+    .filter(Boolean);
+
+  return lines.length ? lines.join("\n") : null;
 }

@@ -24,10 +24,11 @@ Open [http://localhost:3000](http://localhost:3000), then **Open Chat** to go to
 - **4.15–4.16** Type **faridabad** → list_selection (rent / buy / dont care).
 - **4.17–4.18** Click a pill (e.g. **Rent**) → user action + bot **locality_info** (Sector 32 Faridabad, highlights, pros/cons, price trend).
 
-## Stack
+## Stack (Phase 1)
 
-- **BE**: Next.js API routes (`/api/chats/*`): get-conversation-id, get-chats, get-history, send-message, cancel, **stream (SSE)**.
-- **FE**: Single chat page; connects to SSE for new bot events; sends text and user_action events to send-message.
+- **BE/ML**: Co-located in the same service (method calls; **no Kafka** in Phase 1).
+- **BE**: Next.js API routes (`/api/chats/*`): get-conversation-id, get-chats, get-history, **send-message (streaming)**, cancel.
+- **FE**: Single chat page; opens a **new streaming connection per message** (no long-lived SSE subscription).
 - **Mock**: In-memory event log and request state; mock “ML” in `lib/mock/ml-flow.ts` returns the next bot message(s) per contract examples.
 - **Data**: Mock properties (image, price, built-up area, seller, BHK, type) and locality (image, name, city, highlights, pros/cons, price trend %) in `lib/mock/data.ts`.
 
@@ -35,11 +36,12 @@ Open [http://localhost:3000](http://localhost:3000), then **Open Chat** to go to
 
 - `GET /api/chats/get-conversation-id` → `{ conversationId, isNew }`
 - `GET /api/chats/get-history?conversationId=...` with `page` + `page_size`, or `messages_after=evt_xxx`, or `messages_before=evt_xxx` + `page_size`, or `last=N`.
-- `POST /api/chats/send-message` body `{ event: ChatEvent }` → `{ eventId, requestId, expectResponse, timeoutMs }`; server appends user event, runs mock ML, appends bot event(s), broadcasts to SSE.
-- `GET /api/chats/stream?conversationId=...` → SSE stream. **Event types** (see `chat_system_architecture_v1.md` §6.1):
-  - **`event: chat_event`** — chat events to display: `id: <eventId>`, `data: <JSON ChatEvent>`.
-  - **`event: connection_close`** — BE closing the stream; `data: {"reason":"lifecycle"}`.
-  - Comments (`: connected`, `: keepalive`) — no event type; used for liveness only.
+- `POST /api/chats/send-message` body `{ event: ChatEvent }`
+  - If `Accept: text/event-stream`, the response is an SSE stream:
+    - **`event: connection_ack`** — immediate ack: `data: { "eventId": "...", "requestId": "..." }`
+    - **`event: chat_event`** — bot events streamed as they’re produced: `id: <eventId>`, `data: <JSON ChatEvent>`
+    - **`event: connection_close`** — emitted when the response is complete (`isFinal: true`) or early-closed when no response is expected.
+  - Otherwise returns JSON `{ eventId, requestId }` (legacy / non-streaming clients).
 
 ## Implementation diversions
 

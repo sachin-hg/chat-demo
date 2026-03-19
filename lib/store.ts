@@ -29,14 +29,13 @@ const events: StoredEvent[] = [];
 const requests: ChatRequest[] = [];
 const sseClients: Map<string, Set<SSEClient>> = new Map();
 
-let eventCounter = 100;
-let requestCounter = 900;
-
 function nextEventId() {
-  return `evt_${++eventCounter}`;
+  // Use randomness to prevent eventId collisions if the mock store module
+  // gets reloaded / instantiated more than once in dev.
+  return `evt_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 function nextRequestId() {
-  return `req_${++requestCounter}`;
+  return `req_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
 function now() {
@@ -224,6 +223,4 @@ export function getAllEvents(): StoredEvent[] {
 export function resetStore() {
   events.length = 0;
   requests.length = 0;
-  eventCounter = 100;
-  requestCounter = 900;
 }

@@ -1,47 +1,84 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
-import { MOCK_PROPERTIES } from "@/lib/mock/data";
-
-interface PropertyItem {
-  id: string;
-  title?: string;
-  projectName?: string;
-  tags?: string[];
-  image?: string;
-  priceFormatted?: string;
-  builtUpArea?: number;
-  locationFormatted?: string;
-}
+import { useRef, useState } from "react";
+import { useToast } from "@/components/ui/ToastProvider";
+import { useAuth } from "@/components/auth/AuthProvider";
+import type { ChatEvent } from "@/lib/contract-types";
+import type { PropertyCarouselCard } from "@/lib/mock/data";
 
 interface Props {
-  properties: PropertyItem[];
-  onAction: (actionId: string, propertyId: string, messageId: string, derivedLabel: string) => void;
+  properties: PropertyCarouselCard[];
   messageId: string;
+  onUserAction: (event: ChatEvent) => void;
+
   disabled?: boolean;
-  onToast?: (message: string) => void;
 }
 
-export function PropertyCarousel({ properties, onAction, messageId, disabled = false, onToast }: Props) {
-  const [shortlisted, setShortlisted] = useState<Set<string>>(new Set());
-
-  const items = properties.map((p) => {
-    const full = MOCK_PROPERTIES.find((x) => x.id === p.id);
-    return { ...full, ...p } as PropertyItem & { id: string };
+async function postAck(path: string, body: unknown): Promise<{ success: true }> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export function PropertyCarousel({ properties, messageId, onUserAction, disabled = false }: Props) {
+  const [shortlisted, setShortlisted] = useState<Set<string>>(new Set());
+  const toast = useToast();
+  const auth = useAuth();
+  const shortlistInFlightRef = useRef<Set<string>>(new Set());
+
+  const formatInt = (n?: number | null): string => {
+    if (typeof n !== "number" || Number.isNaN(n)) return "";
+    return n.toLocaleString();
+  };
+
+  const getFurnishTag = (furnishTypeId?: number | null): string => {
+    // 1: furnished, 2: semi-furnished, 3: unfurnished (sample contract mapping)
+    if (furnishTypeId === 1) return "Furnished";
+    if (furnishTypeId === 2) return "Semi furnished";
+    if (furnishTypeId === 3) return "Unfurnished";
+    return "";
+  };
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4" style={{ scrollSnapType: "x mandatory" }}>
-      {items.map((p) => {
+    <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4" style={{ scrollSnapType: "x mandatory" }} data-demo="property-carousel">
+      {properties.map((p, idx) => {
         const isShortlisted = shortlisted.has(p.id);
-        const imgSrc = p.image ?? "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600";
+        const imgSrc = p.thumb_image_url?.replace("version", "large") ?? "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600";
+        const propertyForMl = {
+          propertyId: p.id,
+          service: p.type === "rent" ? "rent" : "buy",
+          category: "residential",
+          type: p.type,
+        };
+        const addressText = (p.short_address ?? []).map((x) => x.display_name).filter(Boolean).join(", ");
+        const priceText =
+          p.type === "rent"
+            ? p.formatted_price ?? ""
+            : p.type === "resale"
+              ? p.formatted_min_price ?? ""
+              : `${p.formatted_min_price ?? ""} - ${p.formatted_max_price ?? ""}`.trim();
+
+        const areaText =
+          p.type === "project"
+            ? `${formatInt(p.min_selected_area_in_unit)} - ${formatInt(p.max_selected_area_in_unit)} ${p.unit_of_area}`
+            : `${p.display_area_type}: ${formatInt(p.inventory_configs?.[0]?.area_value_in_unit)} ${p.unit_of_area}`;
+
+        const tagText = p.type === "rent" ? getFurnishTag(p.inventory_configs?.[0]?.furnish_type_id) : p.property_tags?.[0] ?? "";
+
+        const primaryPillOn = p.type === "project" ? p.is_rera_verified : p.is_verified;
+        const primaryPillLabel = p.type === "project" ? "RERA" : "Verified";
 
         return (
           <div
             key={p.id}
             className="flex-shrink-0 w-[262px] rounded-[24px] bg-white border border-[#e1e2e8] overflow-hidden"
             style={{ scrollSnapAlign: "start" }}
+            data-demo-property-index={idx}
           >
             {/* Image – scout 262×160, radius top only */}
             <div className="relative h-[160px] bg-gray-100 rounded-t-[24px] overflow-hidden">
@@ -49,19 +86,61 @@ export function PropertyCarousel({ properties, onAction, messageId, disabled = f
               <button
                 type="button"
                 className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white border border-[#e1e2e8] flex items-center justify-center"
-                onClick={() => {
+                data-demo-action="shortlist"
+                onClick={async () => {
                   if (disabled) return;
+                  const currentlyShortlisted = shortlisted.has(p.id);
+
+                  // Local toggle off (no API/event because it's not part of current contract)
+                  if (currentlyShortlisted) {
+                    setShortlisted((prev) => {
+                      const next = new Set(prev);
+                      next.delete(p.id);
+                      return next;
+                    });
+                    return;
+                  }
+
+                  // Prevent duplicate events/toasts on double-click.
+                  if (shortlistInFlightRef.current.has(p.id)) return;
+                  shortlistInFlightRef.current.add(p.id);
+
+                  const ok = await auth.requireLogin("shortlist");
+                  if (!ok) {
+                    shortlistInFlightRef.current.delete(p.id);
+                    return;
+                  }
+
+                  try {
+                      await postAck("/api/properties/shortlist", { propertyId: propertyForMl.propertyId });
+                  } catch (e) {
+                    console.error(e);
+                    toast.show("Could not shortlist. Please try again.");
+                    shortlistInFlightRef.current.delete(p.id);
+                    return;
+                  }
+
                   setShortlisted((prev) => {
                     const next = new Set(prev);
-                    if (next.has(p.id)) {
-                      next.delete(p.id);
-                    } else {
-                      next.add(p.id);
-                      onToast?.("Property has been shortlisted");
-                      onAction("shortlist", p.id, messageId, "You've shortlisted this property. Check it out in User Profile → Saved properties");
-                    }
+                    next.add(p.id);
                     return next;
                   });
+                  toast.show("Property has been shortlisted");
+
+                  // Notify ML, but don't expect a response. (FE already handled UI + API.)
+                  onUserAction({
+                    sender: { type: "system" },
+                    payload: {
+                      messageType: "user_action",
+                      responseRequired: false,
+                      visibility: "hidden",
+                      content: {
+                        data: { action: "shortlist", messageId, property: propertyForMl },
+                      },
+                    },
+                  } as ChatEvent);
+
+                  shortlistInFlightRef.current.delete(p.id);
                 }}
               >
                 {isShortlisted ? (
@@ -79,57 +158,77 @@ export function PropertyCarousel({ properties, onAction, messageId, disabled = f
             {/* Card body – scout 16px padding */}
             <div className="p-4">
               {/* Tags – scout: RERA #edfff8 #0f8458, status #f2f3f8 #656565 */}
-              {p.tags && p.tags.length > 0 && (
-                <div className="flex gap-2 mb-4 flex-wrap">
-                  {p.tags.map((tag) => {
-                    const isRera = /rera/i.test(tag);
-                    return (
-                      <span
-                        key={tag}
-                        className={`h-5 px-2 rounded-md text-[10px] font-medium flex items-center ${
-                          isRera
-                            ? "bg-[#edfff8] text-[#0f8458]"
-                            : "bg-[#f2f3f8] text-[#656565]"
-                        }`}
-                      >
-                        {tag}
-                      </span>
-                    );
-                  })}
-                </div>
+              <div className="flex gap-2 mb-4 flex-wrap">
+                {primaryPillOn && <span
+                  className={`h-5 px-2 rounded-md text-[12px] font-medium flex items-center ${
+                    primaryPillOn ? "bg-[#edfff8] text-[#0f8458]" : "bg-[#f2f3f8] text-[#656565]"
+                  }`}
+                >
+                  {primaryPillLabel}
+                </span>}
+                {tagText && (
+                  <span className="h-5 px-2 rounded-md text-[12px] font-medium flex items-center bg-[#f2f3f8] text-[#656565]">
+                    {tagText}
+                  </span>
+                )}
+              </div>
+
+              {p.type !== "project" ? (
+                <p className="text-[18px] leading-[1.15] font-semibold text-[#111] whitespace-pre-line">{p.title}</p>
+              ) : (
+                <>
+                  <p className="text-[20px] leading-[1.15] font-semibold text-[#111] whitespace-pre-line">{p.name}</p>
+                  {p.title && <p className="text-[15px] leading-[1.2] font-semibold text-[#111] mt-1">{p.title}</p>}
+                </>
               )}
 
-              <p className="font-semibold text-sm text-[#111]">{p.title ?? "Property"}</p>
-              {p.projectName && <p className="text-xs font-semibold text-[#111]">{p.projectName}</p>}
-
-              {p.builtUpArea && (
-                <div className="flex items-center gap-1 text-[11px] text-[#767676] mt-1.5">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
-                  </svg>
-                  Built up area: {p.builtUpArea.toLocaleString()} sq.ft
-                </div>
-              )}
-
-              {p.locationFormatted && (
-                <div className="flex items-center gap-1 text-[11px] text-[#767676] mt-0.5">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              {addressText && (
+                <div className="flex items-center gap-2 text-[16px] text-[#767676] mt-3">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
                     <circle cx="12" cy="10" r="3" />
                   </svg>
-                  {p.locationFormatted}
+                  <span>{addressText}</span>
                 </div>
               )}
 
-              {p.priceFormatted && (
-                <p className="text-[15px] font-bold text-[#111] mt-2">{p.priceFormatted}</p>
+              <div className="h-px bg-[#e1e2e8] my-3" />
+
+              {areaText && (
+                <div className="flex items-center gap-2 text-[16px] text-[#767676]">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
+                  </svg>
+                  <span>{areaText}</span>
+                </div>
               )}
+
+              {priceText && <p className="text-[18px] font-bold text-[#111] mt-2">{priceText}</p>}
 
               <div className="flex gap-2 mt-4">
                 <button
                   type="button"
                   disabled={disabled}
-                  onClick={() => !disabled && onAction("learn_more_about_property", p.id, messageId, `Learn more about ${p.projectName ?? p.title ?? "this property"}`)}
+                  data-demo-action="learn-more"
+                  onClick={() =>
+                    !disabled &&
+                    onUserAction({
+                      sender: { type: "user" },
+                      payload: {
+                        messageType: "user_action",
+                        responseRequired: true,
+                        visibility: "shown",
+                        content: {
+                          data: {
+                            action: "learn_more_about_property",
+                            messageId,
+                            property: propertyForMl,
+                          },
+                          derivedLabel: `Tell me more about ${p.name ?? p.title ?? "this property"}`,
+                        },
+                      },
+                    } as ChatEvent)
+                  }
                   className="flex-1 h-12 min-w-0 rounded-lg border border-[#5E23DC] text-[#5E23DC] text-sm font-medium hover:bg-[#5E23DC]/[0.06] transition-colors disabled:opacity-40"
                 >
                   Learn more
@@ -137,7 +236,34 @@ export function PropertyCarousel({ properties, onAction, messageId, disabled = f
                 <button
                   type="button"
                   disabled={disabled}
-                  onClick={() => !disabled && onAction("contact", p.id, messageId, "The seller has been contacted, someone will reach out to you soon!")}
+                  data-demo-action="contact"
+                  onClick={async () => {
+                    if (disabled) return;
+                    const ok = await auth.requireLogin("contact");
+                    if (!ok) return;
+                    try {
+                      await postAck("/api/properties/contact-seller", { propertyId: propertyForMl.propertyId });
+                    } catch (e) {
+                      console.error(e);
+                      return;
+                    }
+                    onUserAction({
+                      sender: { type: "system" },
+                      payload: {
+                        messageType: "user_action",
+                        responseRequired: false,
+                        visibility: "shown",
+                        content: {
+                          data: {
+                            action: "crf_submitted",
+                            messageId,
+                            property: propertyForMl,
+                          },
+                          derivedLabel: "The seller has been contacted, someone will reach out to you soon!",
+                        },
+                      },
+                    } as ChatEvent);
+                  }}
                   className="flex-1 h-12 min-w-0 rounded-lg bg-[#5E23DC] text-white text-sm font-medium flex items-center justify-center gap-1 hover:bg-[#4a1bb5] transition-colors disabled:opacity-40"
                 >
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
@@ -152,4 +278,56 @@ export function PropertyCarousel({ properties, onAction, messageId, disabled = f
       })}
     </div>
   );
+}
+
+export function getClipboardTextForPropertyCarousel(templateData: Record<string, unknown>): string | null {
+  const props = (templateData.properties as unknown[]) ?? [];
+  if (!Array.isArray(props) || props.length === 0) return null;
+
+  const lines = props
+    .map((p) => p as Partial<PropertyCarouselCard>)
+    .map((p) => {
+      const title = p.title ?? "";
+      const projectName = p.name ?? "";
+      const url = p.inventory_canonical_url ?? "";
+
+      const addressText = Array.isArray(p.short_address)
+        ? p.short_address.map((x) => x.display_name).filter(Boolean).join(", ")
+        : "";
+
+      const priceText =
+        p.type === "rent"
+          ? p.formatted_price ?? ""
+          : p.type === "resale"
+            ? p.formatted_min_price ?? ""
+            : p.type === "project"
+              ? `${p.formatted_min_price ?? ""} - ${p.formatted_max_price ?? ""}`.trim()
+              : "";
+
+      const areaRange =
+        p.type === "project" && p.display_area_type && p.unit_of_area
+          ? typeof p.min_selected_area_in_unit === "number"
+            ? `${p.display_area_type}: ${p.min_selected_area_in_unit.toLocaleString()}${
+                typeof p.max_selected_area_in_unit === "number"
+                  ? ` - ${p.max_selected_area_in_unit.toLocaleString()}`
+                  : ""
+              } ${p.unit_of_area}`.trim()
+            : ""
+          : "";
+
+      if (!title && !priceText && !addressText) return "";
+
+      if (p.type === "project") {
+        // project: ${projectName} in ${addressText}. ${area range} title ${priceText}. link: ${url}
+        const first = projectName ? `${projectName} in ${addressText}` : `in ${addressText}`.trim();
+        const second = areaRange ? `${areaRange} ${title} ${priceText}`.trim() : `${title} ${priceText}`.trim();
+        return `${first}. ${second}. link: ${url}`.replace(/\s+/g, " ").trim();
+      }
+
+      // rent/resale: title in property for priceText. link: url
+      return `${title} in ${addressText} for ${priceText}. link: ${url}`.replace(/\s+/g, " ").trim();
+    })
+    .filter(Boolean);
+
+  return lines.length ? lines.join("\n") : null;
 }

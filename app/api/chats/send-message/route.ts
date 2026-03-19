@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { appendEvent, createRequest, completeRequest, getAllEvents } from "@/lib/store";
+import {
+  appendEvent,
+  createRequest,
+  completeRequest,
+  getAllEvents,
+  isPending,
+  cancelRequest,
+} from "@/lib/store";
 import { getNextBotEvents } from "@/lib/mock/ml-flow";
 import type { ChatEvent } from "@/lib/contract-types";
 
@@ -30,21 +37,112 @@ export async function POST(request: NextRequest) {
   });
   const requestRecord = createRequest(stored.eventId!);
 
+  const accept = request.headers.get("accept") ?? "";
+  const wantsEventStream = accept.includes("text/event-stream");
+
+  // responseRequired controls whether FE expects bot response(s) for user_action.
+  // For text messages, response is expected until isFinal=true.
+  const shouldExpectResponse =
+    event.payload.messageType === "text" || event.payload.responseRequired === true;
+
   // Return 202 immediately; run mock ML after optional artificial delay (set ENABLE_MOCK_ML_DELAYS=true to enable)
   const mockDelay = getMockDelayMs();
   console.log('Mock Delay', mockDelay)
   const delayMs = mockDelay > 0 ? mockDelay : 100; // when off, use 100ms so 202 is sent before we broadcast
-  setTimeout(() => {
-    const recentEvents = getAllEvents();
-    const botEvents = getNextBotEvents(event, recentEvents);
-    for (const ev of botEvents) {
-      appendEvent({ ...ev, conversationId: "conv_1" });
-    }
-    completeRequest(requestRecord.requestId);
-  }, delayMs);
 
-  return NextResponse.json({
-    eventId: stored.eventId,
-    requestId: requestRecord.requestId,
+  // Legacy JSON mode (keeps old behavior for non-streaming clients).
+  if (!wantsEventStream) {
+    setTimeout(() => {
+      const recentEvents = getAllEvents();
+      const botEvents = getNextBotEvents(event, recentEvents);
+      for (const ev of botEvents) {
+        appendEvent({ ...ev, conversationId: "conv_1" });
+      }
+      completeRequest(requestRecord.requestId);
+    }, delayMs);
+
+    return NextResponse.json({
+      eventId: stored.eventId,
+      requestId: requestRecord.requestId,
+    });
+  }
+
+  // Streaming mode: FE POSTs once, BE streams ack + bot events until isFinal=true.
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      let closed = false;
+      const close = () => {
+        if (closed) return;
+        closed = true;
+        try {
+          controller.close();
+        } catch (_) {}
+      };
+
+      const abortHandler = () => {
+        cancelRequest(requestRecord.requestId);
+        close();
+      };
+      request.signal.addEventListener("abort", abortHandler, { once: true });
+
+      const writeSse = (opts: { event?: string; id?: string; data: unknown }) => {
+        const eventLine = opts.event ? `event: ${opts.event}\n` : "";
+        const idLine = opts.id ? `id: ${opts.id}\n` : "";
+        controller.enqueue(
+          encoder.encode(`${idLine}${eventLine}data: ${JSON.stringify(opts.data)}\n\n`)
+        );
+      };
+
+      // 1) Ack immediately
+      writeSse({
+        event: "connection_ack",
+        data: { eventId: stored.eventId, requestId: requestRecord.requestId },
+      });
+
+      if (!shouldExpectResponse) {
+        completeRequest(requestRecord.requestId);
+        close();
+        return;
+      }
+
+      // 2) Run mock ML after optional delay and stream bot events as they arrive
+      setTimeout(() => {
+        // If the client closed/aborted, don't keep producing events.
+        if (!isPending(requestRecord.requestId)) {
+          completeRequest(requestRecord.requestId);
+          close();
+          return;
+        }
+
+        const recentEvents = getAllEvents();
+        const botEvents = getNextBotEvents(event, recentEvents);
+
+        for (const ev of botEvents) {
+          if (!isPending(requestRecord.requestId)) break;
+          const storedBot = appendEvent({ ...ev, conversationId: "conv_1" });
+
+          writeSse({ event: "chat_event", id: storedBot.eventId, data: storedBot });
+
+          if (storedBot.payload.isFinal === true) {
+            completeRequest(requestRecord.requestId);
+            writeSse({ event: "connection_close", data: { reason: "response_complete" } });
+            close();
+            return;
+          }
+        }
+
+        completeRequest(requestRecord.requestId);
+        close();
+      }, delayMs);
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-store, no-cache",
+      Connection: "keep-alive",
+    },
   });
 }

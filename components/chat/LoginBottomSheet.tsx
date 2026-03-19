@@ -3,10 +3,12 @@
 import { useState } from "react";
 
 type LoginReason = "shortlist" | "contact" | null;
+// "brochure" is treated like a generic gated action.
+type ExtendedLoginReason = "shortlist" | "contact" | "brochure" | null;
 
 interface LoginBottomSheetProps {
   open: boolean;
-  reason: LoginReason;
+  reason: ExtendedLoginReason;
   onClose: () => void;
   onLoggedIn: () => Promise<void> | void;
 }
@@ -60,7 +62,7 @@ export function LoginBottomSheet({ open, reason, onClose, onLoggedIn }: LoginBot
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end" onClick={onClose} data-demo="login-sheet">
       <div className="absolute inset-0 bg-black/40" />
       <div
         className="relative w-full max-w-[430px] mx-auto bg-white rounded-t-3xl pt-3 pb-6 px-4 shadow-2xl"
@@ -100,12 +102,14 @@ export function LoginBottomSheet({ open, reason, onClose, onLoggedIn }: LoginBot
                   onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ""))}
                   className="flex-1 bg-transparent text-sm text-[#222] placeholder-[#767676] focus:outline-none"
                   placeholder="Phone number"
+                  data-demo="login-phone"
                 />
               </div>
               <button
                 type="submit"
                 disabled={phone.trim().length < 10}
                 className="w-full h-11 rounded-xl bg-[#5E23DC] text-white text-sm font-medium disabled:opacity-40 flex items-center justify-center"
+                data-demo="login-continue"
               >
                 Continue
               </button>
@@ -145,6 +149,7 @@ export function LoginBottomSheet({ open, reason, onClose, onLoggedIn }: LoginBot
                   value={val}
                   onChange={(e) => handleOtpChange(idx, e.target.value)}
                   className="w-11 h-11 rounded-lg border border-[#e1e2e8] text-center text-base font-medium text-[#222] focus:outline-none focus:border-[#5E23DC]"
+                  data-demo={`login-otp-${idx}`}
                 />
               ))}
             </div>
@@ -152,6 +157,7 @@ export function LoginBottomSheet({ open, reason, onClose, onLoggedIn }: LoginBot
               type="submit"
               disabled={otp.join("").length < 4 || submitting}
               className="w-full h-11 rounded-xl bg-[#5E23DC] text-white text-sm font-medium disabled:opacity-40 flex items-center justify-center"
+              data-demo="login-otp-submit"
             >
               Continue
             </button>

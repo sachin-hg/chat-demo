@@ -1,0 +1,1605 @@
+{
+    "exp_1_relevance_score_paid_source_default": 4.44,
+    "event_video_thumbnail_url": "",
+    "freshness_score": 1,
+    "min_selected_area": 1900,
+    "absolute_monetization_factor_ab": 0,
+    "medium_address": [
+        {
+            "polygon_uuid": "d12f90744c6c443e2a1e",
+            "display_name": "Sector 46"
+        },
+        {
+            "polygon_uuid": "3c69d8421a77f8f8b611",
+            "display_name": "Gurgaon"
+        }
+    ],
+    "mv_cluster_id": "p_61770",
+    "type": "project",
+    "_score": 534.64,
+    "video_tour": null,
+    "is_uc_property": false,
+    "merged_ml_vector": [
+        0,
+        0,
+        0,
+        0.5,
+        0.5,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0.25,
+        0,
+        0,
+        0.75,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0.125,
+        0.5,
+        0,
+        0.125,
+        0.25,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        4.71500015258789,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+    ],
+    "price": 25000000,
+    "formatted_per_sqft_rate": "7.63k",
+    "ad_deficit": -25.96,
+    "nearby_locality_uuids": [
+        "3b6825fb734eff6e3d03",
+        "1507013dd1564c8cdfa6",
+        "3343e45c87813ecd2e36",
+        "3a8833959f9caf349991",
+        "e3c5b7e9b619e2b081c8",
+        "b835faa6126597e0f4cd",
+        "d584b29a8a398c936329",
+        "f53fdc3566a4aa27a1fb",
+        "dd08825c9fe7d2e9b06e",
+        "5449673d9eee77520a2b",
+        "416b59f117e042703458",
+        "7dda52b15b4a50a77c7f",
+        "de58a3f5d5c94a3a76b9",
+        "c56a7212bfebf162c2d0",
+        "25c1c719ad25fbff8284",
+        "da48d1951da9777ac23d",
+        "be66cf97c6340f920e4b",
+        "2f43cce59b99a34c27ac",
+        "ebd7f89deb5d95bd3ac2",
+        "96d1b8076b34416a9484",
+        "b72e60e2c222ac161359",
+        "84d0407ce018aa666d81",
+        "06be5e4b697d1d179f75",
+        "cf30c91ab70d332d5901"
+    ],
+    "featured_type": "city",
+    "id": 300772,
+    "possession_date": "Jun, 2023",
+    "brochure_name": "Bargainer Ultra Modern Floor Brochure",
+    "magic_factor": 0.4,
+    "ctr": 0.9,
+    "clubhouse_amenities_keys": [
+        "24X7 Water Supply",
+        "Fire Sprinklers",
+        "Power Backup"
+    ],
+    "formatted_min_price": "2.5 Cr",
+    "is_rera_verified": false,
+    "paid_service_inline_boost_ab": 1,
+    "event_booth_image_preview_url": "",
+    "has_transaction": false,
+    "por_apartment_type_id_price_range_mapping": null,
+    "exp_1_relevance_score_paid_source_mobile": 4.44,
+    "date_added": "2023-06-12T12:34:02Z",
+    "collage_image": {},
+    "event_booth_url": "",
+    "is_post_rera": true,
+    "region_entities": [
+        {
+            "name": "Ultra Modern Floor",
+            "id": "613045",
+            "type": "np_building"
+        }
+    ],
+    "inventory_amenities": {
+        "has_gas_pipeline": false,
+        "has_lift": false,
+        "has_parking": false,
+        "is_gated_community": false,
+        "has_gym": false,
+        "has_swimming_pool": false
+    },
+    "exp_1_relevance_score_paid_source_web": 4.44,
+    "current_status": "Ready to Move",
+    "status": "ACTIVE",
+    "short_address": [
+        {
+            "polygon_uuid": "d12f90744c6c443e2a1e",
+            "display_name": "Sector 46"
+        },
+        {
+            "polygon_uuid": "3c69d8421a77f8f8b611",
+            "display_name": "Gurgaon"
+        }
+    ],
+    "credit_score": 0.3,
+    "exp_4_relevance_score_paid_source_web": 4.44,
+    "project_highlights": [],
+    "upper_billboard_highlights": null,
+    "exp_1_relevance_score_other_source_web": 4.44,
+    "unit_of_area": "sq.ft.",
+    "polygon_data": {
+        "primary_polygon_uuid": "d12f90744c6c443e2a1e",
+        "primary_polygon_name": "Sector 46",
+        "primary_polygon_index": null
+    },
+    "review_rating": 5,
+    "min_selected_area_in_unit": 1900,
+    "relevance_vector": [
+        520.2,
+        1,
+        0.3,
+        1,
+        0.9,
+        1,
+        0,
+        1,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+    ],
+    "listing_normalized_mf": 0,
+    "prime_location_factor": null,
+    "updated_at": 1772409606,
+    "spotlight_photo_url": null,
+    "polygons_hash": {
+        "h_district": {
+            "url_name": null,
+            "name": null,
+            "display_name": null,
+            "uuid": null,
+            "is_proxy": null
+        },
+        "city": {
+            "url_name": "gurgaon",
+            "name": "Gurgaon",
+            "display_name": [
+                "Gurgaon",
+                "Haryana"
+            ],
+            "uuid": "3c69d8421a77f8f8b611",
+            "is_proxy": true
+        },
+        "hotspot": {
+            "url_name": null,
+            "name": null,
+            "display_name": null,
+            "uuid": null,
+            "is_proxy": null
+        },
+        "neighbourhood": {
+            "url_name": "block_e_green_wood_city",
+            "name": "Block E",
+            "display_name": [
+                "Block E",
+                "Sector 46",
+                "Gurgaon"
+            ],
+            "uuid": "94f0f396a754c773c3c7",
+            "is_proxy": null
+        },
+        "housing_region": {
+            "url_name": "central_gurgaon",
+            "name": "Central Gurgaon",
+            "display_name": [
+                "Central Gurgaon",
+                "Gurgaon"
+            ],
+            "uuid": "5f775a7010d9b69ea17e",
+            "is_proxy": null
+        },
+        "locality": {
+            "url_name": "sector_46",
+            "name": "Sector 46",
+            "display_name": [
+                "Sector 46",
+                "Gurgaon"
+            ],
+            "uuid": "d12f90744c6c443e2a1e",
+            "is_proxy": null
+        },
+        "sublocality": {
+            "url_name": null,
+            "name": null,
+            "display_name": null,
+            "uuid": null,
+            "is_proxy": null
+        },
+        "state": {
+            "url_name": "haryana",
+            "name": "Haryana",
+            "display_name": [
+                "Haryana",
+                "India"
+            ],
+            "uuid": "793f17ce2d8d4bfcd6f6",
+            "is_proxy": null
+        },
+        "region": {
+            "url_name": "gurgaon_district",
+            "name": "Gurgaon District",
+            "display_name": [
+                "Gurgaon District",
+                "Haryana"
+            ],
+            "uuid": "cdbadacafda35b98d359",
+            "is_proxy": null
+        },
+        "housing_state": {
+            "url_name": null,
+            "name": null,
+            "display_name": null,
+            "uuid": null,
+            "is_proxy": null
+        }
+    },
+    "selective_boost_factor": 1,
+    "images_hash": {
+        "project_images": [],
+        "digilites_hash": [],
+        "flat_images": [
+            {
+                "images": [
+                    {
+                        "meta_data": {
+                            "image_length": 184,
+                            "is_real_image": null,
+                            "image_width": 400
+                        },
+                        "caption": "Lobby",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/05d2b93a74a736af0fa3efd8bbbd7034/v0/version.jpeg",
+                        "tag_names": [
+                            "Main Other"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": 184,
+                            "is_real_image": null,
+                            "image_width": 400
+                        },
+                        "caption": "Bedroom",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-3.housingcdn.com/012c1500/24f9533defa0bd132d180ee7d41f0305/v0/version.jpeg",
+                        "tag_names": [
+                            "Main Other"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": 184,
+                            "is_real_image": null,
+                            "image_width": 400
+                        },
+                        "caption": "Bedroom",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-3.housingcdn.com/012c1500/3af707bfd693943ccdba8aeab4a0b0f0/v0/version.jpeg",
+                        "tag_names": [
+                            "Main Other"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": 184,
+                            "is_real_image": null,
+                            "image_width": 400
+                        },
+                        "caption": "Dining Area",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/5cc2a6b697980655f88c8b233f35ad07/v0/version.jpeg",
+                        "tag_names": [
+                            "Main Other"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": 184,
+                            "is_real_image": null,
+                            "image_width": 400
+                        },
+                        "caption": "Living Area",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-3.housingcdn.com/012c1500/7c3312270db5a2a23155724f98b5a600/v0/version.jpeg",
+                        "tag_names": [
+                            "Main Other"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": 184,
+                            "is_real_image": null,
+                            "image_width": 400
+                        },
+                        "caption": "Bedroom",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/a805c05e3edfdcae5f27b56a336f84d8/v0/version.jpeg",
+                        "tag_names": [
+                            "Main Other"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": 184,
+                            "is_real_image": null,
+                            "image_width": 400
+                        },
+                        "caption": "Kitchen",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-3.housingcdn.com/012c1500/ab955ea9eec60ee4b775106283c622cb/v0/version.jpeg",
+                        "tag_names": [
+                            "Main Other"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": 184,
+                            "is_real_image": null,
+                            "image_width": 400
+                        },
+                        "caption": "Living Area",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/c555889f6ca3354074073c754b831f66/v0/version.jpeg",
+                        "tag_names": [
+                            "Main Other"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": 184,
+                            "is_real_image": null,
+                            "image_width": 400
+                        },
+                        "caption": "Bedroom",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/d6c4857b4e3ba2044c4c9d91f491b0c2/v0/version.jpeg",
+                        "tag_names": [
+                            "Main Other"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": 184,
+                            "is_real_image": null,
+                            "image_width": 400
+                        },
+                        "caption": "Bedroom",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/f01aee1dfbfce83100a157589c86d8b6/v0/version.jpeg",
+                        "tag_names": [
+                            "Main Other"
+                        ]
+                    }
+                ],
+                "alt_tag": "Project Image of 1900.0 - 4100.0 Sq.ft 3 BHK Builder Floor for buy in Bargainer Ultra Modern Floor",
+                "master_tag": "Project Images"
+            }
+        ],
+        "building_images": [],
+        "verified_images": [],
+        "project_vimeo_videos": []
+    },
+    "address": [
+        "Sector 46",
+        "Gurgaon"
+    ],
+    "exp_4_relevance_score_paid_source_android": 4.44,
+    "long_address": [
+        {
+            "polygon_uuid": null,
+            "display_name": "Sector 46"
+        },
+        {
+            "polygon_uuid": "5f775a7010d9b69ea17e",
+            "display_name": "Central Gurgaon"
+        },
+        {
+            "polygon_uuid": "3c69d8421a77f8f8b611",
+            "display_name": "Gurgaon"
+        }
+    ],
+    "distribution_factor": 1,
+    "event_video_url": "",
+    "ad_satisfaction": 100,
+    "max_price": 42000000,
+    "video_product_type": null,
+    "event_ids": [
+        0
+    ],
+    "exp_4_relevance_score_other_source_mobile": 4.44,
+    "completion_date": 1685577600,
+    "project_review_video_url": "",
+    "property_tags": [
+        "Ready to Move",
+        "Project"
+    ],
+    "is_featured": false,
+    "has_slice_view": false,
+    "normalized_churn_score": 1,
+    "exp_1_relevance_score_paid_source_ios": 4.44,
+    "has_offer": false,
+    "developer_information": [
+        {
+            "profile_uuid": "573dc7ba-addc-4112-9db2-7961134cd5fb",
+            "profile_url": "bargainer-propmart-bid-27547926",
+            "profile_picture_url": null,
+            "name": "Bargainer Propmart",
+            "description": "",
+            "total_projects": 18,
+            "year_of_establishment": "",
+            "canonical": "/buy-projects-by-bargainer-propmart-bid-27547926-A7nq4f90h2rl2an78uu24dw9ob"
+        }
+    ],
+    "monetization_factor_ab": 0,
+    "video_story_details": {
+        "seller_device_list": {}
+    },
+    "exp_4_relevance_score_paid_source_mobile": 4.44,
+    "formatted_per_unit_rate": "7.63k",
+    "profile_uuids": [
+        "286759e7-ea58-48e3-9793-5fa90d9f1db4",
+        "43ecdb73-4275-4f31-b86f-d07bced11ac2",
+        "573dc7ba-addc-4112-9db2-7961134cd5fb"
+    ],
+    "is_new_launch": false,
+    "location_coordinates": "28.437401,77.058601",
+    "nearby_establishments": {
+        "bus_station": 1.07,
+        "school": 0.14,
+        "restaurant": 0,
+        "hospital": 0.14
+    },
+    "offer_text": "",
+    "microsite_redirection_url": null,
+    "nearby_landmarks": [
+        {
+            "duration": 1,
+            "establishment_type": "school",
+            "distance": 0.14137194493365,
+            "name": "Manav Rachna International School",
+            "canonical": "/landmarks/sector-46-gurgaon-overview/schools-ESdP5t5v5p7t2o7b0d9a",
+            "travel_distance": 0.197
+        },
+        {
+            "duration": 4,
+            "establishment_type": "bus_station",
+            "distance": 2.30273328844158,
+            "name": "Shubhash Chowk Bus Stop",
+            "canonical": "",
+            "travel_distance": 2.761
+        },
+        {
+            "duration": 7,
+            "establishment_type": "train_station",
+            "distance": 2.77789427988658,
+            "name": "Millennium City Centre Gurugram Metro Station",
+            "canonical": "",
+            "display_establishment_type": "Metro Station",
+            "travel_distance": 4.203
+        },
+        {
+            "establishment_type": "hospital",
+            "distance": 1.88988284432771,
+            "name": "Park Hospital",
+            "canonical": "/landmarks/sector-47-gurgaon-overview/hospitals-ES2P11nw9gv6abt2p9j8"
+        },
+        {
+            "establishment_type": "shopping_mall",
+            "distance": 1.30104324984385,
+            "name": "Baani Square",
+            "canonical": ""
+        }
+    ],
+    "exp_4_relevance_score_other_source_android": 4.44,
+    "exp_1_relevance_score_paid_source_android": 4.44,
+    "formatted_max_price": "4.2 Cr",
+    "seo_address": [
+        {
+            "name": "Sector 46,Gurgaon",
+            "href": "/in/buy/projects/sector_46",
+            "type": "locality"
+        }
+    ],
+    "digi_tour_project_name": "",
+    "max_selected_area": 4100,
+    "paid_benefit": 1,
+    "inventory_canonical_url": "/in/buy/projects/page/300772-bargainer-ultra-modern-floor-by-bargainer-propmart-in-sector-46",
+    "paid_project_source": "locality",
+    "bounding_box": {
+        "url_name": "gurgaon",
+        "name": "Gurgaon",
+        "display_name": null,
+        "uuid": "526acdc6c33455e9e4e9",
+        "is_proxy": null
+    },
+    "has_audience_maximizer": false,
+    "launch_vista_data": {
+        "area": null,
+        "price": null,
+        "configurations": null,
+        "possession": null,
+        "rera_id": null,
+        "is_launch_vista": false,
+        "project_name": null
+    },
+    "possession_display_type": "Status",
+    "initiation_date": 1670005800,
+    "monetization_factor": 0,
+    "listing_absolute_mf": 0,
+    "derived_price_info": null,
+    "video_connect_available": null,
+    "inventory_configs": [
+        {
+            "formatted_price": "2.5 Cr",
+            "seller": [
+                1
+            ],
+            "per_unit_rate": 7605,
+            "listing_id": "eb3e926d075ef0d55e82",
+            "formatted_per_unit_rate": "7.61k",
+            "facing": "all",
+            "area_value_in_unit": 1900,
+            "flat_config_id": 1002090,
+            "property_type_id": 14,
+            "coupon_details": [],
+            "price": 25000000,
+            "formatted_per_sqft_rate": "7.61k",
+            "seller_uuid": "286759e7-ea58-48e3-9793-5fa90d9f1db4",
+            "price_on_request": false,
+            "area_information": [
+                {
+                    "value_in_unit": 1900,
+                    "name": "Builtup Area",
+                    "double_value_in_unit": 1900,
+                    "value": 1900,
+                    "double_value": 1900
+                }
+            ],
+            "property_type": "Builder Floor",
+            "id": 300772,
+            "number_of_toilets": null,
+            "apartment_group_name": "3 BHK",
+            "selected_area_in_unit": 1900,
+            "area": 1900,
+            "brokerage": 0,
+            "number_of_bedrooms": 3,
+            "derived_per_sqft_rate": 7605,
+            "pass_by_filter": true,
+            "apartment_type_id": 4,
+            "loan_amount": 20000000,
+            "is_available": true,
+            "derived_price": 25000000,
+            "per_sqft_rate": 7605,
+            "emi_amount": 139843,
+            "inventory_count": 0,
+            "floor_plan_urls": [],
+            "selected_area": 1900,
+            "completion_date": 1685577600,
+            "formatted_selected_area_in_unit": "1.9 K"
+        },
+        {
+            "formatted_price": "2.5 Cr",
+            "seller": [
+                1
+            ],
+            "per_unit_rate": 7605,
+            "listing_id": "eb3e926d075ef0d55e82",
+            "formatted_per_unit_rate": "7.61k",
+            "facing": "all",
+            "area_value_in_unit": 1900,
+            "flat_config_id": 1002090,
+            "property_type_id": 14,
+            "coupon_details": [],
+            "price": 25000000,
+            "formatted_per_sqft_rate": "7.61k",
+            "seller_uuid": "43ecdb73-4275-4f31-b86f-d07bced11ac2",
+            "price_on_request": false,
+            "area_information": [
+                {
+                    "value_in_unit": 1900,
+                    "name": "Builtup Area",
+                    "double_value_in_unit": 1900,
+                    "value": 1900,
+                    "double_value": 1900
+                }
+            ],
+            "property_type": "Builder Floor",
+            "id": 300772,
+            "number_of_toilets": null,
+            "apartment_group_name": "3 BHK",
+            "selected_area_in_unit": 1900,
+            "area": 1900,
+            "brokerage": 0,
+            "number_of_bedrooms": 3,
+            "derived_per_sqft_rate": 7605,
+            "pass_by_filter": true,
+            "apartment_type_id": 4,
+            "loan_amount": 20000000,
+            "is_available": true,
+            "derived_price": 25000000,
+            "per_sqft_rate": 7605,
+            "emi_amount": 139843,
+            "inventory_count": 0,
+            "floor_plan_urls": [],
+            "selected_area": 1900,
+            "completion_date": 1685577600,
+            "formatted_selected_area_in_unit": "1.9 K"
+        },
+        {
+            "formatted_price": "2.7 Cr",
+            "seller": [
+                1
+            ],
+            "per_unit_rate": 8500,
+            "listing_id": "2b24ffcd920156572507",
+            "formatted_per_unit_rate": "8.5k",
+            "facing": "all",
+            "area_value_in_unit": 2500,
+            "flat_config_id": 1002091,
+            "property_type_id": 14,
+            "coupon_details": [],
+            "price": 27000000,
+            "formatted_per_sqft_rate": "8.5k",
+            "seller_uuid": "286759e7-ea58-48e3-9793-5fa90d9f1db4",
+            "price_on_request": false,
+            "area_information": [
+                {
+                    "value_in_unit": 2500,
+                    "name": "Builtup Area",
+                    "double_value_in_unit": 2500,
+                    "value": 2500,
+                    "double_value": 2500
+                }
+            ],
+            "property_type": "Builder Floor",
+            "id": 300772,
+            "number_of_toilets": null,
+            "apartment_group_name": "3 BHK",
+            "selected_area_in_unit": 2500,
+            "area": 2500,
+            "brokerage": 0,
+            "number_of_bedrooms": 3,
+            "derived_per_sqft_rate": 8500,
+            "pass_by_filter": true,
+            "apartment_type_id": 4,
+            "loan_amount": 21600000,
+            "is_available": true,
+            "derived_price": 27000000,
+            "per_sqft_rate": 8500,
+            "emi_amount": 151030,
+            "inventory_count": 0,
+            "floor_plan_urls": [],
+            "selected_area": 2500,
+            "completion_date": 1685577600,
+            "formatted_selected_area_in_unit": "2.5 K"
+        },
+        {
+            "formatted_price": "2.7 Cr",
+            "seller": [
+                1
+            ],
+            "per_unit_rate": 7605,
+            "listing_id": "608a094307c16a1dfe5b",
+            "formatted_per_unit_rate": "7.61k",
+            "facing": "all",
+            "area_value_in_unit": 2000,
+            "flat_config_id": 1464659,
+            "property_type_id": 14,
+            "coupon_details": [],
+            "price": 27000000,
+            "formatted_per_sqft_rate": "7.61k",
+            "seller_uuid": "286759e7-ea58-48e3-9793-5fa90d9f1db4",
+            "price_on_request": false,
+            "area_information": [
+                {
+                    "value_in_unit": 2000,
+                    "name": "Builtup Area",
+                    "double_value_in_unit": 2000,
+                    "value": 2000,
+                    "double_value": 2000
+                }
+            ],
+            "property_type": "Builder Floor",
+            "id": 300772,
+            "number_of_toilets": null,
+            "apartment_group_name": "3 BHK",
+            "selected_area_in_unit": 2000,
+            "area": 2000,
+            "brokerage": 0,
+            "number_of_bedrooms": 3,
+            "derived_per_sqft_rate": 7605,
+            "pass_by_filter": true,
+            "apartment_type_id": 4,
+            "loan_amount": 21600000,
+            "is_available": true,
+            "derived_price": 27000000,
+            "per_sqft_rate": 7605,
+            "emi_amount": 151030,
+            "inventory_count": 0,
+            "floor_plan_urls": [],
+            "selected_area": 2000,
+            "completion_date": 1685577600,
+            "formatted_selected_area_in_unit": "2.0 K"
+        },
+        {
+            "formatted_price": "2.7 Cr",
+            "seller": [
+                1
+            ],
+            "per_unit_rate": 8500,
+            "listing_id": "2b24ffcd920156572507",
+            "formatted_per_unit_rate": "8.5k",
+            "facing": "all",
+            "area_value_in_unit": 2500,
+            "flat_config_id": 1002091,
+            "property_type_id": 14,
+            "coupon_details": [],
+            "price": 27000000,
+            "formatted_per_sqft_rate": "8.5k",
+            "seller_uuid": "43ecdb73-4275-4f31-b86f-d07bced11ac2",
+            "price_on_request": false,
+            "area_information": [
+                {
+                    "value_in_unit": 2500,
+                    "name": "Builtup Area",
+                    "double_value_in_unit": 2500,
+                    "value": 2500,
+                    "double_value": 2500
+                }
+            ],
+            "property_type": "Builder Floor",
+            "id": 300772,
+            "number_of_toilets": null,
+            "apartment_group_name": "3 BHK",
+            "selected_area_in_unit": 2500,
+            "area": 2500,
+            "brokerage": 0,
+            "number_of_bedrooms": 3,
+            "derived_per_sqft_rate": 8500,
+            "pass_by_filter": true,
+            "apartment_type_id": 4,
+            "loan_amount": 21600000,
+            "is_available": true,
+            "derived_price": 27000000,
+            "per_sqft_rate": 8500,
+            "emi_amount": 151030,
+            "inventory_count": 0,
+            "floor_plan_urls": [],
+            "selected_area": 2500,
+            "completion_date": 1685577600,
+            "formatted_selected_area_in_unit": "2.5 K"
+        },
+        {
+            "formatted_price": "2.7 Cr",
+            "seller": [
+                1
+            ],
+            "per_unit_rate": 7605,
+            "listing_id": "608a094307c16a1dfe5b",
+            "formatted_per_unit_rate": "7.61k",
+            "facing": "all",
+            "area_value_in_unit": 2000,
+            "flat_config_id": 1464659,
+            "property_type_id": 14,
+            "coupon_details": [],
+            "price": 27000000,
+            "formatted_per_sqft_rate": "7.61k",
+            "seller_uuid": "43ecdb73-4275-4f31-b86f-d07bced11ac2",
+            "price_on_request": false,
+            "area_information": [
+                {
+                    "value_in_unit": 2000,
+                    "name": "Builtup Area",
+                    "double_value_in_unit": 2000,
+                    "value": 2000,
+                    "double_value": 2000
+                }
+            ],
+            "property_type": "Builder Floor",
+            "id": 300772,
+            "number_of_toilets": null,
+            "apartment_group_name": "3 BHK",
+            "selected_area_in_unit": 2000,
+            "area": 2000,
+            "brokerage": 0,
+            "number_of_bedrooms": 3,
+            "derived_per_sqft_rate": 7605,
+            "pass_by_filter": true,
+            "apartment_type_id": 4,
+            "loan_amount": 21600000,
+            "is_available": true,
+            "derived_price": 27000000,
+            "per_sqft_rate": 7605,
+            "emi_amount": 151030,
+            "inventory_count": 0,
+            "floor_plan_urls": [],
+            "selected_area": 2000,
+            "completion_date": 1685577600,
+            "formatted_selected_area_in_unit": "2.0 K"
+        },
+        {
+            "formatted_price": "3.5 Cr",
+            "seller": [
+                1
+            ],
+            "per_unit_rate": 7605,
+            "listing_id": "38a7bdf6693b4c197cda",
+            "formatted_per_unit_rate": "7.61k",
+            "facing": "all",
+            "area_value_in_unit": 2600,
+            "flat_config_id": 1464660,
+            "property_type_id": 14,
+            "coupon_details": [],
+            "price": 35000000,
+            "formatted_per_sqft_rate": "7.61k",
+            "seller_uuid": "286759e7-ea58-48e3-9793-5fa90d9f1db4",
+            "price_on_request": false,
+            "area_information": [
+                {
+                    "value_in_unit": 2600,
+                    "name": "Builtup Area",
+                    "double_value_in_unit": 2600,
+                    "value": 2600,
+                    "double_value": 2600
+                }
+            ],
+            "property_type": "Builder Floor",
+            "id": 300772,
+            "number_of_toilets": null,
+            "apartment_group_name": "3 BHK",
+            "selected_area_in_unit": 2600,
+            "area": 2600,
+            "brokerage": 0,
+            "number_of_bedrooms": 3,
+            "derived_per_sqft_rate": 7605,
+            "pass_by_filter": true,
+            "apartment_type_id": 4,
+            "loan_amount": 28000000,
+            "is_available": true,
+            "derived_price": 35000000,
+            "per_sqft_rate": 7605,
+            "emi_amount": 195780,
+            "inventory_count": 0,
+            "floor_plan_urls": [],
+            "selected_area": 2600,
+            "completion_date": 1685577600,
+            "formatted_selected_area_in_unit": "2.6 K"
+        },
+        {
+            "formatted_price": "3.5 Cr",
+            "seller": [
+                1
+            ],
+            "per_unit_rate": 7605,
+            "listing_id": "38a7bdf6693b4c197cda",
+            "formatted_per_unit_rate": "7.61k",
+            "facing": "all",
+            "area_value_in_unit": 2600,
+            "flat_config_id": 1464660,
+            "property_type_id": 14,
+            "coupon_details": [],
+            "price": 35000000,
+            "formatted_per_sqft_rate": "7.61k",
+            "seller_uuid": "43ecdb73-4275-4f31-b86f-d07bced11ac2",
+            "price_on_request": false,
+            "area_information": [
+                {
+                    "value_in_unit": 2600,
+                    "name": "Builtup Area",
+                    "double_value_in_unit": 2600,
+                    "value": 2600,
+                    "double_value": 2600
+                }
+            ],
+            "property_type": "Builder Floor",
+            "id": 300772,
+            "number_of_toilets": null,
+            "apartment_group_name": "3 BHK",
+            "selected_area_in_unit": 2600,
+            "area": 2600,
+            "brokerage": 0,
+            "number_of_bedrooms": 3,
+            "derived_per_sqft_rate": 7605,
+            "pass_by_filter": true,
+            "apartment_type_id": 4,
+            "loan_amount": 28000000,
+            "is_available": true,
+            "derived_price": 35000000,
+            "per_sqft_rate": 7605,
+            "emi_amount": 195780,
+            "inventory_count": 0,
+            "floor_plan_urls": [],
+            "selected_area": 2600,
+            "completion_date": 1685577600,
+            "formatted_selected_area_in_unit": "2.6 K"
+        },
+        {
+            "formatted_price": "2.75 Cr",
+            "seller": [
+                1
+            ],
+            "per_unit_rate": 7480,
+            "listing_id": "8bc8fd53a38b86ef4af7",
+            "formatted_per_unit_rate": "7.48k",
+            "facing": "all",
+            "area_value_in_unit": 2500,
+            "flat_config_id": 1002092,
+            "property_type_id": 14,
+            "coupon_details": [],
+            "price": 27500000,
+            "formatted_per_sqft_rate": "7.48k",
+            "seller_uuid": "286759e7-ea58-48e3-9793-5fa90d9f1db4",
+            "price_on_request": false,
+            "area_information": [
+                {
+                    "value_in_unit": 2500,
+                    "name": "Builtup Area",
+                    "double_value_in_unit": 2500,
+                    "value": 2500,
+                    "double_value": 2500
+                }
+            ],
+            "property_type": "Builder Floor",
+            "id": 300772,
+            "number_of_toilets": null,
+            "apartment_group_name": "4 BHK",
+            "selected_area_in_unit": 2500,
+            "area": 2500,
+            "brokerage": 0,
+            "number_of_bedrooms": 4,
+            "derived_per_sqft_rate": 7480,
+            "pass_by_filter": true,
+            "apartment_type_id": 71,
+            "loan_amount": 22000000,
+            "is_available": true,
+            "derived_price": 27500000,
+            "per_sqft_rate": 7480,
+            "emi_amount": 153827,
+            "inventory_count": 0,
+            "floor_plan_urls": [],
+            "selected_area": 2500,
+            "completion_date": 1685577600,
+            "formatted_selected_area_in_unit": "2.5 K"
+        },
+        {
+            "formatted_price": "2.75 Cr",
+            "seller": [
+                1
+            ],
+            "per_unit_rate": 7480,
+            "listing_id": "8bc8fd53a38b86ef4af7",
+            "formatted_per_unit_rate": "7.48k",
+            "facing": "all",
+            "area_value_in_unit": 2500,
+            "flat_config_id": 1002092,
+            "property_type_id": 14,
+            "coupon_details": [],
+            "price": 27500000,
+            "formatted_per_sqft_rate": "7.48k",
+            "seller_uuid": "43ecdb73-4275-4f31-b86f-d07bced11ac2",
+            "price_on_request": false,
+            "area_information": [
+                {
+                    "value_in_unit": 2500,
+                    "name": "Builtup Area",
+                    "double_value_in_unit": 2500,
+                    "value": 2500,
+                    "double_value": 2500
+                }
+            ],
+            "property_type": "Builder Floor",
+            "id": 300772,
+            "number_of_toilets": null,
+            "apartment_group_name": "4 BHK",
+            "selected_area_in_unit": 2500,
+            "area": 2500,
+            "brokerage": 0,
+            "number_of_bedrooms": 4,
+            "derived_per_sqft_rate": 7480,
+            "pass_by_filter": true,
+            "apartment_type_id": 71,
+            "loan_amount": 22000000,
+            "is_available": true,
+            "derived_price": 27500000,
+            "per_sqft_rate": 7480,
+            "emi_amount": 153827,
+            "inventory_count": 0,
+            "floor_plan_urls": [],
+            "selected_area": 2500,
+            "completion_date": 1685577600,
+            "formatted_selected_area_in_unit": "2.5 K"
+        },
+        {
+            "formatted_price": "3.3 Cr",
+            "seller": [
+                1
+            ],
+            "per_unit_rate": 7012,
+            "listing_id": "a0642787c3fccfa0070c",
+            "formatted_per_unit_rate": "7.01k",
+            "facing": "all",
+            "area_value_in_unit": 4000,
+            "flat_config_id": 1002093,
+            "property_type_id": 14,
+            "coupon_details": [],
+            "price": 33000000,
+            "formatted_per_sqft_rate": "7.01k",
+            "seller_uuid": "286759e7-ea58-48e3-9793-5fa90d9f1db4",
+            "price_on_request": false,
+            "area_information": [
+                {
+                    "value_in_unit": 4000,
+                    "name": "Builtup Area",
+                    "double_value_in_unit": 4000,
+                    "value": 4000,
+                    "double_value": 4000
+                }
+            ],
+            "property_type": "Builder Floor",
+            "id": 300772,
+            "number_of_toilets": null,
+            "apartment_group_name": "4 BHK",
+            "selected_area_in_unit": 4000,
+            "area": 4000,
+            "brokerage": 0,
+            "number_of_bedrooms": 4,
+            "derived_per_sqft_rate": 7012,
+            "pass_by_filter": true,
+            "apartment_type_id": 71,
+            "loan_amount": 26400000,
+            "is_available": true,
+            "derived_price": 33000000,
+            "per_sqft_rate": 7012,
+            "emi_amount": 184593,
+            "inventory_count": 0,
+            "floor_plan_urls": [],
+            "selected_area": 4000,
+            "completion_date": 1685577600,
+            "formatted_selected_area_in_unit": "4.0 K"
+        },
+        {
+            "formatted_price": "3.3 Cr",
+            "seller": [
+                1
+            ],
+            "per_unit_rate": 7012,
+            "listing_id": "a0642787c3fccfa0070c",
+            "formatted_per_unit_rate": "7.01k",
+            "facing": "all",
+            "area_value_in_unit": 4000,
+            "flat_config_id": 1002093,
+            "property_type_id": 14,
+            "coupon_details": [],
+            "price": 33000000,
+            "formatted_per_sqft_rate": "7.01k",
+            "seller_uuid": "43ecdb73-4275-4f31-b86f-d07bced11ac2",
+            "price_on_request": false,
+            "area_information": [
+                {
+                    "value_in_unit": 4000,
+                    "name": "Builtup Area",
+                    "double_value_in_unit": 4000,
+                    "value": 4000,
+                    "double_value": 4000
+                }
+            ],
+            "property_type": "Builder Floor",
+            "id": 300772,
+            "number_of_toilets": null,
+            "apartment_group_name": "4 BHK",
+            "selected_area_in_unit": 4000,
+            "area": 4000,
+            "brokerage": 0,
+            "number_of_bedrooms": 4,
+            "derived_per_sqft_rate": 7012,
+            "pass_by_filter": true,
+            "apartment_type_id": 71,
+            "loan_amount": 26400000,
+            "is_available": true,
+            "derived_price": 33000000,
+            "per_sqft_rate": 7012,
+            "emi_amount": 184593,
+            "inventory_count": 0,
+            "floor_plan_urls": [],
+            "selected_area": 4000,
+            "completion_date": 1685577600,
+            "formatted_selected_area_in_unit": "4.0 K"
+        },
+        {
+            "formatted_price": "3.5 Cr",
+            "seller": [
+                1
+            ],
+            "per_unit_rate": 7605,
+            "listing_id": "e7bd12bbeaaa59ec527d",
+            "formatted_per_unit_rate": "7.61k",
+            "facing": "all",
+            "area_value_in_unit": 2550,
+            "flat_config_id": 1464661,
+            "property_type_id": 14,
+            "coupon_details": [],
+            "price": 35000000,
+            "formatted_per_sqft_rate": "7.61k",
+            "seller_uuid": "286759e7-ea58-48e3-9793-5fa90d9f1db4",
+            "price_on_request": false,
+            "area_information": [
+                {
+                    "value_in_unit": 2550,
+                    "name": "Builtup Area",
+                    "double_value_in_unit": 2550,
+                    "value": 2550,
+                    "double_value": 2550
+                }
+            ],
+            "property_type": "Builder Floor",
+            "id": 300772,
+            "number_of_toilets": null,
+            "apartment_group_name": "4 BHK",
+            "selected_area_in_unit": 2550,
+            "area": 2550,
+            "brokerage": 0,
+            "number_of_bedrooms": 4,
+            "derived_per_sqft_rate": 7605,
+            "pass_by_filter": true,
+            "apartment_type_id": 71,
+            "loan_amount": 28000000,
+            "is_available": true,
+            "derived_price": 35000000,
+            "per_sqft_rate": 7605,
+            "emi_amount": 195780,
+            "inventory_count": 0,
+            "floor_plan_urls": [],
+            "selected_area": 2550,
+            "completion_date": 1685577600,
+            "formatted_selected_area_in_unit": "2.55 K"
+        },
+        {
+            "formatted_price": "3.5 Cr",
+            "seller": [
+                1
+            ],
+            "per_unit_rate": 7605,
+            "listing_id": "e7bd12bbeaaa59ec527d",
+            "formatted_per_unit_rate": "7.61k",
+            "facing": "all",
+            "area_value_in_unit": 2550,
+            "flat_config_id": 1464661,
+            "property_type_id": 14,
+            "coupon_details": [],
+            "price": 35000000,
+            "formatted_per_sqft_rate": "7.61k",
+            "seller_uuid": "43ecdb73-4275-4f31-b86f-d07bced11ac2",
+            "price_on_request": false,
+            "area_information": [
+                {
+                    "value_in_unit": 2550,
+                    "name": "Builtup Area",
+                    "double_value_in_unit": 2550,
+                    "value": 2550,
+                    "double_value": 2550
+                }
+            ],
+            "property_type": "Builder Floor",
+            "id": 300772,
+            "number_of_toilets": null,
+            "apartment_group_name": "4 BHK",
+            "selected_area_in_unit": 2550,
+            "area": 2550,
+            "brokerage": 0,
+            "number_of_bedrooms": 4,
+            "derived_per_sqft_rate": 7605,
+            "pass_by_filter": true,
+            "apartment_type_id": 71,
+            "loan_amount": 28000000,
+            "is_available": true,
+            "derived_price": 35000000,
+            "per_sqft_rate": 7605,
+            "emi_amount": 195780,
+            "inventory_count": 0,
+            "floor_plan_urls": [],
+            "selected_area": 2550,
+            "completion_date": 1685577600,
+            "formatted_selected_area_in_unit": "2.55 K"
+        },
+        {
+            "formatted_price": "4.2 Cr",
+            "seller": [
+                1
+            ],
+            "per_unit_rate": 7605,
+            "listing_id": "e3153ea8b19810ff1ad4",
+            "formatted_per_unit_rate": "7.61k",
+            "facing": "all",
+            "area_value_in_unit": 4100,
+            "flat_config_id": 1464662,
+            "property_type_id": 14,
+            "coupon_details": [],
+            "price": 42000000,
+            "formatted_per_sqft_rate": "7.61k",
+            "seller_uuid": "286759e7-ea58-48e3-9793-5fa90d9f1db4",
+            "price_on_request": false,
+            "area_information": [
+                {
+                    "value_in_unit": 4100,
+                    "name": "Builtup Area",
+                    "double_value_in_unit": 4100,
+                    "value": 4100,
+                    "double_value": 4100
+                }
+            ],
+            "property_type": "Builder Floor",
+            "id": 300772,
+            "number_of_toilets": null,
+            "apartment_group_name": "4 BHK",
+            "selected_area_in_unit": 4100,
+            "area": 4100,
+            "brokerage": 0,
+            "number_of_bedrooms": 4,
+            "derived_per_sqft_rate": 7605,
+            "pass_by_filter": true,
+            "apartment_type_id": 71,
+            "loan_amount": 33600000,
+            "is_available": true,
+            "derived_price": 42000000,
+            "per_sqft_rate": 7605,
+            "emi_amount": 234936,
+            "inventory_count": 0,
+            "floor_plan_urls": [],
+            "selected_area": 4100,
+            "completion_date": 1685577600,
+            "formatted_selected_area_in_unit": "4.1 K"
+        },
+        {
+            "formatted_price": "4.2 Cr",
+            "seller": [
+                1
+            ],
+            "per_unit_rate": 7605,
+            "listing_id": "e3153ea8b19810ff1ad4",
+            "formatted_per_unit_rate": "7.61k",
+            "facing": "all",
+            "area_value_in_unit": 4100,
+            "flat_config_id": 1464662,
+            "property_type_id": 14,
+            "coupon_details": [],
+            "price": 42000000,
+            "formatted_per_sqft_rate": "7.61k",
+            "seller_uuid": "43ecdb73-4275-4f31-b86f-d07bced11ac2",
+            "price_on_request": false,
+            "area_information": [
+                {
+                    "value_in_unit": 4100,
+                    "name": "Builtup Area",
+                    "double_value_in_unit": 4100,
+                    "value": 4100,
+                    "double_value": 4100
+                }
+            ],
+            "property_type": "Builder Floor",
+            "id": 300772,
+            "number_of_toilets": null,
+            "apartment_group_name": "4 BHK",
+            "selected_area_in_unit": 4100,
+            "area": 4100,
+            "brokerage": 0,
+            "number_of_bedrooms": 4,
+            "derived_per_sqft_rate": 7605,
+            "pass_by_filter": true,
+            "apartment_type_id": 71,
+            "loan_amount": 33600000,
+            "is_available": true,
+            "derived_price": 42000000,
+            "per_sqft_rate": 7605,
+            "emi_amount": 234936,
+            "inventory_count": 0,
+            "floor_plan_urls": [],
+            "selected_area": 4100,
+            "completion_date": 1685577600,
+            "formatted_selected_area_in_unit": "4.1 K"
+        }
+    ],
+    "is_most_contacted": true,
+    "am_poly_of_interest": [],
+    "polygon_uuids": [
+        "526acdc6c33455e9e4e9",
+        "3c69d8421a77f8f8b611",
+        "f7f5d7f50dde9452144e",
+        "5f775a7010d9b69ea17e",
+        "d12f90744c6c443e2a1e",
+        "cdbadacafda35b98d359",
+        "793f17ce2d8d4bfcd6f6",
+        "94f0f396a754c773c3c7"
+    ],
+    "contact_persons_info": [],
+    "exp_1_relevance_score_other_source_android": 4.44,
+    "parent_id": null,
+    "rera_reg_id": "Rera Not Applicable",
+    "name": "Bargainer Ultra Modern Floor",
+    "exp_4_relevance_score_other_source_web": 4.44,
+    "_id": "300772_project",
+    "exp_1_relevance_score_other_source_ios": 4.44,
+    "absolute_churn_score": 0,
+    "emi": {
+        "interest_rate": 8,
+        "value": 154363.24,
+        "tenure": 25
+    },
+    "formatted_price": "2.5 Cr",
+    "am_projects_of_interest": [],
+    "show_new_launch": false,
+    "listing_highlights": [],
+    "thumb_image_alt_tag": "Gallery Cover Pic of Bargainer Ultra Modern Floor",
+    "description": "Bargainer Ultra Modern Floor is a residential project in Sector 46, Gurgaon. Bargainer Ultra Modern Floor offers Apartment. Available configurations include 3 BHK, 4 BHK. Apartment, as per the area plan, are in the size range of 1900.0 - 4000.0 sq.ft.. The property is Ready to Move. The project was launched in December 2022 and possession date of Bargainer Ultra Modern Floor is Jun, 2023. Bargainer Ultra Modern Floor is located in Sector 46. The project is developed by Bargainer Propmart.<br><br>Bargainer Ultra Modern Floor is equipped with various resident-centric amenities that includes Power Backup. The property is equipped with Fire Sprinklers. Enjoy a class-apart lifestyle at Bargainer Ultra Modern Floor.<br><br>This project meets all mandates as required by the state authority. RERA ID of Bargainer Ultra Modern Floor is Rera Not Applicable.<br><br>Located close to prominent suburbs of Gurgaon, the area of Sector 46 has prominent schools and hospitals within a close distance.<br><br>",
+    "sale_tag": "New Booking",
+    "title": "3, 4 BHK Builder Floors",
+    "is_launch_vista": false,
+    "sellers_info": [
+        {
+            "profile_url": "arun-gaur-aid-2963866",
+            "profile_picture_url": "https://is1-2.housingcdn.com/fb15c03b/9519c3e4f2fe191b0af7bb8b9b6dea93/v0/version.jpg",
+            "profile_color": null,
+            "partial_contact_number": "98916xxxxx",
+            "profile_category": "gold",
+            "products_bought_by_seller": [
+                22,
+                16,
+                14
+            ],
+            "seller_label": "Seller",
+            "offer_text": [],
+            "is_seller": true,
+            "soft_deficit": -0.45,
+            "housing_chat_disabled": true,
+            "ad_deficit": -16.8,
+            "min_formatted_price": "2.5 Cr",
+            "is_homebuy360_builder": null,
+            "profile_uuid": "43ecdb73-4275-4f31-b86f-d07bced11ac2",
+            "bhk_title": "3, 4 BHK",
+            "contact_person_id": 1,
+            "canonical": "/buy-property-by-arun-gaur-aid-2963866-A5yodmlbj9e764qatc7naq2ojm",
+            "has_pdp_visibility": null,
+            "broker_rera_details": null,
+            "max_formatted_price": "4.2 Cr",
+            "max_price": 42000000,
+            "min_price": 25000000,
+            "product_ids": [],
+            "poc_partial_contact_number": "98188xxxxx",
+            "broker_position": null,
+            "apartment_type_ids": [
+                4,
+                5
+            ],
+            "event_ids": [
+                0
+            ],
+            "name": "ARUN GAUR & CO",
+            "paid": true,
+            "text_color": null,
+            "opt_in": false,
+            "builder_account_type": null
+        },
+        {
+            "profile_url": "bargainer-propmart-aid-27265012",
+            "profile_picture_url": "https://is1-3.housingcdn.com/fb15c03b/c53ef3422c7423a8f8b19eeb2b950b68/v0/version.jpg",
+            "profile_color": null,
+            "partial_contact_number": "84452xxxxx",
+            "profile_category": "titanium",
+            "products_bought_by_seller": [
+                14,
+                16,
+                22,
+                55
+            ],
+            "seller_label": "Seller",
+            "offer_text": [],
+            "is_seller": true,
+            "soft_deficit": -0.55,
+            "housing_chat_disabled": null,
+            "ad_deficit": -9.16,
+            "min_formatted_price": "2.5 Cr",
+            "is_homebuy360_builder": null,
+            "profile_uuid": "286759e7-ea58-48e3-9793-5fa90d9f1db4",
+            "bhk_title": "3, 4 BHK",
+            "contact_person_id": 1,
+            "canonical": "/buy-property-by-bargainer-propmart-aid-27265012-A3jp1jjmjvigs2dnvuihv22px0",
+            "has_pdp_visibility": null,
+            "broker_rera_details": null,
+            "max_formatted_price": "4.2 Cr",
+            "max_price": 42000000,
+            "min_price": 25000000,
+            "product_ids": [],
+            "poc_partial_contact_number": "98188xxxxx",
+            "broker_position": null,
+            "apartment_type_ids": [
+                4,
+                5
+            ],
+            "event_ids": [
+                0
+            ],
+            "name": "Bargainer Propmart",
+            "paid": true,
+            "text_color": null,
+            "opt_in": true,
+            "builder_account_type": null
+        }
+    ],
+    "paid_service_inline_boost": 1,
+    "city_select_uuid": [
+        "526acdc6c33455e9e4e9"
+    ],
+    "formatted_avg_per_unit_rate": "7.63k",
+    "has_brochure": false,
+    "verified_score": 1,
+    "display_area_type": "Builtup Area",
+    "min_price_per_bedrooms": [
+        {
+            "minimum_formatted_price": "2.5 Cr",
+            "minimum_price": 25000000,
+            "maximum_price": 35000000,
+            "maximum_formatted_price": "3.5 Cr",
+            "maximum_area": 2600,
+            "aprt_type_id": 4,
+            "apartment_type_name": "3 BHK",
+            "completion_date": 1685577600,
+            "minimum_area": 1900,
+            "is_available": true
+        },
+        {
+            "minimum_formatted_price": "2.75 Cr",
+            "minimum_price": 27500000,
+            "maximum_price": 42000000,
+            "maximum_formatted_price": "4.2 Cr",
+            "maximum_area": 4100,
+            "aprt_type_id": 71,
+            "apartment_type_name": null,
+            "completion_date": 1685577600,
+            "minimum_area": 2500,
+            "is_available": true
+        }
+    ],
+    "price_on_request": false,
+    "result_type": "Organic",
+    "max_selected_area_in_unit": 4100,
+    "display_neighbourhood": [
+        "Gurgaon",
+        "Sector 46"
+    ],
+    "exp_1_relevance_score_other_source_mobile": 4.44,
+    "info_level": 20,
+    "video_key": null,
+    "thumb_image_url": "https://is1-2.housingcdn.com/4f2250e8/32f2f35cd30dbcaf101b4c26101fe814/v0/version/bargainer_ultra_modern_floor-sector_46-gurgaon-bargainer_propmart.jpeg",
+    "avg_per_unit_rate": 7627,
+    "offers_data": [],
+    "number_of_flats": 0,
+    "churnable_score": 1,
+    "street_info": "Sector 46",
+    "relevance_score": 0.95,
+    "is_exclusive_project": false,
+    "absolute_monetization_factor": 0,
+    "min_price": 25000000,
+    "show_per_sqft_rate": true,
+    "paid": true,
+    "brochure_pdf_url": null,
+    "video_story_detail_list": [],
+    "exp_1_relevance_score_other_source_default": 4.44,
+    "new_relevance_vector": [
+        520.2,
+        1,
+        0.3,
+        1,
+        0.9,
+        1,
+        0,
+        1,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+    ],
+    "exp_4_relevance_score_paid_source_ios": 4.44,
+    "digi_tour_entry_point": "",
+    "number_of_buildings": 1,
+    "exp_4_relevance_score_other_source_ios": 4.44
+}

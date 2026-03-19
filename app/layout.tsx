@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Rubik } from "next/font/google";
 import "./globals.css";
+import { ToastProvider } from "@/components/ui/ToastProvider";
+import { AuthProvider } from "@/components/auth/AuthProvider";
 
 const rubik = Rubik({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-rubik" });
 
@@ -16,7 +18,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={rubik.variable}>
-      <body className="antialiased min-h-screen font-sans">{children}</body>
+      <body className="antialiased min-h-screen font-sans">
+        <ToastProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </ToastProvider>
+      </body>
     </html>
   );
 }

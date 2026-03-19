@@ -1,0 +1,1087 @@
+{
+    "exp_1_relevance_score_paid_source_default": 3.774214,
+    "owner_contact_cap_exceeded": false,
+    "freshness_score": 0.6884284,
+    "absolute_monetization_factor_ab": 44142.83,
+    "medium_address": [
+        {
+            "polygon_uuid": "2475ee745ec374a2d50e",
+            "display_name": "Sector 89"
+        }
+    ],
+    "floor_number": 2,
+    "mv_cluster_id": "b_111094",
+    "type": "resale",
+    "_score": 1.317066,
+    "video_tour": false,
+    "is_uc_property": false,
+    "merged_ml_vector": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        3.365499973297119,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+    ],
+    "property_category_id": 1,
+    "show_to_brokers": false,
+    "formatted_per_sqft_rate": "11.25k",
+    "price": 13450005,
+    "ad_deficit": 265.1,
+    "show_building_name": true,
+    "featured_type": "city",
+    "id": 19363011,
+    "magic_factor": 0.7,
+    "ctr": 1,
+    "clubhouse_amenities_keys": [],
+    "featured_video_thumbnail_url": "https://housing-is-01.s3.amazonaws.com/hsshorts/bad25c0a240f32daba88de287aad6a1c/original.jpg",
+    "is_rera_verified": true,
+    "formatted_min_price": "1.35 Cr",
+    "is_auction_flat": false,
+    "exp_1_relevance_score_paid_source_mobile": 3.774214,
+    "date_added": "2026-01-26T01:05:39Z",
+    "plot_area": null,
+    "region_entities": [
+        {
+            "inventory_canonical_url": "/in/buy/projects/page/261019-m3m-soulitude-by-m3m-india-pvt-ltd-in-sector-89",
+            "is_rera_verified": true,
+            "duplicate_project_id": "null",
+            "latitude": 28.425301,
+            "initiation_date": 1635100200,
+            "type": "project",
+            "has_transaction": true,
+            "review_rating": 3.63,
+            "entity_url": "/in/buy/projects/page/261019-m3m-soulitude-by-m3m-india-pvt-ltd-in-sector-89",
+            "is_post_rera": true,
+            "name": "M3M Soulitude",
+            "paid": true,
+            "show_project_name": true,
+            "completion_date": 1756684800,
+            "id": "261019",
+            "status": "ACTIVE",
+            "longitude": 76.943901
+        }
+    ],
+    "inventory_amenities": {
+        "has_servant_room": false,
+        "has_power_backup": true,
+        "is_gated_community": true,
+        "has_kids_area": true,
+        "has_sports_facility": true,
+        "has_geyser": true,
+        "has_community_hall": true,
+        "has_garden": true,
+        "has_gas_pipeline": false,
+        "has_parking": true,
+        "has_lift": true,
+        "has_regular_water_supply": true,
+        "has_cupboard": true,
+        "has_gym": true,
+        "has_clubhouse": true,
+        "has_cctv": true,
+        "has_swimming_pool": true,
+        "has_intercom": true
+    },
+    "exp_1_relevance_score_paid_source_web": 3.774214,
+    "building_uuid": null,
+    "status": "ACTIVE",
+    "short_address": [
+        {
+            "polygon_uuid": "2475ee745ec374a2d50e",
+            "display_name": "Sector 89"
+        },
+        {
+            "polygon_uuid": "3c69d8421a77f8f8b611",
+            "display_name": "Gurgaon"
+        }
+    ],
+    "credit_score": null,
+    "exp_4_relevance_score_paid_source_web": 3.774214,
+    "exp_1_relevance_score_other_source_web": 3.774214,
+    "unit_of_area": "sq.ft.",
+    "media_details": {
+        "listing_videos": []
+    },
+    "polygon_data": {
+        "primary_polygon_uuid": "2475ee745ec374a2d50e",
+        "primary_polygon_name": "Sector 89"
+    },
+    "relevance_vector": [
+        520.2,
+        1,
+        0,
+        1,
+        1,
+        1,
+        0,
+        1,
+        0,
+        0.6884284,
+        0,
+        0.43,
+        0.42689941863585656,
+        0,
+        0.12098342751155046,
+        0.42689941863585656,
+        0.42689941863585656,
+        0,
+        0.12098342751155046,
+        0.42689941863585656,
+        1
+    ],
+    "listing_normalized_mf": 0.43,
+    "prime_location_factor": null,
+    "updated_at": 1772011309,
+    "polygons_hash": {
+        "h_district": {
+            "url_name": null,
+            "name": null,
+            "display_name": null,
+            "uuid": null,
+            "is_proxy": null
+        },
+        "city": {
+            "url_name": "gurgaon",
+            "name": "Gurgaon",
+            "display_name": [
+                "Gurugram",
+                "Haryana"
+            ],
+            "uuid": "3c69d8421a77f8f8b611",
+            "is_proxy": true
+        },
+        "hotspot": {
+            "url_name": null,
+            "name": null,
+            "display_name": null,
+            "uuid": null,
+            "is_proxy": null
+        },
+        "neighbourhood": {
+            "url_name": null,
+            "name": null,
+            "display_name": null,
+            "uuid": null,
+            "is_proxy": null
+        },
+        "housing_region": {
+            "url_name": "new_gurgaon",
+            "name": "New Gurgaon",
+            "display_name": [
+                "NH 8",
+                "Gurgaon"
+            ],
+            "uuid": "6961c8876d6de65d6f37",
+            "is_proxy": null
+        },
+        "locality": {
+            "url_name": "sector_89",
+            "name": "Sector 89",
+            "display_name": [
+                "Sector 89",
+                "Gurgaon"
+            ],
+            "uuid": "2475ee745ec374a2d50e",
+            "is_proxy": null
+        },
+        "sublocality": {
+            "url_name": null,
+            "name": null,
+            "display_name": null,
+            "uuid": null,
+            "is_proxy": null
+        },
+        "state": {
+            "url_name": "haryana",
+            "name": "Haryana",
+            "display_name": [
+                "Haryana",
+                "India"
+            ],
+            "uuid": "793f17ce2d8d4bfcd6f6",
+            "is_proxy": null
+        },
+        "region": {
+            "url_name": "gurgaon_district",
+            "name": "Gurgaon District",
+            "display_name": [
+                "Gurgaon District",
+                "Haryana"
+            ],
+            "uuid": "cdbadacafda35b98d359",
+            "is_proxy": null
+        },
+        "housing_state": {
+            "url_name": null,
+            "name": null,
+            "display_name": null,
+            "uuid": null,
+            "is_proxy": null
+        }
+    },
+    "offers_segregated_data": {},
+    "selective_boost_factor": 0,
+    "age_of_property": 1,
+    "is_virtual_tour_available": false,
+    "images_hash": {
+        "project_images": [
+            {
+                "images": [
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Elevation",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/4f2250e8/9f21ab08fc73d9ee5dffcdb195004073/v0/version.png",
+                        "tag_names": [
+                            "Elevation"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Elevation",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-3.housingcdn.com/4f2250e8/b133e32ac928a4507a8cb0d29286e00d/v0/version.jpeg",
+                        "tag_names": [
+                            "Elevation"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": 300,
+                            "is_real_image": null,
+                            "image_width": 155
+                        },
+                        "caption": "Bar/Chill-out Lounge",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/099e05c2501270d3bf501b516d975781/v0/version.jpeg",
+                        "tag_names": [
+                            "Amenities"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": 300,
+                            "is_real_image": null,
+                            "image_width": 344
+                        },
+                        "caption": "Cluster Plan For Typical Floor",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/151a05de6f0a7739b12ad2eaa804bcc4/v0/version.jpeg",
+                        "tag_names": [
+                            "Cluster Plan"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Construction Status Feb-25",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/17bafe0374ef0d862982b9e3afdf2581/v0/version.jpeg",
+                        "tag_names": [
+                            "Construction Status"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": 219,
+                            "is_real_image": null,
+                            "image_width": 400
+                        },
+                        "caption": "Others",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/213ff6f5e294dc9786cd6c6aa9d2e3da/v0/version.jpeg",
+                        "tag_names": [
+                            "Amenities"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Elevation",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/289941d5e7ff491fead255b373992f12/v0/version.jpeg",
+                        "tag_names": [
+                            "Elevation"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Construction Status May-24",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/2a60a30de5284c22955027fe2b1ae389/v0/version.jpeg",
+                        "tag_names": [
+                            "Construction Status"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Construction Status Feb-25",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-3.housingcdn.com/012c1500/30df2a9c63319065056843cab7f78547/v0/version.jpeg",
+                        "tag_names": [
+                            "Construction Status"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Construction Status Feb-25",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-3.housingcdn.com/012c1500/3d141def84777eb0aae4a96c14c7b0e9/v0/version.jpeg",
+                        "tag_names": [
+                            "Construction Status"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": 226,
+                            "is_real_image": null,
+                            "image_width": 400
+                        },
+                        "caption": "Location Plan",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/6433be2894ab14f2701056388e26d2d9/v0/version.jpeg",
+                        "tag_names": [
+                            "Location Plan"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Construction Status Feb-25",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-3.housingcdn.com/012c1500/757c08a081f08158ee7aeea3ccf06e97/v0/version.jpeg",
+                        "tag_names": [
+                            "Construction Status"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": 218,
+                            "is_real_image": null,
+                            "image_width": 400
+                        },
+                        "caption": "Master Plan",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-3.housingcdn.com/012c1500/80b557cf6721068dae199a39a4d6a2f5/v0/version.jpeg",
+                        "tag_names": [
+                            "Master Plan"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Construction Status Feb-25",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/922bcfe3eb2bbc1246c3c62e4c4d2c2e/v0/version.jpeg",
+                        "tag_names": [
+                            "Construction Status"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": 300,
+                            "is_real_image": null,
+                            "image_width": 369
+                        },
+                        "caption": "Cluster Plan For Terrace Floor",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/a27fcc17b3c5734a58f86632bc69e1f2/v0/version.jpeg",
+                        "tag_names": [
+                            "Cluster Plan"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Construction Status Feb-25",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-3.housingcdn.com/012c1500/a5e9c8d2ea7c6d4a88c724f68be791c0/v0/version.jpeg",
+                        "tag_names": [
+                            "Construction Status"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Construction Status Feb-25",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/a86f6c5f0576da21f81b0f21b420bf1b/v0/version.jpeg",
+                        "tag_names": [
+                            "Construction Status"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Construction Status Feb-25",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/ab75245c2b9f04ccb3ee553dd73db9d1/v0/version.jpeg",
+                        "tag_names": [
+                            "Construction Status"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": 221,
+                            "is_real_image": null,
+                            "image_width": 400
+                        },
+                        "caption": "Swimming Pool",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-2.housingcdn.com/012c1500/b06200ec2e47257f142cee736c8759ee/v0/version.jpeg",
+                        "tag_names": [
+                            "Amenities"
+                        ]
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": 217,
+                            "is_real_image": null,
+                            "image_width": 400
+                        },
+                        "caption": "Swimming Pool",
+                        "sv_or_dc_approved": null,
+                        "absolute_url": "https://is1-3.housingcdn.com/012c1500/b2e1119e8eea83fc28ebcd95836699b1/v0/version.jpeg",
+                        "tag_names": [
+                            "Amenities"
+                        ]
+                    }
+                ],
+                "alt_tag": "Project Image of 1196 Sq.ft 2.5 BHK Apartment / Flat for sale in Sector 89 for Rs. 13450005",
+                "master_tag": "Project Images"
+            }
+        ],
+        "flat_images": [
+            {
+                "images": [
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Kitchen",
+                        "sv_or_dc_approved": true,
+                        "absolute_url": "https://is1-3.housingcdn.com/01c16c28/8f6ab774435a2d1fd209e3c8405971a1/v0/version/2.5_bhk_apartment-for-sale-sector_89-Gurgaon-kitchen.jpg"
+                    }
+                ],
+                "alt_tag": "Kitchen Image of 1196 Sq.ft 2.5 BHK Apartment / Flat for sale in M3M Soulitude, Sector 89 Gurgaon for Rs. 13450005",
+                "master_tag": "Kitchen"
+            },
+            {
+                "images": [
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Living Room",
+                        "sv_or_dc_approved": true,
+                        "absolute_url": "https://is1-3.housingcdn.com/01c16c28/22d52dc52f4d162cf59a7d14b7e13b3f/v0/version/2.5_bhk_apartment-for-sale-sector_89-Gurgaon-living_room.jpg"
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Living Room",
+                        "sv_or_dc_approved": true,
+                        "absolute_url": "https://is1-3.housingcdn.com/01c16c28/8ae590157c50e98cabe9fb73b78110cd/v0/version/2.5_bhk_apartment-for-sale-sector_89-Gurgaon-living_room.jpg"
+                    }
+                ],
+                "alt_tag": "Living Room Image of 1196 Sq.ft 2.5 BHK Apartment / Flat for sale in M3M Soulitude, Sector 89 Gurgaon for Rs. 13450005",
+                "master_tag": "Living Room"
+            },
+            {
+                "images": [
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Bedroom One",
+                        "sv_or_dc_approved": true,
+                        "absolute_url": "https://is1-3.housingcdn.com/01c16c28/b1ba8f2c21276a7fdb596347b568db29/v0/version/2.5_bhk_apartment-for-sale-sector_89-Gurgaon-bedroom_one.jpg"
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Bedroom One",
+                        "sv_or_dc_approved": true,
+                        "absolute_url": "https://is1-2.housingcdn.com/01c16c28/f5b80acdaf9779cbf40539c415080865/v0/version/2.5_bhk_apartment-for-sale-sector_89-Gurgaon-bedroom_one.jpg"
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Bedroom Two",
+                        "sv_or_dc_approved": true,
+                        "absolute_url": "https://is1-3.housingcdn.com/01c16c28/db278a94fb6f81a9fd8d8932c45784bd/v0/version/2.5_bhk_apartment-for-sale-sector_89-Gurgaon-bedroom_two.jpg"
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Bedroom Two",
+                        "sv_or_dc_approved": true,
+                        "absolute_url": "https://is1-2.housingcdn.com/01c16c28/f39cd3caaff7e794b029759676b71e45/v0/version/2.5_bhk_apartment-for-sale-sector_89-Gurgaon-bedroom_two.jpg"
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Bedroom Three",
+                        "sv_or_dc_approved": true,
+                        "absolute_url": "https://is1-3.housingcdn.com/01c16c28/bd144252501aab236835ef48e2c6b654/v0/version/2.5_bhk_apartment-for-sale-sector_89-Gurgaon-bedroom_three.jpg"
+                    },
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Bedroom Three",
+                        "sv_or_dc_approved": true,
+                        "absolute_url": "https://is1-2.housingcdn.com/01c16c28/bfb5ffbef39b7b76716f2aa6faf60bd1/v0/version/2.5_bhk_apartment-for-sale-sector_89-Gurgaon-bedroom_three.jpg"
+                    }
+                ],
+                "alt_tag": "Bedroom Image of 1196 Sq.ft 2.5 BHK Apartment / Flat for sale in M3M Soulitude, Sector 89 Gurgaon for Rs. 13450005",
+                "master_tag": "Bedroom"
+            },
+            {
+                "images": [
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Attached Bathroom with Bedroom One",
+                        "sv_or_dc_approved": true,
+                        "absolute_url": "https://is1-2.housingcdn.com/01c16c28/a90951447d6914473da3aebb0916c1c5/v0/version/2.5_bhk_apartment-for-sale-sector_89-Gurgaon-attached_bathroom_with_bedroom_one.jpg"
+                    }
+                ],
+                "alt_tag": "Bedroom One Image of 1196 Sq.ft 2.5 BHK Apartment / Flat for sale in M3M Soulitude, Sector 89 Gurgaon for Rs. 13450005",
+                "master_tag": "Bedroom One"
+            },
+            {
+                "images": [
+                    {
+                        "meta_data": {
+                            "image_length": null,
+                            "is_real_image": null,
+                            "image_width": null
+                        },
+                        "caption": "Attached Bathroom with Bedroom Two",
+                        "sv_or_dc_approved": true,
+                        "absolute_url": "https://is1-2.housingcdn.com/01c16c28/66b69fbef7a24469385f438fdf1afca8/v0/version/2.5_bhk_apartment-for-sale-sector_89-Gurgaon-attached_bathroom_with_bedroom_two.jpg"
+                    }
+                ],
+                "alt_tag": "Bedroom Two Image of 1196 Sq.ft 2.5 BHK Apartment / Flat for sale in M3M Soulitude, Sector 89 Gurgaon for Rs. 13450005",
+                "master_tag": "Bedroom Two"
+            }
+        ],
+        "building_images": [],
+        "project_vimeo_videos": [],
+        "project_videos": [
+            {
+                "src": "https://img.youtube.com/vi/u0N1grTXxAI/hqdefault.jpg",
+                "alt": "3D Tour Of M3M Soulitude",
+                "caption": "Project Tour",
+                "type": "video",
+                "uuid": "u0N1grTXxAI",
+                "url": "https://www.youtube.com/embed/u0N1grTXxAI"
+            }
+        ]
+    },
+    "address": [
+        "M3M Soulitude",
+        "Sector 89",
+        "New Gurgaon",
+        "Gurgaon"
+    ],
+    "ml_selected_url": null,
+    "exp_4_relevance_score_paid_source_android": 3.774214,
+    "long_address": [
+        {
+            "region_entity_type": "project",
+            "region_entity_id": 261019,
+            "display_name": "M3M Soulitude"
+        },
+        {
+            "polygon_uuid": "2475ee745ec374a2d50e",
+            "display_name": "Sector 89"
+        },
+        {
+            "polygon_uuid": "6961c8876d6de65d6f37",
+            "display_name": "New Gurgaon"
+        },
+        {
+            "polygon_uuid": "3c69d8421a77f8f8b611",
+            "display_name": "Gurgaon"
+        }
+    ],
+    "distribution_factor": 1,
+    "featured_video_url": "https://video.housingcdn.com/hsshorts/de22b473412350a38a42e3858c8a8a8f/original.mp4",
+    "ad_satisfaction": 32.04,
+    "is_verified": true,
+    "is_corner_property": false,
+    "max_price": 13450005,
+    "event_ids": [
+        446
+    ],
+    "is_first_sale": false,
+    "exp_4_relevance_score_other_source_mobile": 3.774214,
+    "completion_date": 1737833739,
+    "property_tags": [
+        "New Construction",
+        "Resale",
+        "unfurnished",
+        "Ready to Move"
+    ],
+    "is_featured": false,
+    "normalized_churn_score": 1,
+    "exp_1_relevance_score_paid_source_ios": 3.774214,
+    "monetization_factor_ab": 0.43,
+    "exp_4_relevance_score_paid_source_mobile": 3.774214,
+    "is_certified": false,
+    "profile_uuids": [
+        "7de18a0a-5920-426d-93be-5393a9536720"
+    ],
+    "boundary_wall_present": false,
+    "formatted_per_unit_rate": "11.25k",
+    "boosted_as": "HOUSING_ULTRA",
+    "developer_name": "",
+    "is_titanium": false,
+    "calculated_relevance_score": 532.6652098345428,
+    "location_coordinates": "28.425954,76.946372",
+    "nearby_establishments": {
+        "bus_station": 4.83,
+        "school": 0.3,
+        "restaurant": 0.08,
+        "hospital": 0.96
+    },
+    "is_ad_property": null,
+    "nearby_landmarks": [
+        {
+            "duration": 1,
+            "establishment_type": "school",
+            "distance": 0.11059281682622395,
+            "name": "Saraswati Model School",
+            "canonical": "",
+            "travel_distance": 0.589
+        },
+        {
+            "duration": 4,
+            "establishment_type": "hospital",
+            "distance": 1.4458026826065127,
+            "name": "Aarvy Healthcare Pvt Ltd.",
+            "canonical": "",
+            "travel_distance": 3.06
+        },
+        {
+            "duration": 2,
+            "establishment_type": "restaurant",
+            "distance": 0.7997471049647954,
+            "name": "Vasudeva Restaurant",
+            "canonical": "/landmarks/sector-89-gurgaon-overview/restaurants-ES5P10ejjr2ss6tgdsem",
+            "travel_distance": 1.793
+        },
+        {
+            "establishment_type": "shopping_mall",
+            "distance": 4.749764569215936,
+            "name": "Vatika Town Square-INXT",
+            "canonical": ""
+        }
+    ],
+    "exp_4_relevance_score_other_source_android": 3.774214,
+    "exp_1_relevance_score_paid_source_android": 3.774214,
+    "seo_address": [
+        {
+            "name": "M3M Soulitude",
+            "href": "/in/buy/projects/page/261019-m3m-soulitude-by-m3m-india-pvt-ltd-in-sector-89",
+            "type": "project"
+        },
+        {
+            "name": "Sector 89,Gurgaon",
+            "href": "/in/buy/gurgaon/sector_89",
+            "type": "locality"
+        }
+    ],
+    "formatted_max_price": "1.35 Cr",
+    "inventory_canonical_url": "/in/buy/resale/page/19363011-2.5-bhk-apartment-in-sector-89-for-rs-13450005",
+    "paid_benefit": 1,
+    "bounding_box": {
+        "url_name": "gurgaon",
+        "name": "Gurgaon",
+        "display_name": null,
+        "uuid": "526acdc6c33455e9e4e9",
+        "is_proxy": null
+    },
+    "monetization_factor": 0.43,
+    "listing_absolute_mf": 44142.83,
+    "floor_count": 4,
+    "inventory_configs": [
+        {
+            "seller": [
+                1
+            ],
+            "area_in_sq_ft": 1196,
+            "formatted_per_unit_rate": "11.25k",
+            "is_parking_chargeable": null,
+            "is_painting_chargeable": null,
+            "is_rent_maintenance_chargeable": null,
+            "open_parking_count": 1,
+            "is_security_deposit_chargeable": true,
+            "area_value_in_unit": 1196,
+            "property_type_id": 1,
+            "property_category_id": 1,
+            "flat_config_id": 19363011,
+            "furnish_type_id": 3,
+            "lock_in_period": null,
+            "price": 13450005,
+            "formatted_per_sqft_rate": "11.25k",
+            "is_brokerage_chargeable": true,
+            "parking_charges": null,
+            "pitch": "",
+            "id": 19363011,
+            "area": 1196,
+            "is_brokerage_negotiable": true,
+            "brokerage": 135000,
+            "number_of_bedrooms": 3,
+            "derived_per_sqft_rate": 11245,
+            "maintenance_charges_rent": null,
+            "apartment_type_id": 8,
+            "parking_count": 2,
+            "derived_price": 13450005,
+            "apartment_type": "2.5 BHK",
+            "seat_count": null,
+            "per_sqft_rate": 11245,
+            "cabin_count": null,
+            "formatted_price": "1.35 Cr",
+            "formatted_per_sq_unit_area_rate": "11.25k",
+            "per_unit_rate": 11245,
+            "facing": "south-east",
+            "actual_property_type_id": 1,
+            "property_category": "residential",
+            "property_category_type_mapping_id": "1",
+            "property_type": "Apartment",
+            "price_on_request": false,
+            "covered_parking_count": 1,
+            "number_of_toilets": 2,
+            "security_deposit": 0,
+            "is_lock_in_period_chargeable": null,
+            "maintenance_charges_buy": 3500,
+            "is_available": true,
+            "carpet_area": 840,
+            "total_balcony_count": 1,
+            "completion_date": 1737833739,
+            "per_sq_unit_area_rate": 11245,
+            "painting_charges": null
+        }
+    ],
+    "is_most_contacted": true,
+    "polygon_uuids": [
+        "f7f5d7f50dde9452144e",
+        "526acdc6c33455e9e4e9",
+        "3c69d8421a77f8f8b611",
+        "3c69d8421a77f8f8b611",
+        "2475ee745ec374a2d50e",
+        "6961c8876d6de65d6f37",
+        "6961c8876d6de65d6f37",
+        "6961c8876d6de65d6f37",
+        "f80060e7f38254a80391",
+        "6961c8876d6de65d6f37",
+        "793f17ce2d8d4bfcd6f6",
+        "cdbadacafda35b98d359"
+    ],
+    "contact_persons_info": [],
+    "exp_1_relevance_score_other_source_android": 3.774214,
+    "exp_4_relevance_score_other_source_web": 3.774214,
+    "_id": "19363011_resale",
+    "exp_1_relevance_score_other_source_ios": 3.774214,
+    "absolute_churn_score": 0,
+    "titanium_highlights": null,
+    "emi": {
+        "interest_rate": 8,
+        "value": 103809.32,
+        "tenure": 25
+    },
+    "formatted_price": "1.35 Cr",
+    "listing_reports_flag": 0,
+    "locality_champion": false,
+    "ad_slot_name": "HOUSING_ULTRA",
+    "listing_highlights": [],
+    "thumb_image_alt_tag": "Gallery Cover Image of 1196 Sq.ft 2.5 BHK Apartment / Flat for sale in M3M Soulitude, Sector 89 for Rs. 13450005",
+    "description": "2.5 BHK Apartment for sale in Sector 89, Gurgaon - contact now, for details about the most coveted property. This 2.5 BHK unit is available in Sector 89 and offers a premium lifestyle at the best price. It is a desired purchase for any homebuyer in Sector 89. It is on floor 2. The total number of floors is 4. The price of this Apartment is Rs 1.35 Cr. Residents in this project also pay monthly maintenance charges of Rs 3500. It is a good, spacious Apartment unit with carpet area of 840.0 Square feet. The built-up area is 1196 Square feet. There are 3 bedrooms and 2 bathroom. The property is South-East-facing. This building is equipped with lift. This is a gated community. It is a thoroughly secure premise with cctv facility. Other facilities include provisions for Gym, Garden, Sports Facility, Swimming Pool, Intercom, Clubhouse, Community Hall. This property also enjoys power backup facility. Regular water supply is available. A dedicated kids area is also available. This property is at a walking distance from THE SIGNATURE ADVANCED SUPER SPECIALITY HOSPITAL, Aarvy Healthcare Pvt Ltd., and Miracles Apollo Cradle/Spectra Sec 82 - Hospital. The brokerage amount to be paid is Rs 135000",
+    "sale_tag": "Resale",
+    "video": null,
+    "title": "2.5 BHK Flat",
+    "verification_status": "DC_VERIFIED",
+    "platform": null,
+    "listing_deboost_flag": 0,
+    "sellers_info": [
+        {
+            "extra_soft_deficit": 0,
+            "absolute_monetization_factor_ab": 44142.83,
+            "monetization_factor_ab": 0.43,
+            "is_certified": false,
+            "operating_localities": [
+                {
+                    "name": "Sector 89",
+                    "uuid": "2475ee745ec374a2d50e"
+                },
+                {
+                    "name": "Sector 93",
+                    "uuid": "c5b52306d6de50f89eda"
+                },
+                {
+                    "name": "Sector 79",
+                    "uuid": "05f80b391e199362a031"
+                }
+            ],
+            "profile_picture_url": null,
+            "is_titanium": false,
+            "brand_color": "",
+            "seller_classification": "Housing Ultra",
+            "experience": 0.5,
+            "seller_badge": "ULTRA",
+            "uuid": "7de18a0a-5920-426d-93be-5393a9536720",
+            "parent_profile_name": null,
+            "avg_leads_per_day": 2.3,
+            "ad_deficit": 265.1,
+            "seller_badge_products": [
+                "Housing Ultra"
+            ],
+            "listing_order_subscription_type": null,
+            "contact_person_id": 1,
+            "canonical": "/buy-property-by-gurgaon-housing-aid-40156259-Ab1ugjt6hohudigkcop782op40",
+            "show_firm_name": true,
+            "formatted_customer_served_count": "100+",
+            "is_escalated": false,
+            "name": "Gurgaon Housing",
+            "text_color": null,
+            "parent_package_subscription_type": null,
+            "profile_url": "gurgaon-housing-aid-40156259",
+            "profile_color": null,
+            "chat_enabled": null,
+            "partial_contact_number": "96713xxxxx",
+            "profile_category": "gold",
+            "seller_label": "Agent",
+            "is_certified_pro": false,
+            "housing_chat_disabled": null,
+            "soft_deficit": 3.6,
+            "is_housing_ultra": true,
+            "parent_profile_uuid": null,
+            "brand_logo_url": "",
+            "nrr_rank": 1,
+            "ad_product_bucket_score": 12,
+            "profile_uuid": "7de18a0a-5920-426d-93be-5393a9536720",
+            "promotion_days_left": 37,
+            "show_agent_name": true,
+            "broker_rera_details": [],
+            "product_ids": [],
+            "event_ids": [],
+            "firm_name": "Individual Agent",
+            "paid": true,
+            "eligible_for_crm_flow": false,
+            "opt_in": true
+        }
+    ],
+    "city_select_uuid": [
+        "526acdc6c33455e9e4e9"
+    ],
+    "video_url": null,
+    "verified_score": 1,
+    "verified_at": 1769864344,
+    "display_area_type": "Builtup Area",
+    "price_on_request": false,
+    "similar_listings": [],
+    "result_type": "HOUSING_ULTRA",
+    "display_neighbourhood": [
+        "Gurgaon",
+        "Sector 89"
+    ],
+    "info_level": 30,
+    "exp_1_relevance_score_other_source_mobile": 3.774214,
+    "thumb_image_url": "https://is1-3.housingcdn.com/01c16c28/8f6ab774435a2d1fd209e3c8405971a1/v0/version/2.5_bhk_apartment-for-sale-sector_89-Gurgaon-kitchen.jpg",
+    "offers_data": [],
+    "churnable_score": 1,
+    "street_info": "M3m Soulitude Sector 89",
+    "available_from": null,
+    "relevance_score": 0.9105,
+    "absolute_monetization_factor": 44142.83,
+    "is_exclusive_property": null,
+    "min_price": 13450005,
+    "slot_id": null,
+    "area_unit": "square_feet",
+    "paid": true,
+    "photo_under_review": false,
+    "exp_1_relevance_score_other_source_default": 3.774214,
+    "exp_4_relevance_score_paid_source_ios": 3.774214,
+    "new_relevance_vector": [
+        520.2,
+        1,
+        0,
+        1,
+        1,
+        1,
+        0,
+        1,
+        0,
+        0.6884284,
+        0,
+        0.43,
+        0.42689941863585656,
+        0,
+        0.12098342751155046,
+        0.42689941863585656,
+        0.42689941863585656,
+        0,
+        0.12098342751155046,
+        0.42689941863585656,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+    ],
+    "exp_4_relevance_score_other_source_ios": 3.774214
+}

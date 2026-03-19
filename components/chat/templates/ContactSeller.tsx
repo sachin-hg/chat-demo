@@ -1,7 +1,6 @@
 "use client";
 
 import type { ChatEvent } from "@/lib/contract-types";
-import { useToast } from "@/components/ui/ToastProvider";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useEffect, useRef } from "react";
 
@@ -44,8 +43,12 @@ async function postAck(path: string, body: unknown): Promise<{ success: true }> 
   return res.json();
 }
 
-export function ShortlistProperty({ data, messageId, onUserAction, disabled = false }: Props) {
-  const toast = useToast();
+export function ContactSeller({
+  data,
+  messageId,
+  onUserAction,
+  disabled = false,
+}: Props) {
   const auth = useAuth();
   const propertyId = (data.propertyId as string | undefined) ?? "";
   const service = (data.service as string | undefined) ?? "buy";
@@ -60,17 +63,15 @@ export function ShortlistProperty({ data, messageId, onUserAction, disabled = fa
     startedRef.current = true;
 
     (async () => {
-      const ok = await auth.requireLogin("shortlist");
+      const ok = await auth.requireLogin("contact");
       if (!ok) {
         emitLoginFailed(onUserAction);
         return;
       }
       try {
-        await postAck("/api/properties/shortlist", { propertyId });
-        toast.show("Property has been shortlisted");
+        await postAck("/api/properties/contact-seller", { propertyId });
       } catch (e) {
         console.error(e);
-        toast.show("Could not shortlist. Please try again.");
         return;
       }
 
@@ -78,20 +79,21 @@ export function ShortlistProperty({ data, messageId, onUserAction, disabled = fa
         sender: { type: "system" },
         payload: {
           messageType: "user_action",
-          visibility: "shown",
           responseRequired: false,
+          visibility: "shown",
           content: {
             data: {
-              action: "shortlist",
+              action: "crf_submitted",
               messageId,
               property: { propertyId, service, category, type },
             },
-            derivedLabel: "You've shortlisted this property. check it out in User Profile -> Saved properties",
+            derivedLabel: "The seller has been contacted, someone will reach out to you soon!",
           },
         },
       } as ChatEvent);
     })();
-  }, [auth, category, disabled, messageId, onUserAction, propertyId, service, toast, type]);
+  }, [auth, category, disabled, messageId, onUserAction, propertyId, service, type]);
 
   return null;
 }
+

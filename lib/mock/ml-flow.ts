@@ -1,12 +1,9 @@
 import type { ChatEvent, ChatPayloadContent } from "@/lib/contract-types";
 import {
   MOCK_PROPERTIES,
-  MOCK_SELLERS,
-  MOCK_LOCALITIES,
+  MOCK_PROPERTY_CAROUSEL_CARDS,
   SECTOR_OPTIONS,
   SECTOR_21_OPTIONS,
-  RENT_BUY_OPTIONS,
-  MOCK_PRICE_TREND_SECTOR_32_GURGAON,
   MOCK_LOCALITY_SECTOR_32_GURGAON,
   MOCK_LOCALITY_SECTOR_21_GURGAON,
   MOCK_PROPERTY_DETAILS_P2,
@@ -86,6 +83,17 @@ function matchText(text: string, ...options: string[]): boolean {
   return options.some((o) => t.includes(normalizeText(o)) || normalizeText(o).includes(t));
 }
 
+function matchWholeWord(text: string, ...words: string[]): boolean {
+  const t = normalizeText(text);
+  // Match as a standalone word (or the whole input), to avoid false positives like "t**hi**s".
+  return words.some((w) => {
+    const ww = normalizeText(w);
+    if (!ww) return false;
+    if (t === ww) return true;
+    return new RegExp(`(^|\\s)${ww}(\\s|$)`, "i").test(t);
+  });
+}
+
 export function getNextBotEvents(
   userEvent: ChatEvent,
   recentEvents: ChatEvent[]
@@ -120,33 +128,52 @@ export function getNextBotEvents(
     ];
   }
 
-  const getLocalityInfo = (isSector21: boolean, isFinal: boolean) => {
-    const loc = isSector21 ? MOCK_LOCALITY_SECTOR_21_GURGAON : MOCK_LOCALITY_SECTOR_32_GURGAON;
-    const trendStr = loc.priceTrend >= 0 ? `+${loc.priceTrend}% YoY` : `${loc.priceTrend}% YoY`;
-    return botMessage(
-      generateMessageId(),
-      "template",
-      {
-        templateId: "locality_info",
-        data: {
-          localities: [
-            {
-              ...loc,
-              priceTrendLabel: trendStr,
-            },
-          ],
+  // ————— Mock: locality carousel / comparison —————
+  // If user explicitly mentions ambiguous sectors (e.g. "sector 32, sector 21"), we should route to nested_qna instead.
+  if (
+    messageType === "text" &&
+    matchText(textMsg ?? "", "locality carousel", "locality comparison") &&
+    !/(sector\s*32|sector\s*21)/i.test(textMsg ?? "")
+  ) {
+    return [
+      botMessage(
+        generateMessageId(),
+        "template",
+        {
+          templateId: "locality_carousel",
+          data: {
+            localities: [
+              { ...MOCK_LOCALITY_SECTOR_32_GURGAON },
+              { ...MOCK_LOCALITY_SECTOR_21_GURGAON },
+            ],
+          },
         },
-      },
-      { sourceMessageId, sequenceNumber: isFinal ? 1 : 0, isFinal: isFinal }
-    )
+        { sourceMessageId, sequenceNumber: 0, isFinal: true }
+      ),
+    ];
   }
+
+  const locDta = MOCK_LOCALITY_LEARN_MORE_SECTOR_46;
+    const mdLocDta = [
+      `# ${locDta.name}: ${locDta.tagline}`,
+      "",
+      "---",
+      "",
+      `**Summary: ${locDta.summaryTitle}**`,
+      ...locDta.highlights.map((h) => `- ${h}`),
+      "",
+      "---",
+      "",
+      locDta.followUpQuestion,
+    ].join("\n");
+
   
   if (messageType === "user_action" && data?.action === "nested_qna_selection") {
     const selections = data.selections as { questionId: string; selection?: string; text?: string }[] | undefined;
     if (!Array.isArray(selections) || selections.length === 0) return [];
     return [
-      getLocalityInfo(false, false),
-      getLocalityInfo(true, true),
+      botMessage(generateMessageId(), "markdown", { text: mdLocDta }, { sourceMessageId, sequenceNumber: 0, isFinal: false }),
+      botMessage(generateMessageId(), "markdown", { text: mdLocDta }, { sourceMessageId, sequenceNumber: 0, isFinal: true })
     ];
   }
 
@@ -158,10 +185,12 @@ export function getNextBotEvents(
       `By ${p.builder}`,
       `📍 ${p.address}`,
       "",
+      "",
       "---",
       "",
       "**Property Overview**",
       p.overview,
+      "",
       "",
       "---",
       "",
@@ -175,53 +204,36 @@ export function getNextBotEvents(
       p.depositLabel && p.depositValue ? `${p.depositLabel}: ${p.depositValue}` : null,
       `Parking: ${p.parking}`,
       "",
+      "",
       "---",
       "",
       "**Amenities**",
       p.amenities.join(", "),
       "",
+      "",
       "---",
       "",
       "**Property Manager**",
       p.propertyManagerDesc,
+      "",
     ].filter(Boolean).join("\n");
     return [
       botMessage(generateMessageId(), "markdown", { text: md }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
     ];
   }
 
+  
+  
   // ————— Contract §4.25: learn_more_about_locality (markdown, design: locality learn more.png) —————
   if (messageType === "user_action" && action === "learn_more_about_locality") {
-    const loc = MOCK_LOCALITY_LEARN_MORE_SECTOR_46;
-    const md = [
-      `# ${loc.name}: ${loc.tagline}`,
-      "",
-      "---",
-      "",
-      `**Summary: ${loc.summaryTitle}**`,
-      ...loc.highlights.map((h) => `- ${h}`),
-      "",
-      "---",
-      "",
-      loc.followUpQuestion,
-    ].join("\n");
     return [
-      botMessage(generateMessageId(), "markdown", { text: md }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
+      botMessage(generateMessageId(), "markdown", { text: mdLocDta }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
     ];
   }
 
   // ————— Contract §4.26 → §4.5: show_properties_in_locality —————
   if (messageType === "user_action" && action === "show_properties_in_locality") {
-    const properties = MOCK_PROPERTIES.slice(0, 2).map((p) => ({
-      id: p.id,
-      title: p.title,
-      projectName: p.projectName,
-      tags: p.tags,
-      image: p.image,
-      priceFormatted: p.priceFormatted,
-      builtUpArea: p.builtUpArea,
-      locationFormatted: p.locationFormatted,
-    }));
+    const properties = MOCK_PROPERTY_CAROUSEL_CARDS.slice(0, 3);
     return [
       botMessage(
         generateMessageId(),
@@ -234,16 +246,7 @@ export function getNextBotEvents(
 
   // ————— Contract §4.28: location_shared —————
   if (messageType === "user_action" && action === "location_shared") {
-    const properties = MOCK_PROPERTIES.slice(0, 2).map((p) => ({
-      id: p.id,
-      title: p.title,
-      projectName: p.projectName,
-      tags: p.tags,
-      image: p.image,
-      priceFormatted: p.priceFormatted,
-      builtUpArea: p.builtUpArea,
-      locationFormatted: p.locationFormatted,
-    }));
+    const properties = MOCK_PROPERTY_CAROUSEL_CARDS.slice(0, 3);
     return [
       botMessage(generateMessageId(), "text", {
         text: "Here are properties near you.",
@@ -271,7 +274,7 @@ export function getNextBotEvents(
   const text = content.text;
 
   // ————— Contract §4.3: hi / hello —————
-  if (matchText(text, "hi", "hello", "hey")) {
+  if (matchWholeWord(text, "hi", "hello", "hey")) {
     return [
       botMessage(generateMessageId(), "markdown", {
         text: "Hey! I see you're looking for **residential properties** to **buy**. How can I help?",
@@ -292,17 +295,8 @@ export function getNextBotEvents(
   }
 
   // ————— Contract §4.4 + §4.5: show me properties — intro text then carousel —————
-  if (matchText(text, "show me properties", "properties", "list", "show properties")) {
-    const properties = MOCK_PROPERTIES.slice(0, 2).map((p) => ({
-      id: p.id,
-      title: p.title,
-      projectName: p.projectName,
-      tags: p.tags,
-      image: p.image,
-      priceFormatted: p.priceFormatted,
-      builtUpArea: p.builtUpArea,
-      locationFormatted: p.locationFormatted,
-    }));
+  if (matchText(text, "show me properties", "properties", "show properties", "show me properties according to my preference")) {
+    const properties = MOCK_PROPERTY_CAROUSEL_CARDS.slice(0, 3);
     return [
       botMessage(generateMessageId(), "text", {
         text: "Here are 2bhk properties in sector 32 gurgaon",
@@ -317,7 +311,7 @@ export function getNextBotEvents(
   }
 
   // ————— Contract §4.4 / §4.41: shortlist this property as well (text) —————
-  if (matchText(text, "shortlist this property", "shortlist as well", "shortlist this")) {
+  if (matchText(text, "shortlist this property", "shortlist as well", "shortlist this", "shortlist")) {
     return [
       botMessage(generateMessageId(), "template", {
         templateId: "shortlist_property",
@@ -372,9 +366,11 @@ export function getNextBotEvents(
       ),
     ];
   }
-
-  // ————— Contract §4.13 single: sector 32 only —————
-  if (matchText(text, "sector 32", "sector 32?")) {
+  // ————— Sector 32 only: "which sector 32" / "learn more about sector 32" —————
+  if (
+    (matchText(text, "learn more about sector 32", "tell more about sector 32") &&
+     !text.toLowerCase().includes("sector 21"))
+  ) {
     return [
       botMessage(
         generateMessageId(),
@@ -384,8 +380,8 @@ export function getNextBotEvents(
           data: {
             selections: [
               {
-                questionId: "sub_intent_sector_32",
-                title: "Did you mean one of these?",
+                questionId: "sub_intent_1",
+                title: "Which sector 32 are you referring to?",
                 type: "locality_single_select",
                 options: SECTOR_OPTIONS.map((o) => ({ id: o.id, title: o.name, city: o.city, type: o.type })),
               },
@@ -397,9 +393,8 @@ export function getNextBotEvents(
       ),
     ];
   }
-
-  // ————— Sector 21 only —————
-  if (matchText(text, "sector 21", "sector 21?")) {
+  // ————— Contract §4.13 → §4.13.1 + §4.14: sector 21 only — nested_qna —————
+  if (text.includes("sector 21")) {
     return [
       botMessage(
         generateMessageId(),
@@ -408,54 +403,39 @@ export function getNextBotEvents(
           templateId: "nested_qna",
           data: {
             selections: [
+              
               {
-                questionId: "sub_intent_sector_21",
+                questionId: "sub_intent_2",
                 title: "Which sector 21 are you referring to?",
                 type: "locality_single_select",
+                entity: "sector 21",
                 options: SECTOR_21_OPTIONS.map((o) => ({ id: o.id, title: o.name, city: o.city, type: o.type })),
               },
             ],
             canSkip: true,
           },
         },
-        { sourceMessageId, sequenceNumber: 0, isFinal: true }
+        { sourceMessageId, sequenceNumber: 1, isFinal: true }
       ),
+    ];
+  }
+
+  // ————— Sector 21 only —————
+  if (matchText(text, "locality info", "locality detail?", "more about locality")) {
+    return [
+      botMessage(generateMessageId(), "markdown", { text: mdLocDta }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
     ];
   }
 
   // ————— Contract §4.17 → §4.18: "buy" or "rent" → locality_info —————
   if (matchText(text, "buy") && text.length <= 5) {
-    const loc = MOCK_LOCALITY_SECTOR_32_GURGAON;
-    const trendStr = loc.priceTrend >= 0 ? `+${loc.priceTrend}% YoY` : `${loc.priceTrend}% YoY`;
     return [
-      botMessage(
-        generateMessageId(),
-        "template",
-        {
-          templateId: "locality_info",
-          data: {
-            localities: [{ ...loc, priceTrendLabel: trendStr }],
-          },
-        },
-        { sourceMessageId, sequenceNumber: 0, isFinal: true }
-      ),
+      botMessage(generateMessageId(), "markdown", { text: mdLocDta }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
     ];
   }
   if (matchText(text, "rent") && text.length <= 5) {
-    const loc = MOCK_LOCALITIES[0];
-    const trendStr = loc.priceTrend >= 0 ? `+${loc.priceTrend}% YoY` : `${loc.priceTrend}% YoY`;
     return [
-      botMessage(
-        generateMessageId(),
-        "template",
-        {
-          templateId: "locality_info",
-          data: {
-            localities: [{ ...loc, priceTrendLabel: trendStr }],
-          },
-        },
-        { sourceMessageId, sequenceNumber: 0, isFinal: true }
-      ),
+      botMessage(generateMessageId(), "markdown", { text: mdLocDta }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
     ];
   }
 
@@ -609,63 +589,34 @@ export function getNextBotEvents(
     ];
   }
 
-  // ————— Faridabad → rent/buy —————
-  if (matchText(text, "faridabad")) {
-    return [
-      botMessage(
-        generateMessageId(),
-        "template",
-        {
-          templateId: "nested_qna",
-          data: {
-            selections: [
-              {
-                questionId: "sub_intent_rent_buy",
-                title: "Are you looking to rent or buy?",
-                type: "locality_single_select",
-                options: RENT_BUY_OPTIONS.map((o) => ({ id: o.id, title: o.name, type: o.type })),
-              },
-            ],
-            canSkip: false,
-          },
-        },
-        { sourceMessageId, sequenceNumber: 0, isFinal: true }
-      ),
-    ];
-  }
-
-  // ————— Contract §4.23 → §4.24: trending localities (use locality_info; contract shows locality_carousel) —————
-  if (matchText(text, "localities", "locality", "trending", "top localities", "show trending localities", "trending localities", "can you show trending localities")) {
-    return [
-      botMessage(
-        generateMessageId(),
-        "template",
-        {
-          templateId: "locality_info",
-          data: {
-            localities: MOCK_LOCALITIES.map((loc) => ({
-              ...loc,
-              priceTrendLabel: loc.priceTrend >= 0 ? `+${loc.priceTrend}% YoY` : `${loc.priceTrend}% YoY`,
-            })),
-          },
-        },
-        { sourceMessageId, sequenceNumber: 0, isFinal: true }
-      ),
-    ];
-  }
 
   // ————— Contract §4.21 → §4.22: brochure —————
   if (matchText(text, "brochure", "show me the brochure", "brochure of this property")) {
+    const p = MOCK_PROPERTIES.find((x) => x.id === "p2") ?? MOCK_PROPERTIES[0];
     return [
       botMessage(generateMessageId(), "template", {
         templateId: "download_brochure",
-        data: { propertyId: "p2", service: "buy", category: "residential", type: "project" },
+        data: {
+          propertyId: "p2",
+          service: p.type === "rent" ? "rent" : "buy",
+          category: "residential",
+          type: p.type,
+          projectName: p.name ?? "",
+          priceRange:
+            p.type === "rent"
+              ? p.formatted_price ?? ""
+              : p.type === "resale"
+                ? p.formatted_min_price ?? ""
+                : `${p.formatted_min_price ?? ""} - ${p.formatted_max_price ?? ""}`.trim(),
+          brochureUrl: `https://example.com/brochures/${p.id}.pdf`,
+        },
       }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
     ];
   }
 
   // ————— Contract §4.27: show me properties around me → share_location —————
-  if (matchText(text, "properties around me", "around me", "near me", "show me properties near")) {
+  // Frontend ShareLocation template checks if permission already exists and auto-sends location_shared; ML then responds with property carousel.
+  if (matchText(text, "properties around me", "around me", "near me", "show me properties near", "3bhk properties near me")) {
     return [
       botMessage(generateMessageId(), "template", {
         templateId: "share_location",

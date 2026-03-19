@@ -150,13 +150,24 @@ Returns all chats for the user.
 ```
 
 **Response**
+If `Accept: text/event-stream`, the BE returns an SSE stream (Phase 1 merged transport).
+
+**SSE (example)**
+```txt
+event: connection_ack
+data: {"eventId":"evt_301","requestId":"req_901"}
+
+id: evt_401
+event: chat_event
+data: {JSON_CHAT_EVENT}
+
+event: connection_close
+data: {"reason":"response_complete"}
+```
+
+If `Accept` is not `text/event-stream`, the BE returns JSON:
 ```json
-{
-  "eventId": "evt_301",
-  "requestId": "req_901",
-  "expectResponse": true,
-  "timeoutMs": 15000
-}
+{ "eventId": "evt_301", "requestId": "req_901" }
 ```
 
 ---
@@ -169,25 +180,14 @@ Returns all chats for the user.
 
 ---
 
-### 4.6 `GET /chats/stream` (SSE)
+### 4.6 Streaming responses (Phase 1)
 
-```
-GET /chats/stream?conversationId=conv_1
-Accept: text/event-stream
-```
-
-**Chat event format** (see §6.1 for all event types)
-```txt
-id: evt_401
-event: chat_event
-data: {JSON_CHAT_EVENT}
-```
-
-Other event types and comment lines are defined in **§6.1 SSE event types**.
+In Phase 1, FE opens a new stream **per message** by calling `POST /chats/send-message` with
+`Accept: text/event-stream`. This eliminates the need for a long-lived `GET /chats/stream` connection.
 
 ---
 
-## 5. ML ↔ BE Envelopes
+## 5. ML ↔ BE Envelopes (Phase 1)
 
 ### 5.1 ML Input (BE → ML)
 
@@ -197,7 +197,6 @@ Other event types and comment lines are defined in **§6.1 SSE event types**.
   "conversationId": "conv_1",
   "userEventId": "evt_456",
   "event": { "...": "ChatEvent" },
-  "expectResponse": true,
   "ttlMs": 120000
 }
 ```
@@ -365,14 +364,15 @@ sequenceDiagram
     participant BE as Chat BE
     participant ML as ML Engine
 
-    FE->>BE: POST /chats/send-message
+    FE->>BE: POST /chats/send-message (Accept: text/event-stream)
     BE->>BE: persist user event (PENDING)
-    BE->>ML: enqueue request (Kafka)
-    BE-->>FE: 202 Accepted (requestId)
+    BE-->>FE: SSE connection_ack (eventId, requestId)
+    BE->>ML: invoke ML (method call)
 
     ML->>BE: success response
     BE->>BE: create bot event, mark request COMPLETED
-    BE-->>FE: SSE chat_event
+    BE-->>FE: SSE chat_event (repeat until isFinal=true)
+    BE-->>FE: SSE connection_close (response_complete)
 ```
 ---
 

@@ -5,13 +5,12 @@ import { useSearchParams } from "next/navigation";
 import {
   getConversationId,
   getHistory,
-  sendMessage,
+  sendMessageStream,
   cancelRequest,
-  getStreamUrl,
 } from "@/lib/api";
 import type { ChatEvent } from "@/lib/contract-types";
 import { ChatMessage } from "@/components/chat/ChatMessage";
-import { LoginBottomSheet } from "@/components/chat/LoginBottomSheet";
+import { useToast } from "@/components/ui/ToastProvider";
 
 interface StoredMessage extends ChatEvent {
   eventId: string;
@@ -20,12 +19,19 @@ interface StoredMessage extends ChatEvent {
 
 const INITIAL_PAGE_SIZE = 6;
 const LOAD_MORE_PAGE_SIZE = 5;
-const MISSED_MESSAGES_POLL_INTERVAL_MS = 1500;
-const STREAM_OPEN_WAIT_TIMEOUT_MS = 8000;
 const REPLY_TIMEOUT_MS = 25000;
-const SSE_READYSTATE_CHECK_MS = 10_000;
 
 type ReplyStatus = "idle" | "sending" | "awaiting" | "timeout" | "error";
+
+async function postAck(path: string, body: unknown): Promise<{ success: true }> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
 
 /* Scout-bot pill stroke colors: coral, blue, green, yellow, yellow-strong, purple, pink */
 const SUGGESTIONS_ROW1 = [
@@ -67,10 +73,275 @@ function buildContextEvent(conversationId: string): ChatEvent {
   };
 }
 
-interface ToastItem {
-  id: string;
-  message: string;
+const DEMO_DELAY_MS = 2000;
+const DEMO_DOM_WAIT_MS = 600;
+const DEMO_LOGIN_PHONE = "9876543210";
+const DEMO_LOGIN_OTP = "1234";
+
+function delay(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
 }
+
+function demoLog(...args: unknown[]): void {
+  // eslint-disable-next-line no-console
+  console.log("[demo]", ...args);
+}
+
+function setInputValueReact(el: HTMLInputElement, value: string): void {
+  const native = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+  if (native) {
+    native.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  } else {
+    el.value = value;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+}
+
+function waitForSelector(
+  selector: string,
+  opts: { timeout?: number; within?: Element } = {}
+): Promise<Element> {
+  const { timeout = 15000, within = document.body } = opts;
+  const start = Date.now();
+  return new Promise((resolve, reject) => {
+    const run = () => {
+      const el = within.querySelector(selector);
+      if (el) {
+        resolve(el);
+        return;
+      }
+      if (Date.now() - start >= timeout) {
+        reject(new Error(`Demo: timeout waiting for ${selector}`));
+        return;
+      }
+      setTimeout(run, 80);
+    };
+    run();
+  });
+}
+
+async function fillLoginAndSubmit(): Promise<void> {
+  await delay(DEMO_DOM_WAIT_MS);
+  demoLog("login: sheet detected, attempting autofill");
+  const sheet = await waitForSelector('[data-demo="login-sheet"]');
+  const phoneInput = sheet.querySelector<HTMLInputElement>('[data-demo="login-phone"]');
+  const otpAlready = sheet.querySelector<HTMLInputElement>('[data-demo="login-otp-0"]');
+
+  // Phone step
+  if (phoneInput) {
+    demoLog("login: on phone step, filling phone and continuing");
+    phoneInput.focus();
+    setInputValueReact(phoneInput, DEMO_LOGIN_PHONE);
+    await delay(200);
+    const continueBtn = sheet.querySelector<HTMLButtonElement>('[data-demo="login-continue"]');
+    continueBtn?.click();
+    await delay(600);
+  }
+
+  // OTP step (might already be visible, or appears after phone submit)
+  try {
+    demoLog("login: waiting for otp step");
+    const otp0 = otpAlready ?? (await waitForSelector('[data-demo="login-otp-0"]', { timeout: 5000 }));
+    const sheet2 = otp0.closest('[data-demo="login-sheet"]') ?? document.body;
+    const digits = DEMO_LOGIN_OTP.split("");
+    for (let i = 0; i < 4; i++) {
+      const inp = sheet2.querySelector<HTMLInputElement>(`[data-demo="login-otp-${i}"]`);
+      if (inp) {
+        inp.focus();
+        setInputValueReact(inp, digits[i]);
+        await delay(80);
+      }
+    }
+    await delay(200);
+    const submitBtn = sheet2.querySelector<HTMLButtonElement>('[data-demo="login-otp-submit"]');
+    submitBtn?.click();
+    demoLog("login: submitted otp");
+  } catch {
+    // OTP step did not appear (e.g. already logged in / dismissed)
+    demoLog("login: otp step did not appear (already logged in or dismissed)");
+  }
+
+  for (let i = 0; i < 30; i++) {
+    await delay(200);
+    if (!document.querySelector('[data-demo="login-sheet"]')) break;
+  }
+  demoLog("login: sheet closed (or timed out waiting for close)");
+}
+
+async function maybeHandleLogin(): Promise<void> {
+  // After a click, login may or may not appear. Don't block the demo for long when already logged in.
+  // Note: `offsetParent` can be null for fixed overlays; rely on presence + computed style.
+  const selector = '[data-demo="login-sheet"]';
+  try {
+    const el = (await waitForSelector(selector, { timeout: 1500 })) as HTMLElement;
+    const style = window.getComputedStyle(el);
+    demoLog("login: popup appeared", { display: style.display, visibility: style.visibility, opacity: style.opacity });
+    await fillLoginAndSubmit();
+  } catch {
+    demoLog("login: no popup appeared");
+  }
+}
+
+type DemoClickTarget =
+  | "property_carousel_shortlist"
+  | "property_carousel_contact"
+  | "property_carousel_learn_more"
+  | "locality_carousel_learn_more"
+  | "locality_carousel_show_properties"
+  | "nested_qna_option"
+  | "nested_qna_type_and_send"
+  | "nested_qna_type_skip_send"
+  | "download_brochure";
+
+async function runDemoClick(step: {
+  target: DemoClickTarget;
+  propertyIndex?: number;
+  localityIndex?: number;
+  optionId?: string;
+  text?: string;
+  textThenSkipSecond?: boolean;
+}): Promise<void> {
+  await delay(DEMO_DOM_WAIT_MS);
+  demoLog("click_ui: start", step);
+
+  if (step.target === "property_carousel_shortlist" || step.target === "property_carousel_contact" || step.target === "property_carousel_learn_more") {
+    const carousels = document.querySelectorAll('[data-demo="property-carousel"]');
+    const last = carousels[carousels.length - 1];
+    if (!last) throw new Error("Demo: no property carousel found");
+    const idx = step.propertyIndex ?? 0;
+    const card = last.querySelector(`[data-demo-property-index="${idx}"]`);
+    if (!card) throw new Error(`Demo: property card ${idx} not found`);
+    const action =
+      step.target === "property_carousel_shortlist"
+        ? "shortlist"
+        : step.target === "property_carousel_contact"
+          ? "contact"
+          : "learn-more";
+    const btn = card.querySelector<HTMLElement>(`[data-demo-action="${action}"]`);
+    if (!btn) throw new Error(`Demo: ${action} button not found`);
+    btn.click();
+    demoLog("click_ui: property carousel click", { index: idx, action });
+  } else if (step.target === "locality_carousel_learn_more" || step.target === "locality_carousel_show_properties") {
+    const carousels = document.querySelectorAll('[data-demo="locality-carousel"]');
+    const last = carousels[carousels.length - 1];
+    if (!last) throw new Error("Demo: no locality carousel found");
+    const idx = step.localityIndex ?? 0;
+    const card = last.querySelector(`[data-demo-locality-index="${idx}"]`);
+    if (!card) throw new Error(`Demo: locality card ${idx} not found`);
+    const action = step.target === "locality_carousel_learn_more" ? "learn-more" : "show-properties";
+    const btn = card.querySelector<HTMLElement>(`[data-demo-action="${action}"]`);
+    if (!btn) throw new Error(`Demo: ${action} button not found`);
+    btn.click();
+    demoLog("click_ui: locality carousel click", { index: idx, action });
+  } else if (step.target === "nested_qna_option") {
+    demoLog("click_ui: waiting for nested_qna");
+    const qna = await waitForSelector('[data-demo="nested-qna"]', { timeout: 8000 });
+    const opt = step.optionId
+      ? qna.querySelector<HTMLElement>(`[data-demo-option-id="${step.optionId}"]`)
+      : qna.querySelector<HTMLElement>("[data-demo-option-id]");
+    if (!opt) throw new Error("Demo: nested_qna option not found");
+    opt.click();
+    demoLog("click_ui: nested_qna option click", { optionId: step.optionId ?? "(first)" });
+  } else if (step.target === "nested_qna_type_and_send") {
+    demoLog("click_ui: waiting for nested_qna");
+    const qna = await waitForSelector('[data-demo="nested-qna"]', { timeout: 8000 });
+    const input = qna.querySelector<HTMLInputElement>('[data-demo-input="nested-qna-text"]');
+    if (!input) throw new Error("Demo: nested_qna input not found");
+    input.focus();
+    setInputValueReact(input, step.text ?? "");
+    await delay(200);
+    const sendBtn = qna.querySelector<HTMLElement>('[data-demo-action="send"]');
+    if (!sendBtn) throw new Error("Demo: nested_qna send not found");
+    sendBtn.click();
+    demoLog("click_ui: nested_qna type+send", { text: step.text ?? "" });
+  } else if (step.target === "nested_qna_type_skip_send") {
+    demoLog("click_ui: waiting for nested_qna");
+    const qna = await waitForSelector('[data-demo="nested-qna"]', { timeout: 8000 });
+    const input = qna.querySelector<HTMLInputElement>('[data-demo-input="nested-qna-text"]');
+    if (!input) throw new Error("Demo: nested_qna input not found");
+    input.focus();
+    setInputValueReact(input, step.text ?? "");
+    await delay(200);
+    const nextBtn = qna.querySelector<HTMLElement>('[data-demo-action="next"]');
+    if (nextBtn) nextBtn.click();
+    await delay(400);
+    const skipBtn = qna.querySelector<HTMLElement>('[data-demo-action="skip"]');
+    if (skipBtn) skipBtn.click();
+    await delay(200);
+    const sendBtn = qna.querySelector<HTMLElement>('[data-demo-action="send"]');
+    if (sendBtn) sendBtn.click();
+    demoLog("click_ui: nested_qna type+next+skip+send", { text: step.text ?? "" });
+  } else if (step.target === "download_brochure") {
+    const block = document.querySelector('[data-demo="download-brochure"]');
+    if (!block) throw new Error("Demo: download_brochure not found");
+    const btn = block.querySelector<HTMLElement>('[data-demo-action="download"]');
+    if (!btn) throw new Error("Demo: download button not found");
+    btn.click();
+    demoLog("click_ui: download brochure click");
+  }
+
+  await delay(500);
+  await maybeHandleLogin();
+  demoLog("click_ui: done", step.target);
+}
+
+function getLastBotMessageId(messages: StoredMessage[], templateId: string): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.sender?.type !== "bot") continue;
+    const c = m.payload?.content as { templateId?: string } | undefined;
+    if (c?.templateId === templateId) {
+      const id = (m.payload as { messageId?: string })?.messageId;
+      return id ?? null;
+    }
+  }
+  return null;
+}
+
+type DemoStep =
+  | { kind: "text"; text: string }
+  | {
+      kind: "click_ui";
+      target: DemoClickTarget;
+      propertyIndex?: number;
+      localityIndex?: number;
+      optionId?: string;
+      text?: string;
+      textThenSkipSecond?: boolean;
+    }
+  | { kind: "wait_for_user" };
+
+const DEMO_STEPS: DemoStep[] = [
+  { kind: "text", text: "tell me about modiji" },
+  { kind: "text", text: "show me properties according to my preference" },
+  { kind: "click_ui", target: "property_carousel_shortlist", propertyIndex: 0 },
+  { kind: "click_ui", target: "property_carousel_contact", propertyIndex: 1 },
+  { kind: "click_ui", target: "property_carousel_learn_more", propertyIndex: 0 },
+  { kind: "text", text: "shortlist this property" },
+  { kind: "text", text: "contact seller of this property" },
+  { kind: "text", text: "locality comparison of both properties" },
+  { kind: "click_ui", target: "locality_carousel_learn_more", localityIndex: 0 },
+  { kind: "click_ui", target: "locality_carousel_show_properties", localityIndex: 0 },
+  { kind: "text", text: "price trend of first locality" },
+  { kind: "text", text: "rating reviews of first locality" },
+  { kind: "text", text: "transaction data of first locality" },
+  { kind: "text", text: "tell more about sector 21" },
+  { kind: "click_ui", target: "nested_qna_option", optionId: "uuid3" },
+  { kind: "text", text: "to learn more about sector 32" },
+  { kind: "click_ui", target: "nested_qna_type_and_send", text: "sector 32 faridabad" },
+  { kind: "text", text: "locality comparison of sector 32, sector 21" },
+  { kind: "click_ui", target: "nested_qna_type_skip_send", text: "sector 32 gurgaon", textThenSkipSecond: true },
+  { kind: "text", text: "show properties near me" },
+  { kind: "wait_for_user" },
+  { kind: "text", text: "properties near me" },
+  { kind: "wait_for_user" },
+  { kind: "text", text: "3bhk properties near me" },
+  { kind: "click_ui", target: "property_carousel_learn_more", propertyIndex: 0 },
+  { kind: "text", text: "show me brochure" },
+  { kind: "click_ui", target: "download_brochure" },
+  { kind: "text", text: "show me more properties in sector 32, sector 21" },
+];
 
 function ChatPageContent() {
   const searchParams = useSearchParams();
@@ -80,53 +351,33 @@ function ChatPageContent() {
   const [messages, setMessages] = useState<StoredMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [streamStatus, setStreamStatus] = useState<"connecting" | "open" | "error">("connecting");
   const [replyStatus, setReplyStatus] = useState<ReplyStatus>("idle");
   const [awaitingElapsedSec, setAwaitingElapsedSec] = useState(0);
   const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const [loadingMoreOlder, setLoadingMoreOlder] = useState(false);
   const [input, setInput] = useState("");
-  const [reconnectKey, setReconnectKey] = useState(0);
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const toast = useToast();
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [showBackToBottom, setShowBackToBottom] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [loginReason, setLoginReason] = useState<"shortlist" | "contact" | null>(null);
-
-  const eventSourceRef = useRef<EventSource | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const knownEventIdsRef = useRef<Set<string>>(new Set());
-  const streamStatusRef = useRef<"connecting" | "open" | "error">("connecting");
-  const streamOpenResolveRef = useRef<(() => void) | null>(null);
   const replyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const awaitingElapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSentEventRef = useRef<ChatEvent | null>(null);
   const lastRequestIdRef = useRef<string | null>(null);
-  const awaitingUserEventIdRef = useRef<string | null>(null);
+  const activeSendStreamAbortRef = useRef<AbortController | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement | null>(null);
   const scrollRestoreAfterPrependRef = useRef<{ scrollTop: number; scrollHeight: number } | null>(null);
   const lastMessageEventIdRef = useRef<string | undefined>(undefined);
-  const toastTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const lastMessagesRef = useRef<StoredMessage[]>([]);
+  const demoStepIndexRef = useRef(0);
+  const demoWaitingForUserRef = useRef(false);
+  const prevReplyStatusRef = useRef<ReplyStatus>("idle");
+  const demoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleSendTextRef = useRef<(text: string) => void>(() => {});
+  const showToast = useCallback((message: string) => toast.show(message), [toast]);
 
-  const showToast = useCallback((message: string) => {
-    const id = `toast_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    setToasts((prev) => [...prev, { id, message }]);
-    const timer = setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-      toastTimersRef.current.delete(id);
-    }, 3000);
-    toastTimersRef.current.set(id, timer);
-  }, []);
-
-  const dismissToast = useCallback((id: string) => {
-    const timer = toastTimersRef.current.get(id);
-    if (timer) {
-      clearTimeout(timer);
-      toastTimersRef.current.delete(id);
-    }
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
+  lastMessagesRef.current = messages;
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -137,15 +388,10 @@ function ChatPageContent() {
       clearTimeout(replyTimeoutRef.current);
       replyTimeoutRef.current = null;
     }
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
-      pollIntervalRef.current = null;
-    }
     if (awaitingElapsedIntervalRef.current) {
       clearInterval(awaitingElapsedIntervalRef.current);
       awaitingElapsedIntervalRef.current = null;
     }
-    awaitingUserEventIdRef.current = null;
     setAwaitingElapsedSec(0);
     setReplyStatus("idle");
   }, []);
@@ -159,7 +405,11 @@ function ChatPageContent() {
         if (cancelled) return;
         setConversationId(cid);
         if (isNew) {
-          sendMessage(buildContextEvent(cid)).catch(() => {});
+          // Context is fire-and-forget in Phase 1 (no response expected).
+          sendMessageStream(
+            buildContextEvent(cid),
+            { onAck: () => {}, onChatEvent: () => {} },
+          ).catch(() => {});
         }
         const hist = await getHistory(cid, { last: INITIAL_PAGE_SIZE });
         if (cancelled) return;
@@ -178,63 +428,8 @@ function ChatPageContent() {
     };
   }, [isDemo]);
 
-  // SSE: subscribe when we have conversationId
-  useEffect(() => {
-    if (!conversationId) return;
-    streamStatusRef.current = "connecting";
-    setStreamStatus("connecting");
-    const url = getStreamUrl(conversationId);
-    const es = new EventSource(url);
-    eventSourceRef.current = es;
-
-    es.onopen = () => {
-      streamStatusRef.current = "open";
-      setStreamStatus("open");
-      streamOpenResolveRef.current?.();
-      streamOpenResolveRef.current = null;
-    };
-
-    es.addEventListener("chat_event", (e: MessageEvent) => {
-      try {
-        const event = JSON.parse(e.data) as StoredMessage;
-        if (!event.eventId || knownEventIdsRef.current.has(event.eventId)) return;
-        knownEventIdsRef.current.add(event.eventId);
-        setMessages((prev) => [...prev, event]);
-        if (event.sender?.type === "bot") clearReplyWaiting();
-      } catch (_) {}
-    });
-
-    es.addEventListener("connection_close", () => {
-      streamStatusRef.current = "error";
-      setStreamStatus("error");
-      es.close();
-      eventSourceRef.current = null;
-      if (awaitingUserEventIdRef.current) setReconnectKey((k) => k + 1);
-    });
-
-    es.onerror = () => {
-      streamStatusRef.current = "error";
-      setStreamStatus("error");
-      es.close();
-      eventSourceRef.current = null;
-    };
-
-    const readyStateInterval = setInterval(() => {
-      if (eventSourceRef.current !== es) return;
-      if (es.readyState === EventSource.CLOSED) {
-        streamStatusRef.current = "error";
-        setStreamStatus("error");
-        eventSourceRef.current = null;
-        if (awaitingUserEventIdRef.current) setReconnectKey((k) => k + 1);
-      }
-    }, SSE_READYSTATE_CHECK_MS);
-
-    return () => {
-      clearInterval(readyStateInterval);
-      es.close();
-      eventSourceRef.current = null;
-    };
-  }, [conversationId, reconnectKey, clearReplyWaiting]);
+  // Note: Phase-1 merged transport. We no longer keep a long-lived SSE connection.
+  // Instead, each send-message call opens its own stream and we append bot events from it.
 
   useEffect(() => {
     const lastId = messages[messages.length - 1]?.eventId;
@@ -264,72 +459,6 @@ function ChatPageContent() {
     el.addEventListener("scroll", handleScroll, { passive: true });
     return () => el.removeEventListener("scroll", handleScroll);
   }, []);
-
-  const ensureStreamConnected = useCallback((): Promise<void> => {
-    return new Promise((resolve) => {
-      if (streamStatusRef.current === "open") {
-        resolve();
-        return;
-      }
-      if (streamStatusRef.current === "error") setReconnectKey((k) => k + 1);
-      streamOpenResolveRef.current = () => resolve();
-      setTimeout(() => {
-        if (streamOpenResolveRef.current) {
-          streamOpenResolveRef.current = null;
-          resolve();
-        }
-      }, STREAM_OPEN_WAIT_TIMEOUT_MS);
-    });
-  }, []);
-
-  const syncHistory = useCallback(async () => {
-    if (!conversationId) return;
-    try {
-      const hist = await getHistory(conversationId, { last: 100 });
-      const list = hist.messages as StoredMessage[];
-      const toAdd = list.filter(
-        (m) => m.eventId && !knownEventIdsRef.current.has(m.eventId)
-      );
-      if (toAdd.length === 0) return;
-      toAdd.forEach((m) => m.eventId && knownEventIdsRef.current.add(m.eventId));
-      setMessages((prev) => {
-        const existingIds = new Set(prev.map((x) => x.eventId));
-        const missing = list.filter((m) => m.eventId && !existingIds.has(m.eventId));
-        if (missing.length === 0) return prev;
-        return [...prev, ...missing].sort(
-          (a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? "")
-        );
-      });
-    } catch (_) {}
-  }, [conversationId]);
-
-  const fetchMissedMessages = useCallback(
-    async (afterEventId: string): Promise<boolean> => {
-      if (!conversationId) return false;
-      try {
-        const hist = await getHistory(conversationId, {
-          messages_after: afterEventId,
-        });
-        const newOnes = (hist.messages as StoredMessage[]).filter(
-          (m) => m.eventId && !knownEventIdsRef.current.has(m.eventId)
-        );
-        if (newOnes.length === 0) return false;
-        newOnes.forEach((m) => m.eventId && knownEventIdsRef.current.add(m.eventId));
-        setMessages((prev) => [...prev, ...newOnes]);
-        const hasFinalBot = newOnes.some(
-          (m) =>
-            m.sender?.type === "bot" &&
-            (m.payload as { isFinal?: boolean; sourceMessageId?: string })?.isFinal === true &&
-            (m.payload as { sourceMessageId?: string })?.sourceMessageId === afterEventId
-        );
-        if (hasFinalBot) clearReplyWaiting();
-        return newOnes.some((m) => m.sender?.type === "bot");
-      } catch (_) {
-        return false;
-      }
-    },
-    [conversationId, clearReplyWaiting]
-  );
 
   const loadMoreOlder = useCallback(async () => {
     if (!conversationId || loadingMoreOlder || messages.length === 0) return;
@@ -364,8 +493,7 @@ function ChatPageContent() {
   }, [conversationId, loadingMoreOlder, messages]);
 
   const startAwaitingReply = useCallback(
-    (userEventId: string) => {
-      awaitingUserEventIdRef.current = userEventId;
+    (_userEventId: string) => {
       setAwaitingElapsedSec(0);
       setReplyStatus("awaiting");
 
@@ -375,38 +503,24 @@ function ChatPageContent() {
 
       replyTimeoutRef.current = setTimeout(() => {
         replyTimeoutRef.current = null;
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
-          pollIntervalRef.current = null;
-        }
         if (awaitingElapsedIntervalRef.current) {
           clearInterval(awaitingElapsedIntervalRef.current);
           awaitingElapsedIntervalRef.current = null;
         }
-        awaitingUserEventIdRef.current = null;
         setAwaitingElapsedSec(0);
         setReplyStatus("timeout");
+        activeSendStreamAbortRef.current?.abort();
+        activeSendStreamAbortRef.current = null;
       }, REPLY_TIMEOUT_MS);
-
-      setTimeout(() => {
-        if (awaitingUserEventIdRef.current === userEventId) {
-          fetchMissedMessages(userEventId);
-        }
-      }, 400);
-
-      pollIntervalRef.current = setInterval(() => {
-        const afterId = awaitingUserEventIdRef.current;
-        if (!afterId) return;
-        fetchMissedMessages(afterId);
-      }, MISSED_MESSAGES_POLL_INTERVAL_MS);
     },
-    [fetchMissedMessages]
+    []
   );
 
   const handleSendText = useCallback(
     async (text: string) => {
       if (!conversationId || !text.trim() || sending || replyStatus === "awaiting") return;
       const trimmed = text.trim();
+      if (isDemo) demoLog("text: sending", trimmed);
       const event: ChatEvent = {
         conversationId,
         sender: { type: "user" },
@@ -427,25 +541,42 @@ function ChatPageContent() {
       setInput("");
       setSending(true);
       setReplyStatus("sending");
+      const abortController = new AbortController();
+      activeSendStreamAbortRef.current = abortController;
+      let ackReceived = false;
+
       try {
-        await ensureStreamConnected();
-        await syncHistory();
-      } catch (_) {}
-      try {
-        const res = await sendMessage(event);
-        lastRequestIdRef.current = res.requestId;
-        knownEventIdsRef.current.add(res.eventId);
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.eventId === pendingId ? { ...m, eventId: res.eventId } : m
-          )
+        await sendMessageStream(
+          event,
+          {
+            onAck: (ack) => {
+              ackReceived = true;
+              lastRequestIdRef.current = ack.requestId;
+              knownEventIdsRef.current.add(ack.eventId);
+              setMessages((prev) =>
+                prev.map((m) => (m.eventId === pendingId ? { ...m, eventId: ack.eventId } : m))
+              );
+              startAwaitingReply(ack.eventId);
+            },
+            onChatEvent: (botEvent) => {
+              if (!botEvent.eventId || knownEventIdsRef.current.has(botEvent.eventId)) return;
+              knownEventIdsRef.current.add(botEvent.eventId);
+              setMessages((prev) => [...prev, botEvent]);
+              if (botEvent.sender?.type === "bot" && botEvent.payload.isFinal === true) {
+                clearReplyWaiting();
+              }
+            },
+          },
+          { signal: abortController.signal }
         );
-        startAwaitingReply(res.eventId);
       } catch (e) {
+        // Abort can happen on cancel/timeout; don't flip UI into "error".
+        if (abortController.signal.aborted) return;
         console.error(e);
         setReplyStatus("error");
-        setMessages((prev) => prev.filter((m) => m.eventId !== pendingId));
+        if (!ackReceived) setMessages((prev) => prev.filter((m) => m.eventId !== pendingId));
       } finally {
+        if (activeSendStreamAbortRef.current === abortController) activeSendStreamAbortRef.current = null;
         setSending(false);
       }
     },
@@ -453,13 +584,17 @@ function ChatPageContent() {
       conversationId,
       sending,
       replyStatus,
-      ensureStreamConnected,
-      syncHistory,
       startAwaitingReply,
+      clearReplyWaiting,
     ]
   );
 
-  const pendingActionRef = useRef<ChatEvent | null>(null);
+  // Keep a stable callable for demo runner (avoid effect cleanup clearing timers due to callback identity changes).
+  useEffect(() => {
+    handleSendTextRef.current = (text: string) => {
+      handleSendText(text);
+    };
+  }, [handleSendText]);
 
   const handleUserAction = useCallback(
     async (event: ChatEvent) => {
@@ -467,11 +602,7 @@ function ChatPageContent() {
 
       const data = (event.payload.content?.data ?? {}) as Record<string, unknown>;
       const rawAction = (data.action as string | undefined) ?? (data.actionId as string | undefined);
-      if (!isLoggedIn && event.payload.messageType === "user_action" && (rawAction === "shortlist" || rawAction === "contact")) {
-        pendingActionRef.current = event;
-        setLoginReason(rawAction === "shortlist" ? "shortlist" : "contact");
-        return;
-      }
+      if (isDemo) demoLog("user_action: sending", rawAction ?? "(unknown)", data);
 
       const fullEvent: ChatEvent = { ...event, conversationId };
       lastSentEventRef.current = fullEvent;
@@ -484,27 +615,45 @@ function ChatPageContent() {
       setMessages((prev) => [...prev, stored]);
       setSending(true);
       setReplyStatus("sending");
+      const abortController = new AbortController();
+      activeSendStreamAbortRef.current = abortController;
+      let ackReceived = false;
+      const expectsResponse = fullEvent.payload.responseRequired === true;
+
       try {
-        await ensureStreamConnected();
-        await syncHistory();
-      } catch (_) {}
-      try {
-        const res = await sendMessage(fullEvent);
-        lastRequestIdRef.current = res.requestId;
-        knownEventIdsRef.current.add(res.eventId);
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.eventId === pendingId ? { ...m, eventId: res.eventId } : m
-          )
+        await sendMessageStream(
+          fullEvent,
+          {
+            onAck: (ack) => {
+              ackReceived = true;
+              lastRequestIdRef.current = ack.requestId;
+              knownEventIdsRef.current.add(ack.eventId);
+              setMessages((prev) =>
+                prev.map((m) => (m.eventId === pendingId ? { ...m, eventId: ack.eventId } : m))
+              );
+
+              if (expectsResponse) startAwaitingReply(ack.eventId);
+              else setReplyStatus("idle");
+            },
+            onChatEvent: (botEvent) => {
+              if (!botEvent.eventId || knownEventIdsRef.current.has(botEvent.eventId)) return;
+              knownEventIdsRef.current.add(botEvent.eventId);
+              setMessages((prev) => [...prev, botEvent]);
+              if (botEvent.sender?.type === "bot" && botEvent.payload.isFinal === true) {
+                clearReplyWaiting();
+              }
+            },
+          },
+          { signal: abortController.signal }
         );
-        if (fullEvent.payload.responseRequired === true) {
-          startAwaitingReply(res.eventId);
-        }
       } catch (e) {
+        // Abort can happen on cancel/timeout; don't flip UI into "error".
+        if (abortController.signal.aborted) return;
         console.error(e);
         setReplyStatus("error");
-        setMessages((prev) => prev.filter((m) => m.eventId !== pendingId));
+        if (!ackReceived) setMessages((prev) => prev.filter((m) => m.eventId !== pendingId));
       } finally {
+        if (activeSendStreamAbortRef.current === abortController) activeSendStreamAbortRef.current = null;
         setSending(false);
       }
     },
@@ -512,106 +661,116 @@ function ChatPageContent() {
       conversationId,
       sending,
       replyStatus,
-      ensureStreamConnected,
-      syncHistory,
       startAwaitingReply,
+      clearReplyWaiting,
     ]
   );
 
-  const handleLoginSuccess = useCallback(async () => {
-    if (!conversationId || sending || replyStatus === "awaiting") return;
-    setSending(true);
-    try {
-      await ensureStreamConnected();
-      await syncHistory();
-    } catch (_) {}
-    const analyticsEvent: ChatEvent = {
-      conversationId,
-      sender: { type: "user" },
-      payload: {
-        messageType: "user_action",
-        responseRequired: true,
-        content: {
-          data: { actionId: "logged_in" },
-        },
-      },
-    };
-    try {
-      const res = await sendMessage(analyticsEvent);
-      lastRequestIdRef.current = res.requestId;
-      startAwaitingReply(res.eventId);
-      setIsLoggedIn(true);
-      const pending = pendingActionRef.current;
-      pendingActionRef.current = null;
-      setLoginReason(null);
-      if (pending) {
-        await handleUserAction(pending);
+  // Demo autoplay: run first step after delay when ready
+  useEffect(() => {
+    if (!isDemo || !conversationId || loading || demoStepIndexRef.current !== 0) return;
+    const t = setTimeout(async () => {
+      const step = DEMO_STEPS[0];
+      demoLog("step: start", { idx: 0, step });
+      if (step.kind === "wait_for_user") {
+        demoLog("step: wait_for_user (pause)");
+        demoWaitingForUserRef.current = true;
+        demoStepIndexRef.current = 1;
+        return;
       }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSending(false);
+      if (step.kind === "text") {
+        demoStepIndexRef.current = 1;
+        handleSendText(step.text);
+      } else if (step.kind === "click_ui") {
+        demoStepIndexRef.current = 1;
+        try {
+          await runDemoClick(step);
+        } catch (e) {
+          console.error("Demo click failed:", e);
+        }
+      }
+    }, DEMO_DELAY_MS);
+    return () => clearTimeout(t);
+  }, [isDemo, conversationId, loading, handleSendText]);
+
+  // Demo autoplay: run next step 2s after bot reply (idle), or after user action when waiting_for_user
+  useEffect(() => {
+    const prev = prevReplyStatusRef.current;
+    prevReplyStatusRef.current = replyStatus;
+    if (!isDemo) return;
+
+    if (prev !== replyStatus) demoLog("replyStatus:", { from: prev, to: replyStatus });
+
+    if (replyStatus === "idle" && demoWaitingForUserRef.current) {
+      demoLog("wait_for_user: resumed (bot replied)");
+      demoWaitingForUserRef.current = false;
+      const idx = demoStepIndexRef.current;
+      if (idx >= DEMO_STEPS.length) return;
+      demoStepIndexRef.current = idx + 1;
+      if (demoTimeoutRef.current) clearTimeout(demoTimeoutRef.current);
+      demoLog("step: scheduled", { idx, afterMs: DEMO_DELAY_MS });
+      demoTimeoutRef.current = setTimeout(async () => {
+        demoTimeoutRef.current = null;
+        const step = DEMO_STEPS[idx];
+        demoLog("step: start", { idx, step });
+        if (step.kind === "text") {
+          handleSendTextRef.current(step.text);
+        } else if (step.kind === "click_ui") {
+          try {
+            await runDemoClick(step);
+          } catch (e) {
+            console.error("Demo click failed:", e);
+          }
+        } else if (step.kind === "wait_for_user") {
+          demoLog("step: wait_for_user (pause)");
+          demoWaitingForUserRef.current = true;
+        }
+      }, DEMO_DELAY_MS);
+      return;
     }
-  }, [conversationId, sending, replyStatus, ensureStreamConnected, syncHistory, startAwaitingReply, handleUserAction]);
 
-  const handleCallNow = useCallback(async () => {
-    if (!conversationId || sending || replyStatus === "awaiting") return;
-    const analyticsEvent: ChatEvent = {
-      conversationId,
-      sender: { type: "user" },
-      payload: {
-        messageType: "user_action",
-        responseRequired: false,
-        content: {
-          data: {
-            actionId: "call_now",
-            category: "crf_submit",
-          },
-        },
-      },
-    };
-    try {
-      await sendMessage(analyticsEvent);
-    } catch (e) {
-      console.error(e);
-    }
-  }, [conversationId, sending, replyStatus]);
+    if (
+      replyStatus !== "idle" ||
+      prev === "idle" ||
+      demoStepIndexRef.current < 1 ||
+      demoStepIndexRef.current >= DEMO_STEPS.length
+    )
+      return;
+    if (demoTimeoutRef.current) clearTimeout(demoTimeoutRef.current);
+    const idx = demoStepIndexRef.current;
+    demoLog("step: scheduled", { idx, afterMs: DEMO_DELAY_MS });
+    demoTimeoutRef.current = setTimeout(async () => {
+      demoTimeoutRef.current = null;
+      demoStepIndexRef.current = idx + 1;
+      const step = DEMO_STEPS[idx];
+      demoLog("step: start", { idx, step });
+      if (step.kind === "wait_for_user") {
+        demoLog("step: wait_for_user (pause)");
+        demoWaitingForUserRef.current = true;
+        return;
+      }
+      if (step.kind === "text") {
+        if (conversationId) handleSendTextRef.current(step.text);
+      } else if (step.kind === "click_ui") {
+        try {
+          await runDemoClick(step);
+        } catch (e) {
+          console.error("Demo click failed:", e);
+        }
+      }
+    }, DEMO_DELAY_MS);
+    // No cleanup here: callback identity changes can cause this effect to re-run and clear the timer before it fires.
+  }, [isDemo, replyStatus, conversationId, handleSendText]);
 
-  const handleShareLocation = useCallback(async () => {
-    if (!conversationId || sending || replyStatus === "awaiting") return;
-    const event: ChatEvent = {
-      conversationId,
-      sender: { type: "system" },
-      payload: {
-        messageType: "user_action",
-        responseRequired: true,
-        visibility: "shown",
-        content: {
-          data: { action: "location_shared", coordinates: [28.5355, 77.391] },
-          derivedLabel: "Location shared",
-        },
-      },
+  // Cleanup timers on unmount only
+  useEffect(() => {
+    return () => {
+      if (demoTimeoutRef.current) {
+        clearTimeout(demoTimeoutRef.current);
+        demoTimeoutRef.current = null;
+      }
     };
-    handleUserAction(event);
-  }, [conversationId, sending, replyStatus, handleUserAction]);
-
-  const handleDenyLocation = useCallback(async () => {
-    if (!conversationId || sending || replyStatus === "awaiting") return;
-    const event: ChatEvent = {
-      conversationId,
-      sender: { type: "system" },
-      payload: {
-        messageType: "user_action",
-        responseRequired: true,
-        visibility: "shown",
-        content: {
-          data: { action: "location_denied" },
-          derivedLabel: "Location not shared",
-        },
-      },
-    };
-    handleUserAction(event);
-  }, [conversationId, sending, replyStatus, handleUserAction]);
+  }, []);
 
   const handleRetry = useCallback(async () => {
     const event = lastSentEventRef.current;
@@ -625,16 +784,37 @@ function ChatPageContent() {
     const fullEvent: ChatEvent = { ...event, conversationId };
     setSending(true);
     setReplyStatus("sending");
+    const abortController = new AbortController();
+    activeSendStreamAbortRef.current = abortController;
+
+    const expectsResponse =
+      fullEvent.payload.messageType === "text" || fullEvent.payload.responseRequired === true;
     try {
-      const res = await sendMessage(fullEvent);
-      lastRequestIdRef.current = res.requestId;
-      const expectsResponse =
-        fullEvent.payload.messageType === "text" || fullEvent.payload.responseRequired === true;
-      if (expectsResponse) startAwaitingReply(res.eventId);
+      await sendMessageStream(
+        fullEvent,
+        {
+          onAck: (ack) => {
+            lastRequestIdRef.current = ack.requestId;
+            knownEventIdsRef.current.add(ack.eventId);
+            if (expectsResponse) startAwaitingReply(ack.eventId);
+            else setReplyStatus("idle");
+          },
+          onChatEvent: (botEvent) => {
+            if (!botEvent.eventId || knownEventIdsRef.current.has(botEvent.eventId)) return;
+            knownEventIdsRef.current.add(botEvent.eventId);
+            setMessages((prev) => [...prev, botEvent]);
+            if (botEvent.sender?.type === "bot" && botEvent.payload.isFinal === true) clearReplyWaiting();
+          },
+        },
+        { signal: abortController.signal }
+      );
     } catch (e) {
-      console.error(e);
-      setReplyStatus("error");
+      if (!abortController.signal.aborted) {
+        console.error(e);
+        setReplyStatus("error");
+      }
     } finally {
+      if (activeSendStreamAbortRef.current === abortController) activeSendStreamAbortRef.current = null;
       setSending(false);
     }
   }, [conversationId, sending, clearReplyWaiting, startAwaitingReply]);
@@ -642,6 +822,8 @@ function ChatPageContent() {
   const handleCancel = useCallback(async () => {
     if (replyStatus !== "awaiting") return;
     const requestId = lastRequestIdRef.current;
+    activeSendStreamAbortRef.current?.abort();
+    activeSendStreamAbortRef.current = null;
     if (requestId) {
       try {
         await cancelRequest(requestId);
@@ -649,6 +831,7 @@ function ChatPageContent() {
       lastRequestIdRef.current = null;
     }
     clearReplyWaiting();
+    setSending(false);
   }, [replyStatus, clearReplyWaiting]);
 
   // Visible messages (filter context/analytics for display count)
@@ -656,6 +839,11 @@ function ChatPageContent() {
     (m) => m.payload.messageType !== "context" && m.payload.messageType !== "analytics"
   );
   const hasMessages = visibleMessages.length > 0;
+  const lastVisible = visibleMessages[visibleMessages.length - 1];
+  const hasStickyNestedQna =
+    lastVisible?.sender?.type === "bot" &&
+    lastVisible?.payload?.messageType === "template" &&
+    (lastVisible?.payload?.content as { templateId?: string } | undefined)?.templateId === "nested_qna";
 
   const inputPlaceholder = hasMessages ? "Reply to Houzy" : "Ask Houzy";
 
@@ -777,7 +965,7 @@ function ChatPageContent() {
               </div>
             )}
 
-            {messages.map((msg) => (
+            {messages.map((msg, index) => (
               <ChatMessage
                 key={
                   msg.eventId ??
@@ -786,12 +974,9 @@ function ChatPageContent() {
                 }
                 event={msg}
                 onUserAction={handleUserAction}
-                onLoginSuccess={handleLoginSuccess}
-                onCallNow={handleCallNow}
-                onShareLocation={handleShareLocation}
-                onDenyLocation={handleDenyLocation}
+                // onCallNow={handleCallNow}
                 actionsDisabled={replyStatus === "awaiting"}
-                onToast={showToast}
+                isLastMessage={index === messages.length - 1}
               />
             ))}
           </div>
@@ -843,29 +1028,6 @@ function ChatPageContent() {
           </div>
         )}
 
-        {/* Network error — design: "Network connection lost", Retry as link */}
-        {streamStatus === "error" && replyStatus === "idle" && (
-          <div className="mx-0 mb-3 flex items-center gap-3 px-4 py-3 bg-white rounded-2xl border border-[#e1e2e8]">
-            <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2">
-                <path d="M1 6l5 5M5 6l1 5" /><path d="M23 6l-5 5M19 6l-1 5" />
-                <path d="M12 13v5M12 20h.01" />
-              </svg>
-            </div>
-            <div className="flex-1">
-              <p className="text-sm text-[#111] font-medium">Network connection lost</p>
-              <p className="text-xs text-[#767676]">Reconnecting…</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setReconnectKey((k) => k + 1)}
-              className="text-sm font-semibold text-[#2563EB] underline hover:opacity-80"
-            >
-              Retry
-            </button>
-          </div>
-        )}
-
         <div ref={messagesEndRef} />
       </div>
 
@@ -882,68 +1044,60 @@ function ChatPageContent() {
         </button>
       )}
 
-      {/* Input bar – full width with minimal side padding */}
-      <div className="flex-shrink-0 px-3 py-3 pb-[calc(16px+env(safe-area-inset-bottom,0px))] bg-transparent">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSendText(input);
-          }}
-          className="w-full"
-        >
-          <div className="w-full min-h-12 flex items-center rounded-xl border border-[#e1e2e8] bg-white px-4 pr-12 relative focus-within:border-[#5E23DC]/40 transition-colors">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={inputPlaceholder}
-              className="flex-1 min-h-12 bg-transparent text-sm text-[#222] placeholder-[#767676] focus:outline-none caret-[#5E23DC]"
-              disabled={sending}
-            />
-            {/* Stop / Send inside wrapper – scout style */}
-            {replyStatus === "awaiting" ? (
-              <button
-                type="button"
-                onClick={handleCancel}
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-[#5E23DC] text-white"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
-                  <rect x="6" y="6" width="12" height="12" rx="2" />
-                </svg>
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={sending || !input.trim()}
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full disabled:opacity-100"
-                aria-label="Send"
-              >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="block shrink-0">
-                  <circle cx="12" cy="12" r="12" fill={input.trim() && !sending ? "#5E23DC" : "#E1E2E8"} />
-                  <path d="M18.5624 11.9935C18.5628 12.1605 18.5186 12.3246 18.4343 12.4688C18.35 12.6131 18.2288 12.7321 18.0831 12.8138L8.244 18.4394C8.1028 18.5194 7.9434 18.5618 7.78111 18.5624C7.63157 18.5616 7.48439 18.525 7.35187 18.4558C7.21934 18.3865 7.1053 18.2865 7.01928 18.1642C6.93326 18.0419 6.87775 17.9008 6.85738 17.7526C6.83702 17.6045 6.85238 17.4536 6.9022 17.3126L8.48423 12.628C8.49969 12.5822 8.52894 12.5423 8.56796 12.5138C8.60698 12.4853 8.65387 12.4695 8.7022 12.4687H12.9374C13.0016 12.4688 13.0652 12.4557 13.1242 12.4303C13.1832 12.4048 13.2363 12.3675 13.2803 12.3206C13.3243 12.2737 13.3581 12.2183 13.3797 12.1578C13.4014 12.0973 13.4104 12.033 13.4061 11.9689C13.3955 11.8483 13.3397 11.7363 13.25 11.6551C13.1602 11.5739 13.0431 11.5297 12.9221 11.5312H8.70337C8.65434 11.5312 8.60653 11.5158 8.5667 11.4872C8.52686 11.4586 8.49699 11.4182 8.4813 11.3718L6.89927 6.68781C6.8363 6.50827 6.82945 6.31382 6.87962 6.1303C6.92979 5.94678 7.03462 5.78286 7.18016 5.66033C7.32571 5.5378 7.5051 5.46246 7.69449 5.4443C7.88388 5.42615 8.07431 5.46605 8.24048 5.5587L18.0842 11.1773C18.2291 11.2587 18.3498 11.3772 18.4338 11.5206C18.5178 11.6641 18.5622 11.8272 18.5624 11.9935Z" fill="white" />
-                </svg>
-              </button>
-            )}
-          </div>
-        </form>
-        {!hasMessages && (
-          <p className="text-[10px] font-normal leading-tight tracking-[0.6px] text-[#767676] text-center mt-2">
-            Houzy is an AI assistant and may occasionally make mistakes
-          </p>
-        )}
-      </div>
+      {/* Input bar – hidden when sticky nested_qna is active */}
+      {!hasStickyNestedQna && (
+        <div className="flex-shrink-0 px-3 py-3 pb-[calc(16px+env(safe-area-inset-bottom,0px))] bg-transparent">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSendText(input);
+            }}
+            className="w-full"
+          >
+            <div className="w-full min-h-12 flex items-center rounded-xl border border-[#e1e2e8] bg-white px-4 pr-12 relative focus-within:border-[#5E23DC]/40 transition-colors">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={inputPlaceholder}
+                className="flex-1 min-h-12 bg-transparent text-sm text-[#222] placeholder-[#767676] focus:outline-none caret-[#5E23DC]"
+                disabled={sending}
+              />
+              {/* Stop / Send inside wrapper – scout style */}
+              {replyStatus === "awaiting" ? (
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-[#5E23DC] text-white"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+                    <rect x="6" y="6" width="12" height="12" rx="2" />
+                  </svg>
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={sending || !input.trim()}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full disabled:opacity-100"
+                  aria-label="Send"
+                >
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="block shrink-0">
+                    <circle cx="12" cy="12" r="12" fill={input.trim() && !sending ? "#5E23DC" : "#E1E2E8"} />
+                    <path d="M18.5624 11.9935C18.5628 12.1605 18.5186 12.3246 18.4343 12.4688C18.35 12.6131 18.2288 12.7321 18.0831 12.8138L8.244 18.4394C8.1028 18.5194 7.9434 18.5618 7.78111 18.5624C7.63157 18.5616 7.48439 18.525 7.35187 18.4558C7.21934 18.3865 7.1053 18.2865 7.01928 18.1642C6.93326 18.0419 6.87775 17.9008 6.85738 17.7526C6.83702 17.6045 6.85238 17.4536 6.9022 17.3126L8.48423 12.628C8.49969 12.5822 8.52894 12.5423 8.56796 12.5138C8.60698 12.4853 8.65387 12.4695 8.7022 12.4687H12.9374C13.0016 12.4688 13.0652 12.4557 13.1242 12.4303C13.1832 12.4048 13.2363 12.3675 13.2803 12.3206C13.3243 12.2737 13.3581 12.2183 13.3797 12.1578C13.4014 12.0973 13.4104 12.033 13.4061 11.9689C13.3955 11.8483 13.3397 11.7363 13.25 11.6551C13.1602 11.5739 13.0431 11.5297 12.9221 11.5312H8.70337C8.65434 11.5312 8.60653 11.5158 8.5667 11.4872C8.52686 11.4586 8.49699 11.4182 8.4813 11.3718L6.89927 6.68781C6.8363 6.50827 6.82945 6.31382 6.87962 6.1303C6.92979 5.94678 7.03462 5.78286 7.18016 5.66033C7.32571 5.5378 7.5051 5.46246 7.69449 5.4443C7.88388 5.42615 8.07431 5.46605 8.24048 5.5587L18.0842 11.1773C18.2291 11.2587 18.3498 11.3772 18.4338 11.5206C18.5178 11.6641 18.5622 11.8272 18.5624 11.9935Z" fill="white" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </form>
+          {!hasMessages && (
+            <p className="text-[10px] font-normal leading-tight tracking-[0.6px] text-[#767676] text-center mt-2">
+              Houzy is an AI assistant and may occasionally make mistakes
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Login bottom sheet for shortlist / contact */}
-      <LoginBottomSheet
-        open={loginReason !== null}
-        reason={loginReason}
-        onClose={() => {
-          pendingActionRef.current = null;
-          setLoginReason(null);
-        }}
-        onLoggedIn={handleLoginSuccess}
-      />
-
       {/* Info modal — bottom sheet */}
       {showInfoModal && (
         <div className="fixed inset-0 z-50 flex items-end" onClick={() => setShowInfoModal(false)}>
@@ -975,36 +1129,6 @@ function ChatPageContent() {
         </div>
       )}
 
-      {/* Toast notifications – scout-bot login toast style */}
-      <div className="fixed bottom-24 left-1/2 -translate-x-1/2 flex flex-col gap-2 z-50 pointer-events-none" style={{ maxWidth: "380px", width: "calc(100% - 32px)" }}>
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className="flex items-center justify-between gap-3 px-4 py-3 bg-[#111] text-white rounded-2xl shadow-lg pointer-events-auto login-closed-toast"
-          >
-            <div className="flex items-center gap-2.5 flex-1 min-w-0">
-              <span className="w-5 h-5 rounded-full flex items-center justify-center bg-[#0F8458] flex-shrink-0">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
-                  <path d="M20 6L9 17l-5-5" />
-                </svg>
-              </span>
-              <span className="text-sm font-medium truncate">{toast.message}</span>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <div className="w-px h-5 bg-white/30" />
-            <button
-              type="button"
-              onClick={() => dismissToast(toast.id)}
-              className="text-white/80 hover:text-white transition-colors"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            </button>
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
