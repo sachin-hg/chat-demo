@@ -11,13 +11,13 @@ import {
   migrateChat,
 } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
-import type { ChatEvent } from "@/lib/contract-types";
+import type { ChatEventFromUser, ChatEventToUser } from "@/lib/contract-types";
 import { ChatMessage } from "@/components/chat/ChatMessage";
 import { useToast } from "@/components/ui/ToastProvider";
 
-interface StoredMessage extends ChatEvent {
+interface StoredMessage extends ChatEventToUser {
   messageId: string;
-  createdAt?: string;
+  createdAt: string;
 }
 
 const INITIAL_PAGE_SIZE = 6;
@@ -58,11 +58,12 @@ const SUGGESTIONS_ROW2 = [
 ];
 
 // 4.1 Context on chat open
-function buildContextEvent(conversationId: string): ChatEvent {
+function buildContextEvent(conversationId: string): ChatEventFromUser {
   return {
     conversationId,
     sender: { type: "system" },
     messageType: "context",
+    responseRequired: false,
     content: {
       data: {
         page: "SRP",
@@ -375,7 +376,7 @@ function ChatPageContent() {
   const knownMessageIdsRef = useRef<Set<string>>(new Set());
   const replyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const awaitingElapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastSentEventRef = useRef<ChatEvent | null>(null);
+  const lastSentEventRef = useRef<ChatEventFromUser | null>(null);
   const lastRequestMessageIdRef = useRef<string | null>(null);
   const currentPendingLocalMessageIdRef = useRef<string | null>(null);
   const cancelledPendingLocalIdsRef = useRef<Set<string>>(new Set());
@@ -424,7 +425,7 @@ function ChatPageContent() {
         prev.map((m) => (m.messageId === ackedMessageId ? { ...m, messageState: "CANCELLED_BY_USER" } : m))
       );
       try {
-        await cancelRequest(ackedMessageId);
+        if (conversationId) await cancelRequest(ackedMessageId, conversationId);
       } catch (_) {}
       lastRequestMessageIdRef.current = null;
     } else if (pendingLocalId) {
@@ -437,7 +438,7 @@ function ChatPageContent() {
 
     clearReplyWaiting();
     setSending(false);
-  }, [clearReplyWaiting]);
+  }, [clearReplyWaiting, conversationId]);
 
   // Load conversation and initial history
   useEffect(() => {
@@ -603,7 +604,7 @@ function ChatPageContent() {
       }
       const trimmed = text.trim();
       if (isDemo) demoLog("text: sending", trimmed);
-      const event: ChatEvent = {
+      const event: ChatEventFromUser = {
         conversationId,
         sender: { type: "user" },
         messageType: "text",
@@ -615,6 +616,7 @@ function ChatPageContent() {
       const userMessage: StoredMessage = {
         ...event,
         messageId: pendingId,
+        messageState: "PENDING",
         createdAt: new Date().toISOString(),
       };
       currentPendingLocalMessageIdRef.current = pendingId;
@@ -644,7 +646,7 @@ function ChatPageContent() {
                       : m
                   )
                 );
-                cancelRequest(ack.messageId).catch(() => {});
+                if (conversationId) cancelRequest(ack.messageId, conversationId).catch(() => {});
                 return;
               }
               lastRequestMessageIdRef.current = ack.messageId;
@@ -658,7 +660,10 @@ function ChatPageContent() {
               if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
               knownMessageIdsRef.current.add(botEvent.messageId);
               setMessages((prev) => [...prev, botEvent]);
-              if (botEvent.sender?.type === "bot" && botEvent.isFinal === true) {
+              if (
+                botEvent.sender?.type === "bot" &&
+                (botEvent.messageState === "COMPLETED" || botEvent.messageState === "ERRORED_AT_ML")
+              ) {
                 clearReplyWaiting();
               }
             },
@@ -694,7 +699,7 @@ function ChatPageContent() {
   }, [handleSendText]);
 
   const handleUserAction = useCallback(
-    async (event: ChatEvent) => {
+    async (event: ChatEventFromUser) => {
       if (!conversationId || sending || replyStatus === "awaiting") return;
       if (isOffline) {
         setNetworkError(true);
@@ -705,12 +710,13 @@ function ChatPageContent() {
       const rawAction = (data.action as string | undefined) ?? (data.actionId as string | undefined);
       if (isDemo) demoLog("user_action: sending", rawAction ?? "(unknown)", data);
 
-      const fullEvent: ChatEvent = { ...event, conversationId };
+      const fullEvent: ChatEventFromUser = { ...event, conversationId };
       lastSentEventRef.current = fullEvent;
       const pendingId = `pending-${Date.now()}`;
       const stored: StoredMessage = {
         ...fullEvent,
         messageId: pendingId,
+        messageState: "PENDING",
         createdAt: new Date().toISOString(),
       };
       currentPendingLocalMessageIdRef.current = pendingId;
@@ -738,7 +744,7 @@ function ChatPageContent() {
                   : m
               )
             );
-            cancelRequest(ack.messageId).catch(() => {});
+            if (conversationId) cancelRequest(ack.messageId, conversationId).catch(() => {});
             return;
           }
           lastRequestMessageIdRef.current = ack.messageId;
@@ -764,7 +770,7 @@ function ChatPageContent() {
                         : m
                     )
                   );
-                  cancelRequest(ack.messageId).catch(() => {});
+                  if (conversationId) cancelRequest(ack.messageId, conversationId).catch(() => {});
                   return;
                 }
                 lastRequestMessageIdRef.current = ack.messageId;
@@ -779,7 +785,10 @@ function ChatPageContent() {
                 if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
                 knownMessageIdsRef.current.add(botEvent.messageId);
                 setMessages((prev) => [...prev, botEvent]);
-                if (botEvent.sender?.type === "bot" && botEvent.isFinal === true) {
+                if (
+                  botEvent.sender?.type === "bot" &&
+                  (botEvent.messageState === "COMPLETED" || botEvent.messageState === "ERRORED_AT_ML")
+                ) {
                   clearReplyWaiting();
                 }
               },
@@ -923,7 +932,7 @@ function ChatPageContent() {
     const event = lastSentEventRef.current;
     if (!event || !conversationId || sending) return;
     await cancelAndHideCurrentRequest();
-    const fullEvent: ChatEvent = { ...event, conversationId };
+    const fullEvent: ChatEventFromUser = { ...event, conversationId };
     setSending(true);
     setReplyStatus("sending");
     const abortController = new AbortController();
@@ -945,7 +954,10 @@ function ChatPageContent() {
             if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
             knownMessageIdsRef.current.add(botEvent.messageId);
             setMessages((prev) => [...prev, botEvent]);
-            if (botEvent.sender?.type === "bot" && botEvent.isFinal === true) clearReplyWaiting();
+            if (
+              botEvent.sender?.type === "bot" &&
+              (botEvent.messageState === "COMPLETED" || botEvent.messageState === "ERRORED_AT_ML")
+            ) clearReplyWaiting();
           },
         },
         { signal: abortController.signal }

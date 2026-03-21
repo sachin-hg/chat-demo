@@ -1,11 +1,11 @@
 "use client";
 
-import type { ChatEvent } from "@/lib/contract-types";
+import type { ChatEventFromUser } from "@/lib/contract-types";
 import { useEffect, useState } from "react";
 
 interface Props {
   data: Record<string, unknown>;
-  onUserAction: (event: ChatEvent) => void;
+  onUserAction: (event: ChatEventFromUser) => void;
   conversationId?: string;
   disabled?: boolean;
 }
@@ -46,7 +46,7 @@ export function ShareLocation({ data, onUserAction, disabled = false }: Props) {
             messageType: "user_action",
             responseRequired: true,
             content: { data: { action: "location_shared", coordinates: result.coords } },
-          } as ChatEvent);
+          } as unknown as ChatEventFromUser);
         }
       } catch {
         // If Permissions API isn't supported, fall back to rendering the CTA.
@@ -87,7 +87,7 @@ export function ShareLocation({ data, onUserAction, disabled = false }: Props) {
                 messageType: "user_action",
                 responseRequired: true,
                 content: { data: { action: "location_denied" } },
-              } as ChatEvent);
+              } as unknown as ChatEventFromUser);
               return;
             }
 
@@ -105,7 +105,7 @@ export function ShareLocation({ data, onUserAction, disabled = false }: Props) {
                 messageType: "user_action",
                 responseRequired: true,
                 content: { data: { action: "location_denied" } },
-              } as ChatEvent);
+              } as unknown as ChatEventFromUser);
               return;
             }
 
@@ -114,7 +114,7 @@ export function ShareLocation({ data, onUserAction, disabled = false }: Props) {
               messageType: "user_action",
               responseRequired: true,
               content: { data: { action: "location_shared", coordinates: result.coords } },
-            } as ChatEvent);
+            } as unknown as ChatEventFromUser);
           }}
           className="mt-4 w-full h-10 rounded-lg bg-[#5E23DC] text-white text-sm font-semibold hover:bg-[#4a1bb5] transition-colors disabled:opacity-50"
         >

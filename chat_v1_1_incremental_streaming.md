@@ -123,12 +123,12 @@ Rules:
 
 ```txt
 event: message_done
-data: {"eventId":"evt_601","messageId":"msg_b_101","sourceMessageId":"msg_u_99","sequenceNumber":0,"messageType":"markdown","fullText":"# Top picks\nHere are 2BHK options in Sector 32 Gurgaon.","isFinal":false,"context":{"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]}}}
+data: {"eventId":"evt_601","messageId":"msg_b_101","sourceMessageId":"msg_u_99","sequenceNumber":0,"messageType":"markdown","messageState":"IN_PROGRESS","fullText":"# Top picks\nHere are 2BHK options in Sector 32 Gurgaon.","summarisedChatContext":{"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]}}}
 ```
 
 Rules:
 - `fullText` must equal concatenation of all accepted deltas.
-- `isFinal` follows existing response sequencing semantics.
+- `messageState` follows existing response sequencing semantics.
 - `message_done` is idempotent; FE may receive duplicates and should upsert by `eventId` or `messageId`.
 
 ### 4.6 Existing `chat_event` in v1.1
@@ -141,7 +141,7 @@ Example:
 ```txt
 id: evt_602
 event: chat_event
-data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b_102","sourceMessageId":"msg_u_99","sequenceNumber":1,"isFinal":true,"messageType":"template","content":{"templateId":"property_carousel","data":{"property_count":15,"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]},"properties":[{"id":"p1"}]}}}}
+data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b_102","sourceMessageId":"msg_u_99","sequenceNumber":1,"messageState":"COMPLETED","messageType":"template","content":{"templateId":"property_carousel","data":{"property_count":15,"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]},"properties":[{"id":"p1"}]}}}}
 ```
 
 ### 4.7 `connection_close`
@@ -226,7 +226,7 @@ data: {"eventId":"evt_u_11","messageState":"PENDING"}
 
 id: evt_b_21
 event: chat_event
-data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b_21","sourceMessageId":"msg_u_11","sequenceNumber":0,"isFinal":true,"messageType":"markdown","content":{"text":"Here are options for you.","context":{"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]}}}}}
+data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b_21","sourceMessageId":"msg_u_11","sequenceNumber":0,"messageState":"COMPLETED","messageType":"markdown","summarisedChatContext":{"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]}},"content":{"text":"Here are options for you."}}}
 
 event: connection_close
 data: {"reason":"response_complete"}
@@ -257,11 +257,11 @@ event: message_delta
 data: {"messageId":"msg_b_31","chunkIndex":1,"deltaText":" in Sector 32 Gurgaon","isFinalChunk":false}
 
 event: message_done
-data: {"eventId":"evt_b_31","messageId":"msg_b_31","sourceMessageId":"msg_u_12","sequenceNumber":0,"messageType":"markdown","fullText":"# Great options in Sector 32 Gurgaon","isFinal":false,"context":{"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]}}}
+data: {"eventId":"evt_b_31","messageId":"msg_b_31","sourceMessageId":"msg_u_12","sequenceNumber":0,"messageType":"markdown","messageState":"IN_PROGRESS","fullText":"# Great options in Sector 32 Gurgaon","summarisedChatContext":{"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]}}}
 
 id: evt_b_32
 event: chat_event
-data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b_32","sourceMessageId":"msg_u_12","sequenceNumber":1,"isFinal":true,"messageType":"template","content":{"templateId":"property_carousel","data":{"property_count":15,"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]},"properties":[{"id":"p1"},{"id":"p2"}],"context":{"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]}}}}}}
+data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b_32","sourceMessageId":"msg_u_12","sequenceNumber":1,"messageState":"COMPLETED","messageType":"template","summarisedChatContext":{"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]}},"content":{"templateId":"property_carousel","data":{"property_count":15,"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]},"properties":[{"id":"p1"},{"id":"p2"}]}}}}
 
 event: connection_close
 data: {"reason":"response_complete"}
@@ -321,7 +321,7 @@ These are transport event payload contracts (SSE `data` field), not stored `Chat
   "sequenceNumber": 0,
   "messageType": "text | markdown",
   "fullText": "string",
-  "isFinal": true,
+  "messageState": "COMPLETED",
   "context": {
     "service": "buy",
     "category": "residential",
@@ -349,8 +349,8 @@ sequenceDiagram
     ML-->>BE: token chunks
     BE-->>FE: SSE message_start
     BE-->>FE: SSE message_delta (0..N)
-    BE-->>FE: SSE message_done (isFinal=false)
-    BE-->>FE: SSE chat_event (template, isFinal=true)
+    BE-->>FE: SSE message_done (messageState=IN_PROGRESS)
+    BE-->>FE: SSE chat_event (template, messageState=COMPLETED)
     BE-->>FE: SSE connection_close(response_complete)
 ```
 

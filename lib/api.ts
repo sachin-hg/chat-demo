@@ -143,8 +143,11 @@ export async function sendMessageStream(
   }
 }
 
-export async function cancelRequest(messageId: string): Promise<{ ok: boolean }> {
-  return post("/api/chats/cancel", { messageId });
+export async function cancelRequest(
+  messageId: string,
+  conversationId: string
+): Promise<{ ok: boolean }> {
+  return post("/api/chats/cancel", { messageId, conversationId });
 }
 
 export async function migrateChat(currentConversationId: string): Promise<{ newConversationId?: string }> {

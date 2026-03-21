@@ -62,7 +62,7 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
 
 ## API (aligned with spec)
 
-- `ChatEvent` is a **flat object** (no nested `payload` wrapper): top-level fields include `messageType`, `content`, `responseRequired`, `visibility`, `sourceMessageId`, `sequenceNumber`, and `isFinal`.
+- `ChatEvent` is a **flat object** (no nested `payload` wrapper): top-level fields include `messageType`, `content`, `responseRequired`, `visibility`, `sourceMessageId`, and `sequenceNumber`.
 - In FE-facing events, `sourceMessageId` is optional and typically not required for rendering.
 - `GET /api/chats/get-conversation-id` → `{ conversationId, isNew }` (`isNew` is demo-app convenience; not required for production clients)
 - Phase 1 identity mapping: BE keeps a stable 1:1 `conversationId` per `userId` (or per `_ga` for anonymous users), so the same user consistently gets the same conversation.
@@ -79,7 +79,7 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
   - SSE events:
     - **`event: connection_ack`** — immediate ack: `data: { "messageId": "...", "messageState": "PENDING" }`
     - **`event: chat_event`** — bot events streamed as they’re produced: `id: <messageId>`, `data: <JSON ChatEvent>`
-    - **`event: connection_close`** — emitted when response is complete (`isFinal: true`) or stream inactivity reaches 15s.
+    - **`event: connection_close`** — emitted when response reaches terminal state (`messageState: COMPLETED | ERRORED_AT_ML`) or stream inactivity reaches 15s.
 - ML response handling:
   - each ML output is stored by BE as a new bot message with `messageState: "COMPLETED"`.
   - ML `messageState` is applied to the source user message identified by `sourceMessageId`.

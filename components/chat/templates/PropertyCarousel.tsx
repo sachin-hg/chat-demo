@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useRef, useState } from "react";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useAuth } from "@/components/auth/AuthProvider";
-import type { ChatEvent } from "@/lib/contract-types";
+import type { ChatEventFromUser } from "@/lib/contract-types";
 import type { PropertyCarouselCard } from "@/lib/mock/data";
 
 type SrpFilters = Record<string, unknown>;
@@ -12,7 +12,7 @@ type SrpFilters = Record<string, unknown>;
 interface Props {
   properties: PropertyCarouselCard[];
   messageId: string;
-  onUserAction: (event: ChatEvent) => void;
+  onUserAction: (event: ChatEventFromUser) => void;
   propertyCount?: number;
   service?: string;
   category?: string;
@@ -161,7 +161,7 @@ export function PropertyCarousel({
                     content: {
                       data: { action: "shortlist", replyToMessageId: messageId, property: propertyForMl },
                     },
-                  } as ChatEvent);
+                  } as unknown as ChatEventFromUser);
 
                   shortlistInFlightRef.current.delete(p.id);
                 }}
@@ -268,7 +268,7 @@ export function PropertyCarousel({
                         },
                         derivedLabel: `Tell me more about ${p.name ?? p.title ?? "this property"}`,
                       },
-                    } as ChatEvent)
+                    } as unknown as ChatEventFromUser)
                   }
                   className="flex-1 h-12 min-w-0 rounded-lg border border-[#5E23DC] text-[#5E23DC] text-sm font-medium hover:bg-[#5E23DC]/[0.06] transition-colors disabled:opacity-40"
                 >
@@ -301,7 +301,7 @@ export function PropertyCarousel({
                         },
                         derivedLabel: "The seller has been contacted, someone will reach out to you soon!",
                       },
-                    } as ChatEvent);
+                    } as unknown as ChatEventFromUser);
                   }}
                   className="flex-1 h-12 min-w-0 rounded-lg bg-[#5E23DC] text-white text-sm font-medium flex items-center justify-center gap-1 hover:bg-[#4a1bb5] transition-colors disabled:opacity-40"
                 >

@@ -10,7 +10,7 @@ import {
   updateMessageStateByUserMessageId,
 } from "@/lib/store";
 import { getNextBotEvents } from "@/lib/mock/ml-flow";
-import type { ChatEventFromUser, ChatEventToML } from "@/lib/contract-types";
+import type { ChatEventFromUser, ChatEventToML, CancelEventToML } from "@/lib/contract-types";
 
 const DELAYS_MS = [61000];
 function getMockDelayMs(): number {
@@ -77,6 +77,13 @@ export async function POST(request: NextRequest) {
       };
 
       const abortHandler = () => {
+        const cancelEventToML: CancelEventToML = {
+          sender: { type: "system" },
+          conversationId: stored.conversationId,
+          messageIdToCancel: stored.messageId,
+          cancelReason: "CANCELLED_BY_USER",
+        };
+        void cancelEventToML;
         cancelRequestByUserMessageId(stored.messageId!);
         close();
       };
@@ -91,6 +98,13 @@ export async function POST(request: NextRequest) {
         if (inactivityTimer) clearTimeout(inactivityTimer);
         inactivityTimer = setTimeout(() => {
           if (!closed) {
+            const cancelEventToML: CancelEventToML = {
+              sender: { type: "system" },
+              conversationId: stored.conversationId,
+              messageIdToCancel: stored.messageId,
+              cancelReason: "TIMED_OUT_BY_BE",
+            };
+            void cancelEventToML;
             cancelRequestByUserMessageId(stored.messageId!);
             writeSse({ event: "connection_close", data: { reason: "inactivity_15s" } });
             close();
@@ -151,7 +165,7 @@ export async function POST(request: NextRequest) {
 
           writeSse({ event: "chat_event", id: storedBot.messageId, data: storedBot });
 
-          if (storedBot.isFinal === true) {
+          if (ev.messageState === "COMPLETED" || ev.messageState === "ERRORED_AT_ML") {
             completeRequest(stored.messageId!);
             writeSse({ event: "connection_close", data: { reason: "response_complete" } });
             close();

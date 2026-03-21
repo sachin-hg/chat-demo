@@ -56,19 +56,18 @@ function botMessage(
   options: {
     sourceMessageId: string;
     sequenceNumber?: number;
-    isFinal?: boolean;
+    messageState?: "IN_PROGRESS" | "COMPLETED" | "ERRORED_AT_ML";
     visibility?: "shown" | "hidden";
   }
 ): ChatEventFromML & { messageId?: string } {
-  const { sourceMessageId, sequenceNumber = 0, isFinal = true, visibility } = options;
+  const { sourceMessageId, sequenceNumber = 0, messageState = "COMPLETED", visibility } = options;
   return {
     messageId,
     conversationId: CONV,
     sender: BOT,
     sourceMessageId,
     sequenceNumber,
-    isFinal,
-    messageState: isFinal ? "COMPLETED" : "IN_PROGRESS",
+    messageState,
     summarisedChatContext: ML_RESPONSE_CONTEXT,
     messageType,
     visibility,
@@ -174,7 +173,7 @@ export function getNextBotEvents(
         data: {
           property,
         },
-      }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
+      }, { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }),
     ];
   }
 
@@ -198,7 +197,7 @@ export function getNextBotEvents(
             ],
           },
         },
-        { sourceMessageId, sequenceNumber: 0, isFinal: true }
+        { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }
       ),
     ];
   }
@@ -222,8 +221,8 @@ export function getNextBotEvents(
     const selections = data.selections as { questionId: string; selection?: string; text?: string }[] | undefined;
     if (!Array.isArray(selections) || selections.length === 0) return [];
     return [
-      botMessage(generateMessageId(), "markdown", { text: mdLocDta }, { sourceMessageId, sequenceNumber: 0, isFinal: false }),
-      botMessage(generateMessageId(), "markdown", { text: mdLocDta }, { sourceMessageId, sequenceNumber: 0, isFinal: true })
+      botMessage(generateMessageId(), "markdown", { text: mdLocDta }, { sourceMessageId, sequenceNumber: 0, messageState: "IN_PROGRESS" }),
+      botMessage(generateMessageId(), "markdown", { text: mdLocDta }, { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" })
     ];
   }
 
@@ -268,7 +267,7 @@ export function getNextBotEvents(
       "",
     ].filter(Boolean).join("\n");
     return [
-      botMessage(generateMessageId(), "markdown", { text: md }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
+      botMessage(generateMessageId(), "markdown", { text: md }, { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }),
     ];
   }
 
@@ -277,7 +276,7 @@ export function getNextBotEvents(
   // ————— Contract §4.25: learn_more_about_locality (markdown, design: locality learn more.png) —————
   if (messageType === "user_action" && action === "learn_more_about_locality") {
     return [
-      botMessage(generateMessageId(), "markdown", { text: mdLocDta }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
+      botMessage(generateMessageId(), "markdown", { text: mdLocDta }, { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }),
     ];
   }
 
@@ -289,7 +288,7 @@ export function getNextBotEvents(
         generateMessageId(),
         "template",
         { templateId: "property_carousel", data: buildPropertyCarouselData(properties) },
-        { sourceMessageId, sequenceNumber: 0, isFinal: true }
+        { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }
       ),
     ];
   }
@@ -300,12 +299,12 @@ export function getNextBotEvents(
     return [
       botMessage(generateMessageId(), "text", {
         text: "Here are properties near you.",
-      }, { sourceMessageId, sequenceNumber: 0, isFinal: false }),
+      }, { sourceMessageId, sequenceNumber: 0, messageState: "IN_PROGRESS" }),
       botMessage(
         generateMessageId(),
         "template",
         { templateId: "property_carousel", data: buildPropertyCarouselData(properties) },
-        { sourceMessageId, sequenceNumber: 1, isFinal: true }
+        { sourceMessageId, sequenceNumber: 1, messageState: "COMPLETED" }
       ),
     ];
   }
@@ -315,7 +314,7 @@ export function getNextBotEvents(
     return [
       botMessage(generateMessageId(), "text", {
         text: "No problem. You can search by area name or filters instead.",
-      }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
+      }, { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }),
     ];
   }
 
@@ -328,7 +327,7 @@ export function getNextBotEvents(
     return [
       botMessage(generateMessageId(), "markdown", {
         text: "Hey! I see you're looking for **residential properties** to **buy**. How can I help?",
-      }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
+      }, { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }),
     ];
   }
 
@@ -340,7 +339,7 @@ export function getNextBotEvents(
     return [
       botMessage(generateMessageId(), "text", {
         text: "Hey! I'm still learning. Wont be able to help you with this. Anything else?",
-      }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
+      }, { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }),
     ];
   }
 
@@ -350,12 +349,12 @@ export function getNextBotEvents(
     return [
       botMessage(generateMessageId(), "text", {
         text: "Here are 2bhk properties in sector 32 gurgaon",
-      }, { sourceMessageId, sequenceNumber: 0, isFinal: false }),
+      }, { sourceMessageId, sequenceNumber: 0, messageState: "IN_PROGRESS" }),
       botMessage(
         generateMessageId(),
         "template",
         { templateId: "property_carousel", data: buildPropertyCarouselData(properties) },
-        { sourceMessageId, sequenceNumber: 1, isFinal: true }
+        { sourceMessageId, sequenceNumber: 1, messageState: "COMPLETED" }
       ),
     ];
   }
@@ -367,7 +366,7 @@ export function getNextBotEvents(
       botMessage(generateMessageId(), "template", {
         templateId: "shortlist_property",
         data: { property },
-      }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
+      }, { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }),
     ];
   }
 
@@ -379,7 +378,7 @@ export function getNextBotEvents(
     return [
       botMessage(generateMessageId(), "text", {
         text: "Cant help you with that, do you need anything else?",
-      }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
+      }, { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }),
     ];
   }
 
@@ -388,7 +387,7 @@ export function getNextBotEvents(
     return [
       botMessage(generateMessageId(), "text", {
         text: "I could only match 1 out of 2 areas you mentioned?",
-      }, { sourceMessageId, sequenceNumber: 0, isFinal: false }),
+      }, { sourceMessageId, sequenceNumber: 0, messageState: "IN_PROGRESS" }),
       botMessage(
         generateMessageId(),
         "template",
@@ -412,7 +411,7 @@ export function getNextBotEvents(
             ],
           },
         },
-        { sourceMessageId, sequenceNumber: 1, isFinal: true }
+        { sourceMessageId, sequenceNumber: 1, messageState: "COMPLETED" }
       ),
     ];
   }
@@ -438,7 +437,7 @@ export function getNextBotEvents(
             ],
           },
         },
-        { sourceMessageId, sequenceNumber: 0, isFinal: true }
+        { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }
       ),
     ];
   }
@@ -463,7 +462,7 @@ export function getNextBotEvents(
             ],
           },
         },
-        { sourceMessageId, sequenceNumber: 1, isFinal: true }
+        { sourceMessageId, sequenceNumber: 1, messageState: "COMPLETED" }
       ),
     ];
   }
@@ -471,19 +470,19 @@ export function getNextBotEvents(
   // ————— Sector 21 only —————
   if (matchText(text, "locality info", "locality detail?", "more about locality")) {
     return [
-      botMessage(generateMessageId(), "markdown", { text: mdLocDta }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
+      botMessage(generateMessageId(), "markdown", { text: mdLocDta }, { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }),
     ];
   }
 
   // ————— Contract §4.17 → §4.18: "buy" or "rent" → locality_info —————
   if (matchText(text, "buy") && text.length <= 5) {
     return [
-      botMessage(generateMessageId(), "markdown", { text: mdLocDta }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
+      botMessage(generateMessageId(), "markdown", { text: mdLocDta }, { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }),
     ];
   }
   if (matchText(text, "rent") && text.length <= 5) {
     return [
-      botMessage(generateMessageId(), "markdown", { text: mdLocDta }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
+      botMessage(generateMessageId(), "markdown", { text: mdLocDta }, { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }),
     ];
   }
 
@@ -532,7 +531,7 @@ export function getNextBotEvents(
       pt.footerText ?? "",
     ].filter(Boolean).join("\n");
     return [
-      botMessage(generateMessageId(), "markdown", { text: md }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
+      botMessage(generateMessageId(), "markdown", { text: md }, { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }),
     ];
   }
 
@@ -577,7 +576,7 @@ export function getNextBotEvents(
       r.footerText ?? "",
     ].filter(Boolean).join("\n");
     return [
-      botMessage(generateMessageId(), "markdown", { text: md }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
+      botMessage(generateMessageId(), "markdown", { text: md }, { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }),
     ];
   }
 
@@ -633,7 +632,7 @@ export function getNextBotEvents(
       t.ctaText ?? "",
     ].filter(Boolean).join("\n");
     return [
-      botMessage(generateMessageId(), "markdown", { text: md }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
+      botMessage(generateMessageId(), "markdown", { text: md }, { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }),
     ];
   }
 
@@ -647,7 +646,7 @@ export function getNextBotEvents(
         data: {
           property: p,
         },
-      }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
+      }, { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }),
     ];
   }
 
@@ -658,7 +657,7 @@ export function getNextBotEvents(
       botMessage(generateMessageId(), "template", {
         templateId: "share_location",
         data: {},
-      }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
+      }, { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }),
     ];
   }
 
@@ -666,6 +665,6 @@ export function getNextBotEvents(
   return [
     botMessage(generateMessageId(), "text", {
       text: "I can help you find properties! Try asking me to 'show me properties' or ask about localities.",
-    }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
+    }, { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }),
   ];
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ChatEvent } from "@/lib/contract-types";
+import type { ChatEventFromUser, ChatEventToUser } from "@/lib/contract-types";
 import { RichText } from "./RichText";
 import { PropertyCarousel, getClipboardTextForPropertyCarousel } from "./templates/PropertyCarousel";
 import { LoginScreen } from "./templates/LoginScreen";
@@ -16,8 +16,8 @@ import { ContactSeller } from "./templates/ContactSeller";
 import { FeedbackRow } from "./FeedbackRow";
 
 interface ChatMessageProps {
-  event: ChatEvent & { messageId?: string };
-  onUserAction: (event: ChatEvent) => void;
+  event: ChatEventToUser & { messageId?: string };
+  onUserAction: (event: ChatEventFromUser) => void;
   onCallNow?: () => void;
   actionsDisabled?: boolean;
   /** When false, transient templates (share_location, shortlist_property, contact_seller, nested_qna) are not rendered. */
@@ -117,7 +117,7 @@ export function ChatMessage({
   }
 
   // FeedbackRow is only eligible for bot/system messages.
-  const showFeedbackBase = isSystemOrBot && event.isFinal === true;
+  const showFeedbackBase = isSystemOrBot && event.messageState === "COMPLETED";
 
   // Bot text
   if (messageType === "text" && content.text) {
@@ -194,7 +194,7 @@ export function ChatMessage({
                     },
                     derivedLabel,
                   },
-                } as ChatEvent)
+                } as unknown as ChatEventFromUser)
               }
               disabled={actionsDisabled}
             />
@@ -216,7 +216,7 @@ export function ChatMessage({
                     data: { action, replyToMessageId: event.messageId ?? "", locality },
                     derivedLabel,
                   },
-                } as ChatEvent)
+                } as unknown as ChatEventFromUser)
               }
               disabled={actionsDisabled}
             />

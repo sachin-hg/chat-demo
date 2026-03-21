@@ -1,11 +1,11 @@
 "use client";
 
-import type { ChatEvent } from "@/lib/contract-types";
+import type { ChatEventFromUser } from "@/lib/contract-types";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useEffect, useRef } from "react";
 
-function emitLoginFailed(onUserAction: (event: ChatEvent) => void) {
+function emitLoginFailed(onUserAction: (event: ChatEventFromUser) => void) {
   onUserAction({
     sender: { type: "system" },
     messageType: "user_action",
@@ -15,7 +15,7 @@ function emitLoginFailed(onUserAction: (event: ChatEvent) => void) {
       data: { action: "location_denied" },
       derivedLabel: "Login Failed. Can't proceed without logging in!",
     },
-  } as ChatEvent);
+  } as unknown as ChatEventFromUser);
 }
 
 type PropertyMeta = {
@@ -26,7 +26,7 @@ type PropertyMeta = {
 interface Props {
   data: Record<string, unknown>;
   messageId: string;
-  onUserAction: (event: ChatEvent) => void;
+  onUserAction: (event: ChatEventFromUser) => void;
   disabled?: boolean;
 }
 
@@ -82,7 +82,7 @@ export function ShortlistProperty({ data, messageId, onUserAction, disabled = fa
           },
           derivedLabel: "You've shortlisted this property. check it out in User Profile -> Saved properties",
         },
-      } as ChatEvent);
+      } as unknown as ChatEventFromUser);
     })();
   }, [auth, disabled, messageId, onUserAction, propertyId, toast, type]);
 

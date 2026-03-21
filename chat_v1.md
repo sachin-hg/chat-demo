@@ -37,6 +37,9 @@ REQUEST_CREATED
       v
 CANCELLED_BY_USER
 (soft delete user event)
+          |
+          v
+ (cancel signal to ML)
 ```
 
 ---
@@ -196,7 +199,7 @@ JSON only:
 ### 4.5 `POST /chats/cancel`
 
 ```json
-{ "messageId": "msg_301" }
+{ "messageId": "msg_301", "conversationId": "conv_1" }
 ```
 
 - FE invokes cancel using the active user `messageId`.
@@ -232,7 +235,7 @@ data: {"reason":"response_complete"}
 
 - **Awaiting indicator**: FE shows inline awaiting status only when:
   - outbound event has `responseRequired === true`, and
-  - final bot response (`isFinal === true`) has not yet been received.
+  - terminal bot response (`messageState` is not yet `COMPLETED`/`ERRORED_AT_ML`) has not yet been received.
 - **Timeout**: FE maintains a local reply timeout safeguard (current app value: `25s`); after timeout UI is shown, FE relies on polling (`get-history` with `messages_after`) until it receives the response for that message.
 - **Input/CTA behavior**:
   - while `sending`: composer submit disabled
@@ -282,9 +285,8 @@ data: {"reason":"response_complete"}
 {
   "sourceMessageId": "msg_u_456",
   "messageState": "COMPLETED",
-  "status": "success",
-  "event": { "...": "Bot ChatEvent" },
-  "context": {
+  "event": { "...": "ChatEventFromML" },
+  "summarisedChatContext": {
     "service": "buy",
     "category": "residential",
     "city": "526acdc6c33455e9e4e9",
@@ -329,7 +331,10 @@ BE persistence semantics for ML outputs:
 ```json
 {
   "sourceMessageId": "msg_u_456",
-  "status": "error",
+  "messageState": "ERRORED_AT_ML",
+  "event": {
+    "...": "ChatEventFromML"
+  },
   "error": {
     "code": "500",
     "message": "Cannot process request"
@@ -343,9 +348,14 @@ BE persistence semantics for ML outputs:
 
 ```json
 {
-  "type": "cancel_request",
-  "messageId": "msg_u_456",
-  "reason": "TIMED_OUT_BY_BE"
+  "sender": {
+    "type": "system",
+    "userId": "usr_123",
+    "gaId": "GA1.2.12345.67890"
+  },
+  "conversationId": "conv_1",
+  "messageIdToCancel": "msg_u_456",
+  "cancelReason": "TIMED_OUT_BY_BE"
 }
 ```
 
@@ -379,7 +389,7 @@ The stream uses the following **event** values and comment lines:
 - **`connection_close`**: Sent by the BE once, immediately before closing the stream when:
   - inactivity `>= 15s`, or
   - `responseRequired === false`, or
-  - final bot response received (`isFinal === true`).
+  - terminal bot response received (`messageState: COMPLETED | ERRORED_AT_ML`).
 
 **Comments** (lines starting with `:`) do not set an `event` type and are not delivered to `EventSource` message listeners; they are used for connection liveness and keepalive only.
 
@@ -391,7 +401,7 @@ The stream uses the following **event** values and comment lines:
 - Close SSE when any of:
   - inactivity `>= 15s`
   - `responseRequired === false`
-  - final bot response emitted (`isFinal === true`)
+  - terminal bot response emitted (`messageState: COMPLETED | ERRORED_AT_ML`)
 
 ### FE
 - Treat each `send-message-streamed` stream as request-scoped and terminal on `connection_close`.
@@ -412,36 +422,20 @@ updated_at TIMESTAMP
 
 ---
 
-### 8.2 `chat_events` (Immutable)
+### 8.2 `chat_messages` (Immutable)
 
 ```sql
-event_id VARCHAR PK
+message_id VARCHAR PK
 conversation_id VARCHAR
 sender_type ENUM('user','bot','system')
-event_type ENUM('message','info')
 message_type VARCHAR
-payload JSONB
-source ENUM('FE','ML','SYSTEM')
+content JSONB
+source_message_id VARCHAR
+message_state VARCHAR
+summarised_chat_context JSONB
+response_required BOOLEAN
+sequence_number INT
 visibility ENUM('active','soft_deleted')
-created_at TIMESTAMP
-```
-
----
-
-### 8.3 `chat_requests` (Mutable)
-
-```sql
-request_id VARCHAR PK
-conversation_id VARCHAR
-user_event_id VARCHAR
-state ENUM(
-  'PENDING',
-  'COMPLETED',
-  'ERRORED_AT_ML',
-  'TIMED_OUT_BY_BE',
-  'CANCELLED_BY_USER'
-)
-retry_of_request_id VARCHAR
 created_at TIMESTAMP
 updated_at TIMESTAMP
 ```
@@ -450,14 +444,13 @@ updated_at TIMESTAMP
 
 ## 9. System Invariants (Non-Negotiable)
 
-1. One user message → one request
-2. Only PENDING requests accept ML output
-3. Event log is append-only
-4. Request table is mutable
-5. FE never talks to ML
-6. ML never talks to FE
-7. BE is the single source of truth
-8. Late ML responses are discarded and logged
+1. One user message → one request lifecycle
+2. Only PENDING/IN_PROGRESS source messages accept ML output
+3. Message log is append-only
+4. FE never talks to ML
+5. ML never talks to FE
+6. BE is the single source of truth
+7. Late ML responses are discarded and logged
 
 ---
 
@@ -478,7 +471,7 @@ sequenceDiagram
 
     ML->>BE: success response
     BE->>BE: create bot event, mark request COMPLETED
-    BE-->>FE: SSE chat_event (repeat until isFinal=true)
+    BE-->>FE: SSE chat_event (repeat until terminal messageState)
     BE-->>FE: SSE connection_close (response_complete)
 ```
 ---
@@ -621,7 +614,7 @@ This section records how the **chat-demo** implementation diverges from or exten
 - **Message origin**: `system` and `user` messages are generated by the **client app**; `bot` messages are generated by **ML** and relayed via BE.  
   **Rendering rule:** `system` and `bot` messages are rendered as bot-side messages, while only `sender.type = user` is rendered in user bubbles.
 - **Message IDs**: `messageId` is generated by **BE** (not FE/ML) for all persisted messages. Every message delivered to FE must include `messageId`.
-- **Every bot message MUST have `messageId`, `sourceMessageId`, `sequenceNumber`, and `isFinal`**
+- **Every bot message MUST have `messageId`, `sourceMessageId`, `sequenceNumber`, and `messageState`**
 - **`sourceMessageId`** ties all bot response messages back to the user message that triggered them
 - In FE-facing events, `sourceMessageId` is optional and generally not required for rendering logic.
 - **`user_action` visibility**: hidden by default — only rendered when `visibility === "shown"` and `derivedLabel` is set
@@ -655,10 +648,6 @@ This section records how the **chat-demo** implementation diverges from or exten
       "type": "integer",
       "minimum": 0,
       "description": "0-based position within the response sequence for a single user turn. Required when sender.type = bot."
-    },
-    "isFinal": {
-      "type": "boolean",
-      "description": "true if this is the last message in the response sequence for the current user turn."
     },
     "responseRequired": {
       "type": "boolean",
@@ -853,11 +842,11 @@ data: {"messageId":"msg_user_001","messageState":"PENDING"}
 
 id: msg_bot_010
 event: chat_event
-data: {"sender":{"type":"bot"},"messageId":"msg_b1","sourceMessageId":"msg_u1","sequenceNumber":0,"isFinal":false,"messageType":"text","content":{"text":"Here are 2bhk properties in sector 32 gurgaon"}}
+data: {"sender":{"type":"bot"},"messageId":"msg_b1","sourceMessageId":"msg_u1","sequenceNumber":0,"messageState":"IN_PROGRESS","messageType":"text","content":{"text":"Here are 2bhk properties in sector 32 gurgaon"}}
 
 id: msg_bot_011
 event: chat_event
-data: {"sender":{"type":"bot"},"messageId":"msg_b2","sourceMessageId":"msg_u1","sequenceNumber":1,"isFinal":true,"messageType":"template","content":{"templateId":"property_carousel","data":{"properties":[{"id":"p1","type":"project","title":"2, 3 BHK Apartments","name":"Godrej Air","short_address":[{"display_name":"Sector 85"},{"display_name":"Gurgaon"}],"is_rera_verified":true,"inventory_canonical_url":"https://example.com/property/p1","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":["Ready to move"],"formatted_min_price":"3 Cr","formatted_max_price":"3.5 Cr","unit_of_area":"sq.ft.","display_area_type":"Built up area","min_selected_area_in_unit":2500,"max_selected_area_in_unit":4750,"inventory_configs":[]},{"id":"p2","type":"rent","title":"3 BHK flat","short_address":[{"display_name":"Sector 33"},{"display_name":"Sohna"},{"display_name":"Gurgaon"}],"region_entities":[{"name":"M3M Solitude Ralph Estate"}],"is_rera_verified":false,"is_verified":true,"inventory_canonical_url":"https://example.com/property/p2","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":[],"formatted_price":"30,000","unit_of_area":"sq.ft.","display_area_type":"Built up area","inventory_configs":[{"furnish_type_id":2,"area_value_in_unit":4750}]},{"id":"p4","type":"rent","title":"2 BHK independent floor","short_address":[{"display_name":"Sector 23"},{"display_name":"Sohna"},{"display_name":"Gurgaon"}],"is_rera_verified":true,"is_verified":false,"inventory_canonical_url":"https://example.com/property/p4","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":[],"formatted_price":"12,000","unit_of_area":"sq.ft.","display_area_type":"Built up area","inventory_configs":[{"furnish_type_id":3,"area_value_in_unit":750}]}]}}}
+data: {"sender":{"type":"bot"},"messageId":"msg_b2","sourceMessageId":"msg_u1","sequenceNumber":1,"messageState":"COMPLETED","messageType":"template","content":{"templateId":"property_carousel","data":{"properties":[{"id":"p1","type":"project","title":"2, 3 BHK Apartments","name":"Godrej Air","short_address":[{"display_name":"Sector 85"},{"display_name":"Gurgaon"}],"is_rera_verified":true,"inventory_canonical_url":"https://example.com/property/p1","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":["Ready to move"],"formatted_min_price":"3 Cr","formatted_max_price":"3.5 Cr","unit_of_area":"sq.ft.","display_area_type":"Built up area","min_selected_area_in_unit":2500,"max_selected_area_in_unit":4750,"inventory_configs":[]},{"id":"p2","type":"rent","title":"3 BHK flat","short_address":[{"display_name":"Sector 33"},{"display_name":"Sohna"},{"display_name":"Gurgaon"}],"region_entities":[{"name":"M3M Solitude Ralph Estate"}],"is_rera_verified":false,"is_verified":true,"inventory_canonical_url":"https://example.com/property/p2","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":[],"formatted_price":"30,000","unit_of_area":"sq.ft.","display_area_type":"Built up area","inventory_configs":[{"furnish_type_id":2,"area_value_in_unit":4750}]},{"id":"p4","type":"rent","title":"2 BHK independent floor","short_address":[{"display_name":"Sector 23"},{"display_name":"Sohna"},{"display_name":"Gurgaon"}],"is_rera_verified":true,"is_verified":false,"inventory_canonical_url":"https://example.com/property/p4","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":[],"formatted_price":"12,000","unit_of_area":"sq.ft.","display_area_type":"Built up area","inventory_configs":[{"furnish_type_id":3,"area_value_in_unit":750}]}]}}}
 
 event: connection_close
 data: {"reason":"response_complete"}
@@ -886,7 +875,7 @@ data: {"reason":"response_complete"}
   "messageId": "msg_b_001",
   "sourceMessageId": "msg_u_001",
   "sequenceNumber": 0,
-  "isFinal": true,
+  "messageState": "COMPLETED",
   "messageType": "text",
   "content": { "text": "Hey! I'm still learning. Wont be able to help you with this. Anything else?" }
 }
@@ -909,7 +898,7 @@ data: {"reason":"response_complete"}
   "messageId": "msg_b_010",
   "sourceMessageId": "msg_u_010",
   "sequenceNumber": 0,
-  "isFinal": false,
+  "messageState": "IN_PROGRESS",
   "messageType": "text",
   "content": { "text": "Here are 2bhk properties in sector 32 gurgaon" }
 }
@@ -920,7 +909,7 @@ data: {"reason":"response_complete"}
   "messageId": "msg_b_011",
   "sourceMessageId": "msg_u_010",
   "sequenceNumber": 1,
-  "isFinal": true,
+  "messageState": "COMPLETED",
   "messageType": "template",
   "content": {
       "templateId": "property_carousel",
@@ -1071,7 +1060,7 @@ data: {"reason":"response_complete"}
   "messageId": "msg_b_019",
   "sourceMessageId": "msg_u_018",
   "sequenceNumber": 1,
-  "isFinal": true,
+  "messageState": "COMPLETED",
   "messageType": "markdown",
   "content": { "text": "# 3 BHK Apartment\nBy Godrej Properties Ltd.\n📍 Godrej Nature Plus, Sector 85, Gurgaon\n\n---\n\n**Property Overview**\nHere is an excellent 3 BHK Apartment available for buy in Gurgaon. Surrounded by natural greens and equipped with numerous amenities, this spacious home offers a comfortable lifestyle with good connectivity to major landmarks.\n\n---\n\n**Configuration**\nType: 3 BHK Apartment\nBuilt-up Area: 1,820 sq.ft.\nBedrooms: 3 | Bathrooms: 3 | Balconies: 3\nFloor: 17\nFurnishing: Semi-Furnished\nPrice: ₹2.8 Cr\nParking: 2 parking space(s)\n\n---\n\n**Amenities**\nParking, Regular Water Supply, Gym, Swimming Pool, Kids Area, Sports Facility, Lift, Power Backup, Intercom, CCTV\n\n---\n\n**Property Manager**\nGodrej Properties Ltd is the real estate segment of the 120-year Godrej Group, known for excellent craftsmanship in contemporary housing projects." }
 }
@@ -1092,7 +1081,7 @@ data: {"reason":"response_complete"}
   "messageId": "msg_b_020",
   "sourceMessageId": "msg_u_020",
   "sequenceNumber": 0,
-  "isFinal": true,
+  "messageState": "COMPLETED",
   "messageType": "template",
   "content": {
       "templateId": "shortlist_property",
@@ -1125,7 +1114,7 @@ data: {"reason":"response_complete"}
   "messageId": "msg_b_021",
   "sourceMessageId": "msg_u_021",
   "sequenceNumber": 0,
-  "isFinal": true,
+  "messageState": "COMPLETED",
   "messageType": "template",
   "content": {
       "templateId": "contact_seller",
@@ -1169,7 +1158,7 @@ data: {"reason":"response_complete"}
   "messageId": "msg_b_025",
   "sourceMessageId": "msg_u_025",
   "sequenceNumber": 0,
-  "isFinal": true,
+  "messageState": "COMPLETED",
   "messageType": "template",
   "content": {
       "templateId": "locality_carousel",
@@ -1215,7 +1204,7 @@ data: {"reason":"response_complete"}
   "messageId": "msg_b_030",
   "sourceMessageId": "msg_u_030",
   "sequenceNumber": 1,
-  "isFinal": true,
+  "messageState": "COMPLETED",
   "messageType": "template",
   "content": {
       "templateId": "nested_qna",
@@ -1273,7 +1262,7 @@ data: {"reason":"response_complete"}
   "messageId": "msg_b_031",
   "sourceMessageId": "msg_u_030",
   "sequenceNumber": 0,
-  "isFinal": false,
+  "messageState": "IN_PROGRESS",
   "messageType": "markdown",
   "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" }
 }
@@ -1284,7 +1273,7 @@ data: {"reason":"response_complete"}
   "messageId": "msg_b_032",
   "sourceMessageId": "msg_u_030",
   "sequenceNumber": 1,
-  "isFinal": true,
+  "messageState": "COMPLETED",
   "messageType": "markdown",
   "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" }
 }
@@ -1305,7 +1294,7 @@ data: {"reason":"response_complete"}
   "messageId": "msg_b_033",
   "sourceMessageId": "msg_u_033",
   "sequenceNumber": 0,
-  "isFinal": true,
+  "messageState": "COMPLETED",
   "messageType": "template",
   "content": {
       "templateId": "locality_carousel",
@@ -1341,7 +1330,7 @@ data: {"reason":"response_complete"}
   "messageId": "msg_b_034",
   "sourceMessageId": "msg_u_034",
   "sequenceNumber": 0,
-  "isFinal": true,
+  "messageState": "COMPLETED",
   "messageType": "markdown",
   "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" }
 }
@@ -1360,7 +1349,7 @@ data: {"reason":"response_complete"}
   "messageId": "msg_b_035",
   "sourceMessageId": "msg_u_035",
   "sequenceNumber": 0,
-  "isFinal": true,
+  "messageState": "COMPLETED",
   "messageType": "markdown",
   "content": { "text": "# Price Trends for Sector 86\n\n---\n\n## Average Price\n\n₹12,220 / sq ft\n\n## 1-Year Growth\n\n11.43%\n\n## Available Properties\n\n188\n\n---\n\n## Price Range\n\n- Minimum – ₹5,666 / sq ft\n- Maximum – ₹29,841 / sq ft\n\n---\n\n## 2025 Quarterly Trends\n\n- Q1 – ₹10,691 / sq ft\n- Q2 – ₹11,442 / sq ft\n- Q3 – ₹11,242 / sq ft\n- Q4 – ₹12,220 / sq ft\n\n---\n\n## Latest Update\n\nQ1 2026 – ₹11,850 / sq ft\n\n---\n\nThis data helps you make informed property decisions." }
 }
@@ -1379,7 +1368,7 @@ data: {"reason":"response_complete"}
   "messageId": "msg_b_036",
   "sourceMessageId": "msg_u_036",
   "sequenceNumber": 0,
-  "isFinal": true,
+  "messageState": "COMPLETED",
   "messageType": "markdown",
   "content": { "text": "# Locality Ratings & Reviews — Sector 46, Gurgaon\n\n---\n\n## Overall Rating\n⭐ **4.09 / 5.0**\nBased on 11 reviews\n\n---\n\n## Rating Distribution\n- 4-star – 9 reviews (82%)\n- 3-star – 2 reviews (18%)\n\n---\n\n## Category Breakdown\n\nSchools & Hospitals – 4.30 / 5.0\nMarkets & Malls – 4.10 / 5.0\nSafety & Security – 4.00 / 5.0\nPublic Transport – 3.80 / 5.0\nTraffic & Roads – 3.70 / 5.0\nCleanliness – 4.20 / 5.0\n\n---\n\n## Key Insights\n\n### Top strengths\n- Good schools and healthcare nearby\n- Strong neighborhood safety perception\n- Everyday shopping options are convenient\n\n### Areas to consider\n\n- Peak-hour traffic congestion on internal roads\n- Public transport access can improve in some pockets\n\n---\n\nRatings are based on user feedback and may change as new reviews are added." }
 }
@@ -1398,7 +1387,7 @@ data: {"reason":"response_complete"}
   "messageId": "msg_b_037",
   "sourceMessageId": "msg_u_037",
   "sequenceNumber": 0,
-  "isFinal": true,
+  "messageState": "COMPLETED",
   "messageType": "markdown",
   "content": { "text": "# Transaction Data Analysis\n\n---\n\n## Project Details\n\nName: Godrej Gold County\nLocation: Tumkur Road, Bengaluru\nTotal Transactions: 395\n\n---\n\n## Transaction Breakdown\n\nSales: 272 | Mortgages: 123\n\n---\n\n## Area Statistics\n\nAverage Area: 2,550.0 sq ft\nSize Range: 1,200.0 – 3,800.0 sq ft\n\n---\n\n## Recent Activity (Last 6 Months)\n\nActive Transactions: 28 | Recent Mortgages: 11\n\n---\n\n## Latest Transactions\n\n- Unit A-1203 – 3 BHK | 2,420 sq ft | ₹2.35 Cr | 2026-01-12\n- Unit B-904 – 4 BHK | 3,180 sq ft | ₹3.12 Cr | 2025-12-28\n- Unit C-701 – 3 BHK | 2,150 sq ft | ₹2.08 Cr | 2025-12-14\n\n---\n\n## Market Insights\n\nLeased Properties: 54 (13.67%)\nMarket Activity: Stable with moderate upward demand\n\n---\nData based on registered transactions and may have slight reporting delay.\nWould you like a unit-type wise transaction split for this project?" }
 }
@@ -1881,7 +1870,7 @@ data: {"reason":"response_complete"}
   "messageId": "msg_b_050",
   "sourceMessageId": "msg_u_050",
   "sequenceNumber": 0,
-  "isFinal": true,
+  "messageState": "COMPLETED",
   "messageType": "template",
   "content": {
       "templateId": "download_brochure",
@@ -1956,7 +1945,7 @@ When a guest chat (`_ga`) becomes authenticated mid-session:
 ### 4.5 FE runtime behavior notes
 
 - FE starts awaiting UI only when `responseRequired: true` and no final bot event has been received.
-- FE stops loader/awaiting and marks response complete on first bot event with `isFinal: true`.
+- FE stops loader/awaiting and marks response complete on first terminal bot event (`messageState: COMPLETED | ERRORED_AT_ML`).
 - FE treats `connection_close` as stream completion for the turn.
 - FE keeps a local timeout safeguard (current app value: 25s). On timeout, FE shows Retry/Dismiss and then relies on polling (`get-history` with `messages_after`) until it receives the response for that message.
 - Input/CTA behavior:
@@ -2123,7 +2112,7 @@ This section documents current behavior in this repository where it differs from
 
 - Eligible base condition:
   - `sender.type` is `bot` or `system`, and
-  - `isFinal === true`, and
+  - `messageState === "COMPLETED"` or `messageState === "ERRORED_AT_ML"`, and
   - message is the latest visible message (`isLastMessage`).
 - Text/markdown:
   - rendered for final bot/system `text` and `markdown` messages.

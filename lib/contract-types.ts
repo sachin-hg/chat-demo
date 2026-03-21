@@ -63,9 +63,8 @@ export interface ChatEventToML {
 }
 
 export interface CancelEventToML {
-  // user identifiers
-  loginAuthToken?: string;
-  gaId?: string;
+  
+  sender: SenderForML;
 
   conversationId: string;
 
@@ -82,12 +81,12 @@ export interface ChatEventFromML {
   sourceMessageId: string;
   messageType: MessageType;
   messageState: "IN_PROGRESS" | "COMPLETED" | "ERRORED_AT_ML";
+  error?: { code: string; message: string };
   /** Optional ML response context snapshot for downstream consumers. */
   summarisedChatContext?: Record<string, unknown>;
   visibility?: "shown" | "hidden";
   
   sequenceNumber: number;
-  isFinal: boolean;
   
   content: ChatPayloadContent;
 }
@@ -107,7 +106,6 @@ export interface ChatEventToUser {
   visibility?: "shown" | "hidden"; // mandatory where sender === user && messageType === user_action
   
   sequenceNumber?: number; // mandatory where sender === bot
-  isFinal?: boolean;  // mandatory where sender === bot
   
   sender: Sender;
   content: ChatPayloadContent;

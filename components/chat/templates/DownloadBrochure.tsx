@@ -2,14 +2,14 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import type { ChatEvent } from "@/lib/contract-types";
+import type { ChatEventFromUser } from "@/lib/contract-types";
 import { useAuth } from "@/components/auth/AuthProvider";
 import type { PropertyCarouselCard } from "@/lib/mock/data";
 
 interface Props {
   data: Record<string, unknown>;
   messageId: string;
-  onUserAction: (event: ChatEvent) => void;
+  onUserAction: (event: ChatEventFromUser) => void;
   disabled?: boolean;
 }
 
@@ -79,7 +79,7 @@ export function DownloadBrochure({ data, messageId, onUserAction, disabled = fal
                   data: { action: "location_denied" },
                   derivedLabel: "Login Failed. Can't proceed without logging in!",
                 },
-              } as ChatEvent);
+              } as unknown as ChatEventFromUser);
               return;
             }
 
@@ -92,7 +92,7 @@ export function DownloadBrochure({ data, messageId, onUserAction, disabled = fal
               content: {
                 data: { action: "brochure_downloaded", replyToMessageId: messageId, property: propertyMeta },
               },
-            } as ChatEvent);
+            } as unknown as ChatEventFromUser);
           }}
           className="w-full h-11 rounded-xl bg-[#5E23DC] text-white text-sm font-medium brochure-card__cta hover:bg-[#4a1bb5] transition-colors disabled:opacity-40"
         >
