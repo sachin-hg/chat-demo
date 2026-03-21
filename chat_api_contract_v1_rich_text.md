@@ -415,19 +415,20 @@ data: {"reason":"response_complete"}
             "inventory_configs": [{ "furnish_type_id": 2, "area_value_in_unit": 4750 }]
           },
           {
-            "id": "p4",
-            "type": "rent",
-            "title": "2 BHK independent floor",
-            "short_address": [{ "display_name": "Sector 23" }, { "display_name": "Sohna" }, { "display_name": "Gurgaon" }],
-            "is_rera_verified": true,
-            "is_verified": false,
-            "inventory_canonical_url": "https://example.com/property/p4",
-            "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
-            "property_tags": [],
-            "formatted_price": "12,000",
+            "id": "p3",
+            "type": "resale",
+            "title": "3 BHK apartment",
+            "short_address": [{ "display_name": "Sector 33" }, { "display_name": "Sohna" }, { "display_name": "Gurgaon" }],
+            "region_entities": [{ "name": "M3M Solitude Ralph Estate" }],
+            "is_rera_verified": false,
+            "is_verified": true,
+            "inventory_canonical_url": "https://example.com/property/p3",
+            "thumb_image_url": "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=600",
+            "property_tags": ["Possession by March, 2026"],
+            "formatted_min_price": "3 Cr",
             "unit_of_area": "sq.ft.",
             "display_area_type": "Built up area",
-            "inventory_configs": [{ "furnish_type_id": 3, "area_value_in_unit": 750 }]
+            "inventory_configs": [{ "furnish_type_id": null, "area_value_in_unit": 4750 }]
           }
         ]
       }
