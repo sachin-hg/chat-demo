@@ -188,6 +188,14 @@ export function cancelRequest(requestId: string) {
   }
 }
 
+export function cancelRequestByUserEventId(userEventId: string) {
+  const r = requests.find((x) => x.userEventId === userEventId);
+  if (r && r.state === "PENDING") {
+    r.state = "CANCELLED_BY_USER";
+    r.updatedAt = now();
+  }
+}
+
 export function isPending(requestId: string): boolean {
   const r = requests.find((x) => x.requestId === requestId);
   return r ? r.state === "PENDING" : false;
@@ -195,6 +203,10 @@ export function isPending(requestId: string): boolean {
 
 export function getRequestState(requestId: string): RequestState | undefined {
   return requests.find((x) => x.requestId === requestId)?.state;
+}
+
+export function getRequestStateByUserEventId(userEventId: string): RequestState | undefined {
+  return requests.find((x) => x.userEventId === userEventId)?.state;
 }
 
 export function hasPendingRequest(conversationId: string): boolean {
@@ -266,9 +278,6 @@ function withRequestState(event: StoredEvent): StoredEvent {
   if (!resolved) return event;
   return {
     ...event,
-    payload: {
-      ...event.payload,
-      requestState: resolved,
-    },
+    requestState: resolved,
   };
 }

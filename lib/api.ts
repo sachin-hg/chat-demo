@@ -136,8 +136,8 @@ export async function sendMessageStream(
   }
 }
 
-export async function cancelRequest(requestId: string): Promise<{ ok: boolean }> {
-  return post("/api/chats/cancel", { requestId });
+export async function cancelRequest(eventId: string): Promise<{ ok: boolean }> {
+  return post("/api/chats/cancel", { eventId });
 }
 
 export function getStreamUrl(conversationId: string): string {

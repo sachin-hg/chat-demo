@@ -78,18 +78,6 @@ It is intended to be committed directly into a repository and used as the single
           "type": "boolean",
           "description": "true if this is the last message in the response sequence for the current user turn. FE/BE close the per-request stream when this is received; FE also stops loader/awaiting UI when this is received. Required when sender.type = bot."
         },
-        "requestState": {
-          "type": "string",
-          "enum": [
-            "PENDING",
-            "COMPLETED",
-            "ERRORED_AT_ML",
-            "TIMED_OUT_BY_BE",
-            "CANCELLED_BY_USER"
-          ],
-          "description": "BE-resolved request lifecycle state for this message/turn."
-        },
-
         "responseRequired": {
           "type": "boolean",
           "description": "FE-controlled. Applicable to user text and user_action events. true = FE expects ML response and starts loader/awaiting UI. false/absent = fire-and-forget, no ML response expected."
@@ -160,6 +148,18 @@ It is intended to be committed directly into a repository and used as the single
       }
     },
 
+    "requestState": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "COMPLETED",
+        "ERRORED_AT_ML",
+        "TIMED_OUT_BY_BE",
+        "CANCELLED_BY_USER"
+      ],
+      "description": "BE-resolved request lifecycle state for this message/turn."
+    },
+
     "metadata": { "type": "object" }
   },
 
@@ -222,8 +222,8 @@ It is intended to be committed directly into a repository and used as the single
 | Condition | FE Behavior |
 |---------|-------------|
 | messageType = context | Do not render |
-| payload.requestState = CANCELLED_BY_USER | Do not render |
-| payload.requestState = ERRORED_AT_ML or TIMED_OUT_BY_BE | Render generic error text (“Something went wrong. Please try again.”) |
+| requestState = CANCELLED_BY_USER | Do not render |
+| requestState = ERRORED_AT_ML or TIMED_OUT_BY_BE | Render generic error text (“Something went wrong. Please try again.”) |
 | messageType = user_action AND visibility != shown | Do not render (hidden by default) |
 | messageType = user_action AND visibility = shown | Render derivedLabel |
 | template supported | Render template |
@@ -294,7 +294,7 @@ It is intended to be committed directly into a repository and used as the single
 
 ```txt
 event: connection_ack
-data: {"eventId":"evt_user_001","requestId":"req_001"}
+data: {"eventId":"evt_user_001","requestState":"PENDING"}
 
 id: evt_bot_010
 event: chat_event
@@ -678,7 +678,7 @@ This section documents current behavior in this repository where it differs from
 - Stream sequence is:
   - `connection_ack` (immediate),
   - `chat_event` (0..N),
-  - `connection_close` (`reason: "response_complete"`).
+  - `connection_close` (`reason` in `response_complete | response_not_required | inactivity_15s`).
 - FE reply timeout is 25s (`replyStatus: timeout`), with Retry and Dismiss.
 
 ### A.2 Rendering behavior

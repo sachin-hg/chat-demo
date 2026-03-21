@@ -61,10 +61,10 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
 - `GET /api/chats/get-history?conversationId=...` with `page` + `page_size`, or `messages_after=evt_xxx`, or `messages_before=evt_xxx` + `page_size`, or `last=N`.
 - `POST /api/chats/send-message` body `{ event: ChatEvent }`
   - If `Accept: text/event-stream`, the response is an SSE stream:
-    - **`event: connection_ack`** — immediate ack: `data: { "eventId": "...", "requestId": "..." }`
+    - **`event: connection_ack`** — immediate ack: `data: { "eventId": "...", "requestState": "PENDING" }`
     - **`event: chat_event`** — bot events streamed as they’re produced: `id: <eventId>`, `data: <JSON ChatEvent>`
-    - **`event: connection_close`** — emitted when the response is complete (`isFinal: true`) or early-closed when no response is expected.
-  - Otherwise returns JSON `{ eventId, requestId }` (legacy / non-streaming clients).
+    - **`event: connection_close`** — emitted when response is complete (`isFinal: true`), response is not required, or stream inactivity reaches 15s.
+  - Otherwise returns JSON `{ eventId, requestState }` (legacy / non-streaming clients).
 
 ## UI Notes
 

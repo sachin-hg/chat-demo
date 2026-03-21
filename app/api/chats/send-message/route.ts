@@ -5,8 +5,8 @@ import {
   completeRequest,
   getAllEvents,
   isPending,
-  cancelRequest,
-  getRequestState,
+  cancelRequestByUserEventId,
+  getRequestStateByUserEventId,
 } from "@/lib/store";
 import { getNextBotEvents } from "@/lib/mock/ml-flow";
 import type { ChatEvent } from "@/lib/contract-types";
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
   });
   const requestRecord = createRequest(stored.eventId!);
   // Expose initial state for the just-created user event.
-  stored.payload.requestState = "PENDING";
+  stored.requestState = "PENDING";
 
   const accept = request.headers.get("accept") ?? "";
   const wantsEventStream = accept.includes("text/event-stream");
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
         appendEvent({
           ...ev,
           conversationId: "conv_1",
-          payload: { ...ev.payload, requestState: state },
+          requestState: state,
         });
       }
       completeRequest(requestRecord.requestId);
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       eventId: stored.eventId,
-      requestId: requestRecord.requestId,
+      requestState: getRequestStateByUserEventId(stored.eventId!) ?? "PENDING",
     });
   }
 
@@ -81,16 +81,21 @@ export async function POST(request: NextRequest) {
   const stream = new ReadableStream({
     start(controller) {
       let closed = false;
+      let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
       const close = () => {
         if (closed) return;
         closed = true;
+        if (inactivityTimer) {
+          clearTimeout(inactivityTimer);
+          inactivityTimer = null;
+        }
         try {
           controller.close();
         } catch (_) {}
       };
 
       const abortHandler = () => {
-        cancelRequest(requestRecord.requestId);
+        cancelRequestByUserEventId(stored.eventId!);
         close();
       };
       request.signal.addEventListener("abort", abortHandler, { once: true });
@@ -101,6 +106,14 @@ export async function POST(request: NextRequest) {
         controller.enqueue(
           encoder.encode(`${idLine}${eventLine}data: ${JSON.stringify(opts.data)}\n\n`)
         );
+        if (inactivityTimer) clearTimeout(inactivityTimer);
+        inactivityTimer = setTimeout(() => {
+          if (!closed) {
+            cancelRequestByUserEventId(stored.eventId!);
+            writeSse({ event: "connection_close", data: { reason: "inactivity_15s" } });
+            close();
+          }
+        }, 15000);
       };
 
       // 1) Ack immediately
@@ -108,13 +121,13 @@ export async function POST(request: NextRequest) {
         event: "connection_ack",
         data: {
           eventId: stored.eventId,
-          requestId: requestRecord.requestId,
-          requestState: getRequestState(requestRecord.requestId) ?? "PENDING",
+          requestState: getRequestStateByUserEventId(stored.eventId!) ?? "PENDING",
         },
       });
 
       if (!shouldExpectResponse) {
         completeRequest(requestRecord.requestId);
+        writeSse({ event: "connection_close", data: { reason: "response_not_required" } });
         close();
         return;
       }
@@ -137,7 +150,7 @@ export async function POST(request: NextRequest) {
           const storedBot = appendEvent({
             ...ev,
             conversationId: "conv_1",
-            payload: { ...ev.payload, requestState: state },
+            requestState: state,
           });
 
           writeSse({ event: "chat_event", id: storedBot.eventId, data: storedBot });

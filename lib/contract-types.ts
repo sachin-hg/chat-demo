@@ -36,8 +36,6 @@ export interface ChatPayload {
   sequenceNumber?: number;
   /** true = last message in response sequence. Required for bot. */
   isFinal?: boolean;
-  /** Request lifecycle state for this turn/message as resolved by BE. */
-  requestState?: RequestState;
   /** Applies to user text (always true) and user_action (conditional). */
   responseRequired?: boolean;
   messageType: MessageType;
@@ -48,6 +46,8 @@ export interface ChatPayload {
 
 export interface ChatEvent {
   eventId?: string;
+  /** Request lifecycle state for this event/turn as resolved by BE. */
+  requestState?: RequestState;
   conversationId?: string;
   loginAuthToken?: string;
   sender: Sender;
@@ -58,9 +58,7 @@ export interface ChatEvent {
 
 export interface SendMessageResponse {
   eventId: string;
-  requestId: string;
-  /** @deprecated No longer used. For text: response is always expected until isFinal. For user_action: response expected when responseRequired === true, until isFinal. */
-  timeoutMs?: number;
+  requestState?: RequestState;
 }
 
 export interface GetHistoryResponse {

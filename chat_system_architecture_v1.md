@@ -158,7 +158,7 @@ If `Accept: text/event-stream`, the BE returns an SSE stream (Phase 1 merged tra
 **SSE (example)**
 ```txt
 event: connection_ack
-data: {"eventId":"evt_301","requestId":"req_901"}
+data: {"eventId":"evt_301","requestState":"PENDING"}
 
 id: evt_401
 event: chat_event
@@ -170,11 +170,11 @@ data: {"reason":"response_complete"}
 
 If `Accept` is not `text/event-stream`, the BE returns JSON:
 ```json
-{ "eventId": "evt_301", "requestId": "req_901" }
+{ "eventId": "evt_301", "requestState": "PENDING" }
 ```
 
 **Message payload enrichment**
-- Each persisted message may include `payload.requestState` with one of:
+- Each persisted message may include top-level `requestState` with one of:
   - `PENDING`
   - `COMPLETED`
   - `ERRORED_AT_ML`
@@ -187,7 +187,7 @@ If `Accept` is not `text/event-stream`, the BE returns JSON:
 ### 4.5 `POST /chats/cancel`
 
 ```json
-{ "requestId": "req_901" }
+{ "eventId": "evt_301" }
 ```
 
 ---
@@ -271,7 +271,7 @@ The stream uses the following **event** values and comment lines:
 | Event / line | When | Format | FE handling |
 |--------------|------|--------|-------------|
 | **`event: chat_event`** | Bot (or visible info) event to display | `id: <eventId>\nevent: chat_event\ndata: <JSON ChatEvent>\n\n` | Parse `data` as `ChatEvent`; append to messages; `id` equals `eventId`. |
-| **`event: connection_close`** | BE closing the stream (lifecycle: idle or max activity) | `event: connection_close\ndata: {"reason":"lifecycle"}\n\n` | Treat connection as closed; set error state; reconnect if awaiting ML or on-demand. |
+| **`event: connection_close`** | BE closing the stream (response complete / no-response / inactivity) | `event: connection_close\ndata: {"reason":"..."}\n\n` | Treat connection as closed for this request stream. |
 | **Comment** (no event) | On open | `: connected\n\n` | Keeps connection alive; client detects stream open. |
 | **Comment** (no event) | Keepalive while pending ML | `: keepalive\n\n` | Not delivered to EventSource listeners; used to refresh activity so BE does not close at 60s. |
 
@@ -281,7 +281,10 @@ The stream uses the following **event** values and comment lines:
 - `data` is a single JSON object: the full `ChatEvent` (including `eventId`, `eventType`, `sender`, `payload`, `createdAt`, etc.).
 
 **Other event values**  
-- **`connection_close`**: Sent by the BE once, immediately before closing the stream when closing due to lifecycle (no activity > 15s and no pending ML, or no activity > 60s). Not sent when the client aborts. FE should treat the connection as closed and update UI (e.g. error state, reconnect as per §7).
+- **`connection_close`**: Sent by the BE once, immediately before closing the stream when:
+  - inactivity `>= 15s`, or
+  - `responseRequired === false`, or
+  - final bot response received (`isFinal === true`).
 
 **Comments** (lines starting with `:`) do not set an `event` type and are not delivered to `EventSource` message listeners; they are used for connection liveness and keepalive only.
 
@@ -290,15 +293,13 @@ The stream uses the following **event** values and comment lines:
 ## 7. Connection Lifecycle Rules
 
 ### BE
-- Close SSE if:
-  - No activity > 15s AND no pending ML
-  - No activity > 60s overall
+- Close SSE when any of:
+  - inactivity `>= 15s`
+  - `responseRequired === false`
+  - final bot response emitted (`isFinal === true`)
 
 ### FE
-- Close SSE if no activity > 60s
-- Reconnect:
-  - Immediately if awaiting ML
-  - On-demand otherwise
+- Treat each `send-message` stream as request-scoped and terminal on `connection_close`.
 
 ---
 
@@ -378,7 +379,7 @@ sequenceDiagram
 
     FE->>BE: POST /chats/send-message (Accept: text/event-stream)
     BE->>BE: persist user event (PENDING)
-    BE-->>FE: SSE connection_ack (eventId, requestId)
+    BE-->>FE: SSE connection_ack (eventId)
     BE->>ML: invoke ML (method call)
 
     ML->>BE: success response
@@ -418,7 +419,7 @@ sequenceDiagram
     FE->>BE: send-message
     BE->>ML: enqueue request
 
-    FE->>BE: cancel(requestId)
+    FE->>BE: cancel(eventId)
     BE->>BE: mark CANCELLED_BY_USER
     BE->>ML: cancel_request
 
@@ -479,7 +480,7 @@ This section records how the **chat-demo** implementation diverges from or exten
 
 ### A.4 Cancel
 
-- **Cancel button**: A **Cancel** button is shown next to **Send** while awaiting a reply. It calls `POST /chats/cancel` with the current `requestId` and then clears the awaiting state so the user can send again.
+- **Cancel button**: A **Cancel** button is shown next to **Send** while awaiting a reply. It calls `POST /chats/cancel` with the current user `eventId` and then clears the awaiting state so the user can send again.
 - **Advisory cancellation, strict BE gate**: cancellation signal to ML is advisory, but BE strictly ignores late updates for cancelled/non-pending requests (`isPending` gate before append/broadcast).
 
 ### A.7 UI behavior for requestState
@@ -487,6 +488,7 @@ This section records how the **chat-demo** implementation diverges from or exten
 - `PENDING`, `COMPLETED`: render as usual.
 - `ERRORED_AT_ML`, `TIMED_OUT_BY_BE`: FE renders generic error text (“Something went wrong. Please try again.”).
 - `CANCELLED_BY_USER`: FE does not render that message.
+- `requestState` is attached at top-level event field (`event.requestState`), not inside payload.
 
 ### A.5 Template and action handling
 

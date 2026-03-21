@@ -62,7 +62,7 @@ export function ChatMessage({
 }: ChatMessageProps) {
   const { sender, payload } = event;
   const { messageType, content } = payload;
-  const requestState = payload.requestState;
+  const requestState = event.requestState;
   const isBot = sender.type === "bot";
   const isSystemOrBot = sender.type === "bot" || sender.type === "system";
   const isUser = sender.type === "user";

@@ -364,7 +364,7 @@ function ChatPageContent() {
   const replyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const awaitingElapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSentEventRef = useRef<ChatEvent | null>(null);
-  const lastRequestIdRef = useRef<string | null>(null);
+  const lastRequestEventIdRef = useRef<string | null>(null);
   const activeSendStreamAbortRef = useRef<AbortController | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement | null>(null);
   const scrollRestoreAfterPrependRef = useRef<{ scrollTop: number; scrollHeight: number } | null>(null);
@@ -550,7 +550,7 @@ function ChatPageContent() {
           {
             onAck: (ack) => {
               ackReceived = true;
-              lastRequestIdRef.current = ack.requestId;
+              lastRequestEventIdRef.current = ack.eventId;
               knownEventIdsRef.current.add(ack.eventId);
               setMessages((prev) =>
                 prev.map((m) => (m.eventId === pendingId ? { ...m, eventId: ack.eventId } : m))
@@ -625,7 +625,7 @@ function ChatPageContent() {
           {
             onAck: (ack) => {
               ackReceived = true;
-              lastRequestIdRef.current = ack.requestId;
+              lastRequestEventIdRef.current = ack.eventId;
               knownEventIdsRef.current.add(ack.eventId);
               setMessages((prev) =>
                 prev.map((m) => (m.eventId === pendingId ? { ...m, eventId: ack.eventId } : m))
@@ -774,10 +774,10 @@ function ChatPageContent() {
   const handleRetry = useCallback(async () => {
     const event = lastSentEventRef.current;
     if (!event || !conversationId || sending) return;
-    const previousRequestId = lastRequestIdRef.current;
-    if (previousRequestId) {
-      cancelRequest(previousRequestId).catch(() => {});
-      lastRequestIdRef.current = null;
+    const previousRequestEventId = lastRequestEventIdRef.current;
+    if (previousRequestEventId) {
+      cancelRequest(previousRequestEventId).catch(() => {});
+      lastRequestEventIdRef.current = null;
     }
     clearReplyWaiting();
     const fullEvent: ChatEvent = { ...event, conversationId };
@@ -793,7 +793,7 @@ function ChatPageContent() {
         fullEvent,
         {
           onAck: (ack) => {
-            lastRequestIdRef.current = ack.requestId;
+            lastRequestEventIdRef.current = ack.eventId;
             knownEventIdsRef.current.add(ack.eventId);
             if (expectsResponse) startAwaitingReply(ack.eventId);
             else setReplyStatus("idle");
@@ -820,14 +820,14 @@ function ChatPageContent() {
 
   const handleCancel = useCallback(async () => {
     if (replyStatus !== "awaiting") return;
-    const requestId = lastRequestIdRef.current;
+    const requestEventId = lastRequestEventIdRef.current;
     activeSendStreamAbortRef.current?.abort();
     activeSendStreamAbortRef.current = null;
-    if (requestId) {
+    if (requestEventId) {
       try {
-        await cancelRequest(requestId);
+        await cancelRequest(requestEventId);
       } catch (_) {}
-      lastRequestIdRef.current = null;
+      lastRequestEventIdRef.current = null;
     }
     clearReplyWaiting();
     setSending(false);
