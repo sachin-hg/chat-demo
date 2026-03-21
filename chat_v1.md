@@ -930,7 +930,7 @@ data: {"reason":"response_complete"}
     "content": {
       "templateId": "property_carousel",
       "data": {
-        // structure should be similar to corresponding venus/casa APIs. this is just sample
+        // this is still under discussion, required to power "view all" button. discuss if this should be replaced with "hasViewMore"
         "property_count": 15,
         "service": "buy",
         "category": "residential",
@@ -959,6 +959,7 @@ data: {"reason":"response_complete"}
           "property_type_id": [1, 2],
           "type": "project"
         },
+        // structure should be similar to corresponding venus/casa APIs. this is just sample
         "properties": [
           {
             "id": "p1",
@@ -1084,7 +1085,7 @@ data: {"reason":"response_complete"}
     "sequenceNumber": 0,
     "isFinal": false,
     "messageType": "markdown",
-    "content": { "text": "# Godrej Air\n📍 Sector 85, Gurgaon\n\nProperty details..." }
+    "content": { "text": "# 3 BHK Apartment\nBy Godrej Properties Ltd.\n📍 Godrej Nature Plus, Sector 85, Gurgaon\n\n---\n\n**Property Overview**\nHere is an excellent 3 BHK Apartment available for buy in Gurgaon. Surrounded by natural greens and equipped with numerous amenities, this spacious home offers a comfortable lifestyle with good connectivity to major landmarks.\n\n---\n\n**Configuration**\nType: 3 BHK Apartment\nBuilt-up Area: 1,820 sq.ft.\nBedrooms: 3 | Bathrooms: 3 | Balconies: 3\nFloor: 17\nFurnishing: Semi-Furnished\nPrice: ₹2.8 Cr\nParking: 2 parking space(s)\n\n---\n\n**Amenities**\nParking, Regular Water Supply, Gym, Swimming Pool, Kids Area, Sports Facility, Lift, Power Backup, Intercom, CCTV\n\n---\n\n**Property Manager**\nGodrej Properties Ltd is the real estate segment of the 120-year Godrej Group, known for excellent craftsmanship in contemporary housing projects." }
   }
 }
 ```
@@ -1097,7 +1098,7 @@ data: {"reason":"response_complete"}
     "sequenceNumber": 1,
     "isFinal": true,
     "messageType": "markdown",
-    "content": { "text": "## More details\nAmenities, configuration, pricing..." }
+    "content": { "text": "# 3 BHK Apartment\nBy Godrej Properties Ltd.\n📍 Godrej Nature Plus, Sector 85, Gurgaon\n\n---\n\n**Property Overview**\nHere is an excellent 3 BHK Apartment available for buy in Gurgaon. Surrounded by natural greens and equipped with numerous amenities, this spacious home offers a comfortable lifestyle with good connectivity to major landmarks.\n\n---\n\n**Configuration**\nType: 3 BHK Apartment\nBuilt-up Area: 1,820 sq.ft.\nBedrooms: 3 | Bathrooms: 3 | Balconies: 3\nFloor: 17\nFurnishing: Semi-Furnished\nPrice: ₹2.8 Cr\nParking: 2 parking space(s)\n\n---\n\n**Amenities**\nParking, Regular Water Supply, Gym, Swimming Pool, Kids Area, Sports Facility, Lift, Power Backup, Intercom, CCTV\n\n---\n\n**Property Manager**\nGodrej Properties Ltd is the real estate segment of the 120-year Godrej Group, known for excellent craftsmanship in contemporary housing projects." }
   }
 }
 ```
@@ -1178,6 +1179,17 @@ data: {"reason":"response_complete"}
         }
       }
     }
+  }
+}
+```
+
+```json
+{
+  "sender": { "type": "user" },
+  "payload": {
+    "messageType": "text",
+    "responseRequired": true,
+    "content": { "text": "show trending localties" }
   }
 }
 ```
@@ -1294,10 +1306,6 @@ data: {"reason":"response_complete"}
   }
 }
 ```
-
-#### 4.3.10 Near-me flow (ML always sends share_location)
-After `4.3.9`, the implemented demo flow includes these canonical examples:
-
 ```json
 {
   "sender": { "type": "bot" },
@@ -1307,7 +1315,7 @@ After `4.3.9`, the implemented demo flow includes these canonical examples:
     "sequenceNumber": 0,
     "isFinal": false,
     "messageType": "markdown",
-    "content": { "text": "# Sector 32, Gurgaon\nLocality learn-more summary..." }
+    "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" }
   }
 }
 ```
@@ -1320,10 +1328,12 @@ After `4.3.9`, the implemented demo flow includes these canonical examples:
     "sequenceNumber": 1,
     "isFinal": true,
     "messageType": "markdown",
-    "content": { "text": "# Sector 21, Gurgaon\nLocality learn-more summary..." }
+    "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" }
   }
 }
 ```
+
+#### 4.3.10 Near-me flow (ML always sends share_location)
 ```json
 {
   "sender": { "type": "user" },
@@ -1456,31 +1466,35 @@ After `4.3.9`, the implemented demo flow includes these canonical examples:
 }
 ```
 
-Implemented demo-flow alignment for the later sequence (steps 18-40):
+Examples for implemented steps 18-40:
 
-18. user asks `tell more about sector 21`  
-19. bot replies nested_qna: which sector 21  
-20. user selects first option  
-21. bot replies learn-more markdown for sector 21  
-22. user asks `to learn more about sector 32`  
-23. bot replies nested_qna: which sector 32  
-24. user types `sector 32 faridabad` in template textbox  
-25. bot replies learn-more markdown for sector 32  
-26. user asks `locality comparison of sector 32, sector 21`  
-27. bot replies nested_qna for sector 32 + sector 21  
-28. user enters `sector 32 gurgaon` and skips sector 21  
-29. bot replies learn-more markdown for sector 32 gurgaon  
-30. user says `show properties near me`  
-31. bot replies with location request (`share_location`)  
-32. user denies location  
-33. user says `properties near me` again  
-34. bot asks location permission again  
-35. user grants location this time  
-36. bot replies with property carousel  
-37. user says `3bhk properties near me`  
-38. location already available; FE auto-sends location_shared without rendering share_location template  
-39. bot replies with property carousel  
-40. user continues with property learn-more + brochure flow + nested_qna for `show me more properties in sector 32, sector 21`
+```json
+[
+  { "step": 18, "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "tell more about sector 21" } } },
+  { "step": 19, "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "nested_qna", "data": { "selections": [{ "questionId": "sub_intent_2", "title": "Which sector 21 are you referring to?", "type": "locality_single_select", "options": [{ "id": "uuid3", "title": "Sector 21", "city": "Gurgaon", "type": "Locality" }, { "id": "uuid4", "title": "Sector 21", "city": "Faridabad", "type": "Locality" }] }] } } } },
+  { "step": 20, "sender": { "type": "user" }, "payload": { "messageType": "user_action", "responseRequired": true, "visibility": "shown", "content": { "data": { "action": "nested_qna_selection", "selections": [{ "questionId": "sub_intent_2", "selection": "uuid3" }] }, "derivedLabel": "Q. Which sector 21 are you referring to?\nA. Sector 21, Gurgaon" } } },
+  { "step": 21, "sender": { "type": "bot" }, "payload": { "messageType": "markdown", "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" } } },
+  { "step": 22, "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "to learn more about sector 32" } } },
+  { "step": 23, "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "nested_qna", "data": { "selections": [{ "questionId": "sub_intent_1", "title": "Which sector 32 are you referring to?", "type": "locality_single_select", "options": [{ "id": "uuid1", "title": "Sector 32", "city": "Gurgaon", "type": "Locality" }, { "id": "uuid2", "title": "Sector 32", "city": "Faridabad", "type": "Locality" }] }] } } } },
+  { "step": 24, "sender": { "type": "user" }, "payload": { "messageType": "user_action", "responseRequired": true, "visibility": "shown", "content": { "data": { "action": "nested_qna_selection", "selections": [{ "questionId": "sub_intent_1", "text": "sector 32 faridabad" }] }, "derivedLabel": "Q. Which sector 32 are you referring to?\nA. sector 32 faridabad" } } },
+  { "step": 25, "sender": { "type": "bot" }, "payload": { "messageType": "markdown", "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" } } },
+  { "step": 26, "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "locality comparison of sector 32, sector 21" } } },
+  { "step": 27, "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "nested_qna", "data": { "selections": [{ "questionId": "sub_intent_1", "title": "Which sector 32 are you referring to?" }, { "questionId": "sub_intent_2", "title": "Which sector 21 are you referring to?" }], "canSkip": true } } } },
+  { "step": 28, "sender": { "type": "user" }, "payload": { "messageType": "user_action", "responseRequired": true, "visibility": "shown", "content": { "data": { "action": "nested_qna_selection", "selections": [{ "questionId": "sub_intent_1", "text": "sector 32 gurgaon" }, { "questionId": "sub_intent_2", "skipped": true }] }, "derivedLabel": "Q. Which sector 32 are you referring to?\nA. sector 32 gurgaon\n\nQ. Which sector 21 are you referring to?\nA. Skipped" } } },
+  { "step": 29, "sender": { "type": "bot" }, "payload": { "messageType": "markdown", "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" } } },
+  { "step": 30, "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "show properties near me" } } },
+  { "step": 31, "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "share_location", "data": {} } } },
+  { "step": 32, "sender": { "type": "system" }, "payload": { "messageType": "user_action", "responseRequired": true, "content": { "data": { "action": "location_denied" } } } },
+  { "step": 33, "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "properties near me" } } },
+  { "step": 34, "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "share_location", "data": {} } } },
+  { "step": 35, "sender": { "type": "system" }, "payload": { "messageType": "user_action", "responseRequired": true, "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } } } },
+  { "step": 36, "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "property_carousel", "data": { "property_count": 15, "properties": [{ "id": "p1" }, { "id": "p2" }, { "id": "p3" }] } } } },
+  { "step": 37, "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "3bhk properties near me" } } },
+  { "step": 38, "sender": { "type": "system" }, "payload": { "messageType": "user_action", "responseRequired": true, "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } } }, "note": "auto-shared by FE without rendering share_location template" },
+  { "step": 39, "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "property_carousel", "data": { "property_count": 15, "properties": [{ "id": "p1" }, { "id": "p2" }, { "id": "p3" }] } } } },
+  { "step": 40, "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "show me more properties in sector 32, sector 21" } } }
+]
+```
 
 ```json
 {
