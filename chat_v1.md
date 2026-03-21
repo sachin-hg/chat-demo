@@ -69,6 +69,24 @@ CANCELLED_BY_USER
 
 ## 4. API Contracts
 
+### 4.0 Contract Interfaces (from `lib/contract-types.ts`)
+
+- `Sender`: base sender shape (`type`).
+- `SenderForML extends Sender`: sender plus optional `userId`/`gaId` derived by BE from headers.
+- `ChatPayloadContent`: content envelope (`text`, `templateId`, `data`, `derivedLabel`).
+- `ChatEventFromUser`: FE -> BE event shape for send-message APIs.
+- `ChatEventToML`: BE -> ML event shape for user turn dispatch.
+- `CancelEventToML`: BE -> ML cancellation signal shape.
+- `ChatEventFromML`: ML -> BE event shape (includes `sourceMessageId`, `messageState`, optional `error`, optional `summarisedChatContext`).
+- `ChatEventToUser`: BE -> FE event shape for history and stream delivery.
+- `SendMessageResponse`: ack shape for send-message/send-message-streamed (`messageId`, `messageState?`).
+- `GetHistoryResponse`: history API shape (`conversationId`, `messages: ChatEventToUser[]`, `hasMore`).
+- `GetConversationIdResponse`: conversation lookup shape (`conversationId`, `isNew`).
+- `GetChatsResponse`: list shape for chat threads.
+- `ChatEvent` (union): `ChatEventFromUser | ChatEventToML | CancelEventToML | ChatEventFromML | ChatEventToUser`.
+
+---
+
 ### 4.1 `GET /chats/get-conversation-id`
 
 Returns the active conversation ID for the caller.
@@ -76,6 +94,9 @@ In Phase 1, this is a stable 1:1 mapping:
 - one `conversationId` per authenticated `userId`, or
 - one `conversationId` per anonymous `_ga`.
 So repeated calls for the same user/`_ga` return the same `conversationId`.
+
+**Interfaces**
+- Response: `GetConversationIdResponse`
 
 **Response**
 ```json
@@ -95,6 +116,9 @@ Returns all chats for the user.
 Ordering: **latest chat first** (descending by `lastActivityAt`).
 
 > Phase 1 note: this endpoint is not required for core flow because BE maintains exactly one conversation per user (`userId`/`_ga`), so clients can rely on `GET /chats/get-conversation-id`.
+
+**Interfaces**
+- Response: `GetChatsResponse`
 
 **Response**
 ```json
@@ -139,6 +163,9 @@ Example (`messages_after`):
 
 Returns latest 6 messages strictly after `msg_401` (e.g. `msg_402..msg_407`).
 
+**Interfaces**
+- Response: `GetHistoryResponse` (`messages` items are `ChatEventToUser`)
+
 **Response**
 ```json
 {
@@ -169,6 +196,10 @@ Returns latest 6 messages strictly after `msg_401` (e.g. `msg_402..msg_407`).
   }
 }
 ```
+
+**Interfaces**
+- Request body `event`: `ChatEventFromUser`
+- Response: `SendMessageResponse`
 
 **Response**
 JSON only:
@@ -202,6 +233,9 @@ JSON only:
 { "messageId": "msg_301", "conversationId": "conv_1" }
 ```
 
+**Interfaces**
+- BE -> ML advisory cancellation object: `CancelEventToML`
+
 - FE invokes cancel using the active user `messageId`.
 - Cancellation is advisory toward ML, but BE strictly ignores late updates for cancelled/non-pending requests.
 
@@ -213,6 +247,13 @@ Request body is identical to `send-message`. This endpoint requires `Accept: tex
 
 Before dispatching to ML, BE authenticates with `login_auth_token` when present and forwards derived identity under `sender.userId` / `sender.gaId`.
 `sender.userId` is BE-derived from auth/identity request headers.
+
+**Interfaces**
+- FE -> BE request `event`: `ChatEventFromUser`
+- BE -> ML dispatch event: `ChatEventToML`
+- ML -> BE event: `ChatEventFromML`
+- BE -> FE stream payload (`chat_event`): `ChatEventToUser`
+- BE -> FE ack (`connection_ack`): `SendMessageResponse`
 
 **SSE (example)**
 ```txt
@@ -283,36 +324,45 @@ data: {"reason":"response_complete"}
 
 ```json
 {
-  "sourceMessageId": "msg_u_456",
-  "messageState": "COMPLETED",
-  "event": { "...": "ChatEventFromML" },
-  "summarisedChatContext": {
-    "service": "buy",
-    "category": "residential",
-    "city": "526acdc6c33455e9e4e9",
-    "filters": {
-      "poly": ["dce9290ec3fe8834a293"],
-      "est": 194298,
-      "region_entity_id": 31817,
-      "region_entity_type": "project",
-      "uuid": [],
-      "qv_resale_id": 1234,
-      "qv_rent_id": 12345,
-      "apartment_type_id": [1, 2],
-      "contact_person_id": [1, 2],
-      "facing": ["east", "west"],
-      "has_lift": true,
-      "is_gated_community": true,
-      "is_verified": true,
-      "max_area": 4000,
-      "max_poss": 0,
-      "max_price": 4800000,
-      "radius": 3000,
-      "routing_range": 10,
-      "routing_range_type": "time",
-      "min_price": 100,
-      "property_type_id": [1, 2],
-      "type": "project"
+  "event": {
+    "conversationId": "conv_1",
+    "sender": { "type": "bot" },
+    "sourceMessageId": "msg_u_456",
+    "messageType": "template",
+    "messageState": "COMPLETED",
+    "sequenceNumber": 0,
+    "summarisedChatContext": {
+      "service": "buy",
+      "category": "residential",
+      "city": "526acdc6c33455e9e4e9",
+      "filters": {
+        "poly": ["dce9290ec3fe8834a293"],
+        "est": 194298,
+        "region_entity_id": 31817,
+        "region_entity_type": "project",
+        "uuid": [],
+        "qv_resale_id": 1234,
+        "qv_rent_id": 12345,
+        "apartment_type_id": [1, 2],
+        "contact_person_id": [1, 2],
+        "facing": ["east", "west"],
+        "has_lift": true,
+        "is_gated_community": true,
+        "is_verified": true,
+        "max_area": 4000,
+        "max_poss": 0,
+        "max_price": 4800000,
+        "radius": 3000,
+        "routing_range": 10,
+        "routing_range_type": "time",
+        "min_price": 100,
+        "property_type_id": [1, 2],
+        "type": "project"
+      }
+    },
+    "content": {
+      "templateId": "property_carousel",
+      "data": { "...": "template payload" }
     }
   }
 }
@@ -458,6 +508,13 @@ updated_at TIMESTAMP
 
 ### 10.1 User Message → ML → FE (Happy Path)
 
+**Interfaces used**
+- FE -> BE: `ChatEventFromUser`
+- BE -> ML: `ChatEventToML`
+- ML -> BE: `ChatEventFromML`
+- BE -> FE (`chat_event`): `ChatEventToUser`
+- BE -> FE (`connection_ack`): `SendMessageResponse`
+
 ```mermaid
 sequenceDiagram
     participant FE as Web FE
@@ -477,6 +534,12 @@ sequenceDiagram
 ---
 
 ### 10.2 Timeout at BE (No ML Response)
+
+**Interfaces used**
+- FE -> BE: `ChatEventFromUser`
+- BE -> ML cancel advisory: `CancelEventToML`
+- FE polling response: `GetHistoryResponse` (`ChatEventToUser[]`)
+
 ```mermaid
 sequenceDiagram
     participant FE
@@ -498,6 +561,12 @@ sequenceDiagram
 ---
 
 ### 10.3 Cancel by User
+
+**Interfaces used**
+- FE -> BE: `ChatEventFromUser`
+- FE cancel call triggers BE -> ML advisory: `CancelEventToML`
+- Any ML late response is typed as `ChatEventFromML` and discarded by BE state gate
+
 ```mermaid
 sequenceDiagram
     participant FE
@@ -520,6 +589,12 @@ sequenceDiagram
 ---
 
 ### 10.4 SSE Reconnect Flow
+
+**Interfaces used**
+- Initial turn request: `ChatEventFromUser`
+- Stream payloads: `ChatEventToUser`
+- Recovery API response: `GetHistoryResponse` (`ChatEventToUser[]`)
+
 ```mermaid
 sequenceDiagram
     participant FE
@@ -541,6 +616,11 @@ sequenceDiagram
 ---
 
 ### 10.5 Conversation Migration After Login
+
+**Interfaces used**
+- Conversation lookup: `GetConversationIdResponse`
+- Post-migration history load: `GetHistoryResponse` (`ChatEventToUser[]`)
+
 ```mermaid
 sequenceDiagram
     participant FE
