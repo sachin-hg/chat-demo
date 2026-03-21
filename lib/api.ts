@@ -36,19 +36,15 @@ export async function getChats(): Promise<GetChatsResponse> {
 export async function getHistory(
   conversationId: string,
   params?: {
-    page?: number;
     page_size?: number;
     messages_after?: string;
     messages_before?: string;
-    last?: number;
   }
 ): Promise<GetHistoryResponse> {
   const sp = new URLSearchParams({ conversationId });
-  if (params?.page != null) sp.set("page", String(params.page));
   if (params?.page_size != null) sp.set("page_size", String(params.page_size));
   if (params?.messages_after) sp.set("messages_after", params.messages_after);
   if (params?.messages_before) sp.set("messages_before", params.messages_before);
-  if (params?.last != null) sp.set("last", String(params.last));
   return get(`/api/chats/get-history?${sp}`);
 }
 

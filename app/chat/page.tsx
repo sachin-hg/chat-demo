@@ -18,7 +18,7 @@ interface StoredMessage extends ChatEvent {
 }
 
 const INITIAL_PAGE_SIZE = 6;
-const LOAD_MORE_PAGE_SIZE = 5;
+const LOAD_MORE_PAGE_SIZE = 6;
 const REPLY_TIMEOUT_MS = 25000;
 
 type ReplyStatus = "idle" | "sending" | "awaiting" | "timeout" | "error";
@@ -365,6 +365,8 @@ function ChatPageContent() {
   const awaitingElapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSentEventRef = useRef<ChatEvent | null>(null);
   const lastRequestEventIdRef = useRef<string | null>(null);
+  const currentPendingLocalEventIdRef = useRef<string | null>(null);
+  const cancelledPendingLocalIdsRef = useRef<Set<string>>(new Set());
   const activeSendStreamAbortRef = useRef<AbortController | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement | null>(null);
   const scrollRestoreAfterPrependRef = useRef<{ scrollTop: number; scrollHeight: number } | null>(null);
@@ -396,6 +398,33 @@ function ChatPageContent() {
     setReplyStatus("idle");
   }, []);
 
+  const cancelAndHideCurrentRequest = useCallback(async () => {
+    activeSendStreamAbortRef.current?.abort();
+    activeSendStreamAbortRef.current = null;
+
+    const ackedEventId = lastRequestEventIdRef.current;
+    const pendingLocalId = currentPendingLocalEventIdRef.current;
+
+    if (ackedEventId) {
+      setMessages((prev) =>
+        prev.map((m) => (m.eventId === ackedEventId ? { ...m, requestState: "CANCELLED_BY_USER" } : m))
+      );
+      try {
+        await cancelRequest(ackedEventId);
+      } catch (_) {}
+      lastRequestEventIdRef.current = null;
+    } else if (pendingLocalId) {
+      cancelledPendingLocalIdsRef.current.add(pendingLocalId);
+      setMessages((prev) =>
+        prev.map((m) => (m.eventId === pendingLocalId ? { ...m, requestState: "CANCELLED_BY_USER" } : m))
+      );
+      currentPendingLocalEventIdRef.current = null;
+    }
+
+    clearReplyWaiting();
+    setSending(false);
+  }, [clearReplyWaiting]);
+
   // Load conversation and initial history
   useEffect(() => {
     let cancelled = false;
@@ -410,7 +439,7 @@ function ChatPageContent() {
           buildContextEvent(cid),
           { onAck: () => {}, onChatEvent: () => {} },
         ).catch(() => {});
-        const hist = await getHistory(cid, { last: INITIAL_PAGE_SIZE });
+        const hist = await getHistory(cid, { page_size: INITIAL_PAGE_SIZE });
         if (cancelled) return;
         const list = hist.messages as StoredMessage[];
         setMessages(list);
@@ -536,6 +565,8 @@ function ChatPageContent() {
         eventId: pendingId,
         createdAt: new Date().toISOString(),
       };
+      currentPendingLocalEventIdRef.current = pendingId;
+      lastRequestEventIdRef.current = null;
       setMessages((prev) => [...prev, userMessage]);
       setInput("");
       setSending(true);
@@ -550,6 +581,19 @@ function ChatPageContent() {
           {
             onAck: (ack) => {
               ackReceived = true;
+              currentPendingLocalEventIdRef.current = null;
+              if (cancelledPendingLocalIdsRef.current.has(pendingId)) {
+                cancelledPendingLocalIdsRef.current.delete(pendingId);
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.eventId === pendingId
+                      ? { ...m, eventId: ack.eventId, requestState: "CANCELLED_BY_USER" }
+                      : m
+                  )
+                );
+                cancelRequest(ack.eventId).catch(() => {});
+                return;
+              }
               lastRequestEventIdRef.current = ack.eventId;
               knownEventIdsRef.current.add(ack.eventId);
               setMessages((prev) =>
@@ -611,6 +655,8 @@ function ChatPageContent() {
         eventId: pendingId,
         createdAt: new Date().toISOString(),
       };
+      currentPendingLocalEventIdRef.current = pendingId;
+      lastRequestEventIdRef.current = null;
       setMessages((prev) => [...prev, stored]);
       setSending(true);
       setReplyStatus("sending");
@@ -625,6 +671,19 @@ function ChatPageContent() {
           {
             onAck: (ack) => {
               ackReceived = true;
+              currentPendingLocalEventIdRef.current = null;
+              if (cancelledPendingLocalIdsRef.current.has(pendingId)) {
+                cancelledPendingLocalIdsRef.current.delete(pendingId);
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.eventId === pendingId
+                      ? { ...m, eventId: ack.eventId, requestState: "CANCELLED_BY_USER" }
+                      : m
+                  )
+                );
+                cancelRequest(ack.eventId).catch(() => {});
+                return;
+              }
               lastRequestEventIdRef.current = ack.eventId;
               knownEventIdsRef.current.add(ack.eventId);
               setMessages((prev) =>
@@ -774,12 +833,7 @@ function ChatPageContent() {
   const handleRetry = useCallback(async () => {
     const event = lastSentEventRef.current;
     if (!event || !conversationId || sending) return;
-    const previousRequestEventId = lastRequestEventIdRef.current;
-    if (previousRequestEventId) {
-      cancelRequest(previousRequestEventId).catch(() => {});
-      lastRequestEventIdRef.current = null;
-    }
-    clearReplyWaiting();
+    await cancelAndHideCurrentRequest();
     const fullEvent: ChatEvent = { ...event, conversationId };
     setSending(true);
     setReplyStatus("sending");
@@ -816,22 +870,16 @@ function ChatPageContent() {
       if (activeSendStreamAbortRef.current === abortController) activeSendStreamAbortRef.current = null;
       setSending(false);
     }
-  }, [conversationId, sending, clearReplyWaiting, startAwaitingReply]);
+  }, [conversationId, sending, startAwaitingReply, cancelAndHideCurrentRequest]);
 
   const handleCancel = useCallback(async () => {
     if (replyStatus !== "awaiting") return;
-    const requestEventId = lastRequestEventIdRef.current;
-    activeSendStreamAbortRef.current?.abort();
-    activeSendStreamAbortRef.current = null;
-    if (requestEventId) {
-      try {
-        await cancelRequest(requestEventId);
-      } catch (_) {}
-      lastRequestEventIdRef.current = null;
-    }
-    clearReplyWaiting();
-    setSending(false);
-  }, [replyStatus, clearReplyWaiting]);
+    await cancelAndHideCurrentRequest();
+  }, [replyStatus, cancelAndHideCurrentRequest]);
+
+  const handleDismiss = useCallback(async () => {
+    await cancelAndHideCurrentRequest();
+  }, [cancelAndHideCurrentRequest]);
 
   // Visible messages (filter context/analytics for display count)
   const visibleMessages = messages.filter(
@@ -1019,7 +1067,7 @@ function ChatPageContent() {
             </button>
             <button
               type="button"
-              onClick={clearReplyWaiting}
+              onClick={handleDismiss}
               className="text-sm font-semibold text-[#767676] hover:opacity-80"
             >
               Dismiss

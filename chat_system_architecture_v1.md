@@ -100,9 +100,29 @@ Ordering: **latest chat first** (descending by `lastActivityAt`).
 
 ### 4.3 `GET /chats/get-history`
 
-**Pagination**
+**Query params**
+- `conversationId` (required)
+- `page_size` (optional, default `6`)
+- `messages_before` (optional cursor, exclusive)
+- `messages_after` (optional cursor, exclusive)
+- `messages_before` and `messages_after` cannot be used together.
+
+**Sort order**
+- Always ascending by `created_at` (oldest → newest) in returned `messages`.
+
+**Soft-delete filtering (canonical behavior)**
+- User request events whose request state is `CANCELLED_BY_USER` are excluded by BE in `get-history` response.
+- No other event types are filtered.
+
+**Implicit window (no cursor)**
 ```
-/chats/get-history?conversationId=conv_1&page=0&page_size=3
+/chats/get-history?conversationId=conv_1
+```
+Returns latest 6 messages by default (or latest `page_size` when provided).
+
+**Equivalent explicit default page size**
+```
+/chats/get-history?conversationId=conv_1&page_size=6
 ```
 
 **Response**
@@ -122,7 +142,13 @@ Ordering: **latest chat first** (descending by `lastActivityAt`).
 }
 ```
 
-**After Event**
+**Before cursor (load older)**
+```
+/chats/get-history?conversationId=conv_1&messages_before=evt_12
+```
+Returns latest 6 messages strictly before `evt_12` (e.g. `evt_6..evt_11`).
+
+**After cursor (recover missed messages)**
 ```
 /chats/get-history?conversationId=conv_1&messages_after=evt_401
 ```
@@ -173,14 +199,17 @@ If `Accept` is not `text/event-stream`, the BE returns JSON:
 { "eventId": "evt_301", "requestState": "PENDING" }
 ```
 
-**Message payload enrichment**
+**Message event enrichment**
 - Each persisted message may include top-level `requestState` with one of:
   - `PENDING`
   - `COMPLETED`
   - `ERRORED_AT_ML`
   - `TIMED_OUT_BY_BE`
   - `CANCELLED_BY_USER`
-- FE uses this to decide rendering behavior per message.
+- FE rendering by `requestState`:
+  - `PENDING`, `COMPLETED`: render as usual
+  - `ERRORED_AT_ML`, `TIMED_OUT_BY_BE`: render generic error text
+  - `CANCELLED_BY_USER`: do not render message
 
 ---
 
@@ -190,12 +219,42 @@ If `Accept` is not `text/event-stream`, the BE returns JSON:
 { "eventId": "evt_301" }
 ```
 
+- FE invokes cancel using the active user `eventId`.
+- Cancellation is advisory toward ML, but BE strictly ignores late updates for cancelled/non-pending requests.
+
 ---
 
 ### 4.6 Streaming responses (Phase 1)
 
 In Phase 1, FE opens a new stream **per message** by calling `POST /chats/send-message` with
 `Accept: text/event-stream`. This eliminates the need for a long-lived `GET /chats/stream` connection.
+
+### 4.7 FE Request UI Semantics (canonical)
+
+- **Awaiting indicator**: FE shows inline awaiting status only when:
+  - outbound event has `payload.responseRequired === true`, and
+  - final bot response (`payload.isFinal === true`) has not yet been received.
+- **Timeout**: FE maintains a local reply timeout safeguard (current app value: `25s`), after which timeout UI is shown.
+- **Input/CTA behavior**:
+  - while `sending`: composer submit disabled
+  - while `awaiting`: template actions disabled, composer shows **Cancel**
+  - on `timeout`/`error`: **Retry** and **Dismiss** actions shown
+- **Dismiss/Cancel semantics**:
+  - FE dismiss/cancel transitions the active request to `CANCELLED_BY_USER`
+  - cancelled message is hidden by rendering rules
+  - if dismiss happens before `connection_ack` arrives, FE still marks local pending user event as `CANCELLED_BY_USER`; if ack arrives later, FE immediately cancels by that `eventId`.
+
+### 4.8 Template and Action Handling (canonical)
+
+- **Transient templates**: `share_location`, `shortlist_property`, `contact_seller`, and `nested_qna` render only when they are the latest message.
+- **nested_qna contract shape**: `template.data.selections[]` with per-question `questionId` and options.
+- FE submission for nested QnA uses `user_action`:
+  - `action: "nested_qna_selection"`
+  - `selections: [...]`
+- **Share location**:
+  - ML always returns `share_location` for near-me prompts.
+  - FE `ShareLocation` may auto-send `location_shared` when permission is already granted, and template may not be visibly rendered in that case.
+- **Auth gating**: shortlist/contact/brochure actions are FE-gated behind login; successful actions post hidden/shown `user_action` events back to BE/ML.
 
 ---
 
@@ -457,45 +516,27 @@ This section records how the **chat-demo** implementation diverges from or exten
 
 ### A.1 get-history
 
-- **Pagination**: In addition to `page`, `page_size`, and `messages_after`, the implementation supports:
-  - **`messages_before`** + **`page_size`**: returns up to `page_size` messages *before* the given event ID (for “Load older messages”).
-  - **`last`**: returns the last N messages (e.g. initial load with `last=6`).
-- **Soft-deleted events**: Events that are the user request event for a request in state **CANCELLED_BY_USER** are excluded from history (soft-deleted per §3). No other event types are filtered.
-- This filtering is done in BE `get-history` itself before response payload is returned to FE.
+- Cursor behavior and soft-delete filtering are documented in canonical section §4.3.
 
 ### A.2 FE reply timeout and UI
 
-- **FE timeout**: The FE uses a 25s reply timeout (spec does not define FE timeout). After 25s without a bot final reply, the FE shows “Request timed out” with **Retry** and **Dismiss**.
-- **Awaiting indicator**: While awaiting, FE shows a single inline status (“Running through the details...”).
-- **Input/CTA behavior**:
-  - While `sending`, input submit is disabled.
-  - While `awaiting`, template actions are disabled and **Cancel** is shown in the composer.
-  - On timeout/error, Retry/Dismiss actions are shown.
+- Canonical FE request UI semantics are documented in §4.7.
 
 ### A.3 SSE
 
-- **Per-message stream**: FE uses `POST /chats/send-message` with `Accept: text/event-stream` per request (no long-lived `GET /chats/stream`).
-- **connection_close**: BE emits `event: connection_close` with `{"reason":"response_complete"}` when final response is sent.
-- **Ack + events**: stream starts with `connection_ack`, followed by `chat_event` entries until final.
+- Canonical SSE behavior is documented in §4.6 and §6.
 
 ### A.4 Cancel
 
-- **Cancel button**: A **Cancel** button is shown next to **Send** while awaiting a reply. It calls `POST /chats/cancel` with the current user `eventId` and then clears the awaiting state so the user can send again.
-- **Advisory cancellation, strict BE gate**: cancellation signal to ML is advisory, but BE strictly ignores late updates for cancelled/non-pending requests (`isPending` gate before append/broadcast).
+- Canonical cancel behavior is documented in §4.5 and §4.7.
 
 ### A.7 UI behavior for requestState
 
-- `PENDING`, `COMPLETED`: render as usual.
-- `ERRORED_AT_ML`, `TIMED_OUT_BY_BE`: FE renders generic error text (“Something went wrong. Please try again.”).
-- `CANCELLED_BY_USER`: FE does not render that message.
-- `requestState` is attached at top-level event field (`event.requestState`), not inside payload.
+- Canonical requestState placement and rendering rules are documented in §4.4.
 
 ### A.5 Template and action handling
 
-- **Transient templates**: `share_location`, `shortlist_property`, `contact_seller`, and `nested_qna` are rendered only when they are the latest message.
-- **nested_qna contract shape**: `template.data.selections[]` with per-question `questionId` and options; FE submits `user_action` with `action: "nested_qna_selection"` and `selections`.
-- **Share location behavior**: ML always returns `share_location` for near-me queries; FE `ShareLocation` auto-sends `location_shared` when permission is already granted, and may not render the permission template in that case.
-- **Auth gating for actions**: shortlist/contact/brochure actions are FE-gated behind login bottom sheet; successful action posts send hidden/shown `user_action` events back to BE/ML.
+- Canonical template/action rules are documented in §4.8.
 
 ### A.6 Demo mode (`/chat?demo=true`)
 

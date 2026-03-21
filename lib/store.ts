@@ -67,11 +67,9 @@ export function getChats() {
 export function getHistory(
   conversationId: string,
   options?: {
-    page?: number;
     pageSize?: number;
     messagesAfter?: string;
     messagesBefore?: string;
-    last?: number;
   }
 ): {
   conversationId: string;
@@ -86,21 +84,11 @@ export function getHistory(
     (e) =>
       (e.conversationId === conversationId || !e.conversationId) && !cancelledUserEventIds.has(e.eventId)
   );
+  const pageSize = Math.max(1, options?.pageSize ?? 6);
 
-  if (options?.last != null) {
-    const n = Math.max(0, options.last);
-    const hasMore = list.length > n;
-    const messages = list.slice(-n);
-    return {
-      conversationId: CONV_ID,
-      messages: messages as StoredEvent[],
-      hasMore,
-    };
-  }
-
-  if (options?.messagesBefore) {
+  // Explicit window: latest `pageSize` messages before `messages_before` (exclusive).
+  if (options?.messagesBefore && !options?.messagesAfter) {
     const idx = list.findIndex((e) => e.eventId === options.messagesBefore);
-    const pageSize = options?.pageSize ?? 10;
     if (idx <= 0) {
       return {
         conversationId: CONV_ID,
@@ -111,23 +99,29 @@ export function getHistory(
     const beforeList = list.slice(0, idx);
     const hasMore = beforeList.length > pageSize;
     const messages = beforeList.slice(-pageSize);
+    const messagesWithState = messages.map((e) => withRequestState(e));
     return {
       conversationId: CONV_ID,
-      messages: messages as StoredEvent[],
+      messages: messagesWithState as StoredEvent[],
       hasMore,
     };
   }
 
-  if (options?.messagesAfter) {
+  // Explicit window: all messages strictly after `messages_after`.
+  if (options?.messagesAfter && !options?.messagesBefore) {
     const idx = list.findIndex((e) => e.eventId === options.messagesAfter);
-    list = idx >= 0 ? list.slice(idx + 1) : list;
-  } else if (options?.page !== undefined && options?.pageSize !== undefined) {
-    const start = options.page * options.pageSize;
-    list = list.slice(start, start + options.pageSize + 1);
+    list = idx >= 0 ? list.slice(idx + 1) : [];
+    const messagesWithState = list.map((e) => withRequestState(e));
+    return {
+      conversationId: CONV_ID,
+      messages: messagesWithState as StoredEvent[],
+      hasMore: false,
+    };
   }
 
-  const hasMore = options?.page !== undefined && options?.pageSize !== undefined && list.length > options.pageSize;
-  const messages = hasMore ? list.slice(0, options!.pageSize!) : list;
+  // Implicit window (no cursor): latest `pageSize` messages.
+  const hasMore = list.length > pageSize;
+  const messages = list.slice(-pageSize);
 
   const messagesWithState = messages.map((e) => withRequestState(e));
   return {

@@ -609,12 +609,53 @@ Apps should send identity via cookie headers:
 
 ### 4.5 FE runtime behavior notes
 
-- FE starts loader/awaiting UI when sending events with `responseRequired: true`.
-- FE stops loader and marks response complete on first bot event with `isFinal: true`.
+- FE starts awaiting UI only when `responseRequired: true` and no final bot event has been received.
+- FE stops loader/awaiting and marks response complete on first bot event with `isFinal: true`.
 - FE treats `connection_close` as stream completion for the turn.
-- FE timeout: 25s. On timeout, FE shows Retry/Dismiss.
+- FE keeps a local timeout safeguard (current app value: 25s). On timeout, FE shows Retry/Dismiss.
+- Input/CTA behavior:
+  - while sending: input submit disabled
+  - while awaiting: template actions disabled and Cancel shown in composer
+  - on timeout/error: Retry/Dismiss shown
+- Dismiss and Cancel semantics:
+  - both map to `CANCELLED_BY_USER` for the active request
+  - message in `CANCELLED_BY_USER` is not rendered
+  - if dismiss happens before ack, FE marks the pending local user event cancelled; if ack arrives later, FE immediately cancels using ack `eventId`.
+- RequestState rendering semantics:
+  - `PENDING`, `COMPLETED`: render as usual
+  - `ERRORED_AT_ML`, `TIMED_OUT_BY_BE`: render generic error text
+  - `CANCELLED_BY_USER`: do not render
 - Transient templates (`share_location`, `shortlist_property`, `contact_seller`, `nested_qna`) are rendered only when they are the latest message to prevent stale CTA/template duplication in history.
 - Sticky `nested_qna`: while active as latest message, FE hides the text composer to avoid parallel free-text input during structured disambiguation.
+- Nested QnA contract:
+  - bot template uses `template.data.selections[]` with `questionId` + options
+  - FE submit uses `user_action` with `action: "nested_qna_selection"` and `selections`.
+- Share location behavior:
+  - ML always returns `share_location` for near-me queries.
+  - FE may auto-send `location_shared` when permission is already granted; template may not be visibly rendered in that case.
+- Auth gating:
+  - shortlist/contact/brochure actions are FE-gated behind login
+  - successful action posts hidden/shown `user_action` to BE/ML.
+- Cancel API semantics:
+  - FE calls `POST /chats/cancel` with current user `eventId`
+  - cancellation is advisory to ML; BE ignores late updates for cancelled/non-pending requests.
+
+---
+### 4.6 `GET /chats/get-history` cursor contract
+
+- Supported query params:
+  - `conversationId` (required)
+  - `page_size` (optional, default `6`)
+  - `messages_before` (optional, exclusive cursor)
+  - `messages_after` (optional, exclusive cursor)
+- `messages_before` and `messages_after` are mutually exclusive in one request.
+- Returned `messages` are always in ascending `created_at` order.
+- Behavior:
+  - no cursor: latest `page_size` messages (default latest 6)
+  - `messages_before=evt_x`: latest `page_size` messages before `evt_x`
+  - `messages_after=evt_x`: all messages after `evt_x`
+- `hasMore` remains required for FE pagination controls.
+- BE applies soft-delete filtering in this API: user request events with `requestState = CANCELLED_BY_USER` are excluded; no other event types are filtered.
 
 ---
 ## 5. FE Renderer Pseudocode
@@ -680,6 +721,7 @@ This section documents current behavior in this repository where it differs from
   - `chat_event` (0..N),
   - `connection_close` (`reason` in `response_complete | response_not_required | inactivity_15s`).
 - FE reply timeout is 25s (`replyStatus: timeout`), with Retry and Dismiss.
+- Canonical stream/cancel/runtime semantics are defined in §4.5 and examples in §4.2.
 
 ### A.2 Rendering behavior
 
