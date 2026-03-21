@@ -438,7 +438,7 @@ updated_at TIMESTAMP
 
 ### 10.1 User Message → ML → FE (Happy Path)
 
-```
+```mermaid
 sequenceDiagram
     participant FE as Web FE
     participant BE as Chat BE
@@ -457,7 +457,7 @@ sequenceDiagram
 ---
 
 ### 10.2 Timeout at BE (No ML Response)
-```
+```mermaid
 sequenceDiagram
     participant FE
     participant BE
@@ -478,7 +478,7 @@ sequenceDiagram
 ---
 
 ### 10.3 Cancel by User
-```
+```mermaid
 sequenceDiagram
     participant FE
     participant BE
@@ -500,7 +500,7 @@ sequenceDiagram
 ---
 
 ### 10.4 SSE Reconnect Flow
-```
+```mermaid
 sequenceDiagram
     participant FE
     participant BE

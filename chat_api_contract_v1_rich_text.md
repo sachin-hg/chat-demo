@@ -302,7 +302,7 @@ data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b1","sourceMessageId"
 
 id: evt_bot_011
 event: chat_event
-data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b2","sourceMessageId":"msg_u1","sequenceNumber":1,"isFinal":true,"messageType":"template","content":{"templateId":"property_carousel","data":{"properties":[{"id":"p1"},{"id":"p2"}]}}}}
+data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b2","sourceMessageId":"msg_u1","sequenceNumber":1,"isFinal":true,"messageType":"template","content":{"templateId":"property_carousel","data":{"properties":[{"id":"p1","type":"project","title":"2, 3 BHK Apartments","name":"Godrej Air","short_address":[{"display_name":"Sector 85"},{"display_name":"Gurgaon"}],"is_rera_verified":true,"inventory_canonical_url":"https://example.com/property/p1","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":["Ready to move"],"formatted_min_price":"3 Cr","formatted_max_price":"3.5 Cr","unit_of_area":"sq.ft.","display_area_type":"Built up area","min_selected_area_in_unit":2500,"max_selected_area_in_unit":4750,"inventory_configs":[]},{"id":"p2","type":"rent","title":"3 BHK flat","short_address":[{"display_name":"Sector 33"},{"display_name":"Sohna"},{"display_name":"Gurgaon"}],"region_entities":[{"name":"M3M Solitude Ralph Estate"}],"is_rera_verified":false,"is_verified":true,"inventory_canonical_url":"https://example.com/property/p2","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":[],"formatted_price":"30,000","unit_of_area":"sq.ft.","display_area_type":"Built up area","inventory_configs":[{"furnish_type_id":2,"area_value_in_unit":4750}]},{"id":"p4","type":"rent","title":"2 BHK independent floor","short_address":[{"display_name":"Sector 23"},{"display_name":"Sohna"},{"display_name":"Gurgaon"}],"is_rera_verified":true,"is_verified":false,"inventory_canonical_url":"https://example.com/property/p4","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":[],"formatted_price":"12,000","unit_of_area":"sq.ft.","display_area_type":"Built up area","inventory_configs":[{"furnish_type_id":3,"area_value_in_unit":750}]}]}}}}
 
 event: connection_close
 data: {"reason":"response_complete"}
@@ -378,7 +378,59 @@ data: {"reason":"response_complete"}
     "messageType": "template",
     "content": {
       "templateId": "property_carousel",
-      "data": { "properties": [{ "id": "p1" }, { "id": "p2" }, { "id": "p4" }] }
+      "data": {
+        "properties": [
+          {
+            "id": "p1",
+            "type": "project",
+            "title": "2, 3 BHK Apartments",
+            "name": "Godrej Air",
+            "short_address": [{ "display_name": "Sector 85" }, { "display_name": "Gurgaon" }],
+            "is_rera_verified": true,
+            "inventory_canonical_url": "https://example.com/property/p1",
+            "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
+            "property_tags": ["Ready to move"],
+            "formatted_min_price": "3 Cr",
+            "formatted_max_price": "3.5 Cr",
+            "unit_of_area": "sq.ft.",
+            "display_area_type": "Built up area",
+            "min_selected_area_in_unit": 2500,
+            "max_selected_area_in_unit": 4750,
+            "inventory_configs": []
+          },
+          {
+            "id": "p2",
+            "type": "rent",
+            "title": "3 BHK flat",
+            "short_address": [{ "display_name": "Sector 33" }, { "display_name": "Sohna" }, { "display_name": "Gurgaon" }],
+            "region_entities": [{ "name": "M3M Solitude Ralph Estate" }],
+            "is_rera_verified": false,
+            "is_verified": true,
+            "inventory_canonical_url": "https://example.com/property/p2",
+            "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
+            "property_tags": [],
+            "formatted_price": "30,000",
+            "unit_of_area": "sq.ft.",
+            "display_area_type": "Built up area",
+            "inventory_configs": [{ "furnish_type_id": 2, "area_value_in_unit": 4750 }]
+          },
+          {
+            "id": "p4",
+            "type": "rent",
+            "title": "2 BHK independent floor",
+            "short_address": [{ "display_name": "Sector 23" }, { "display_name": "Sohna" }, { "display_name": "Gurgaon" }],
+            "is_rera_verified": true,
+            "is_verified": false,
+            "inventory_canonical_url": "https://example.com/property/p4",
+            "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
+            "property_tags": [],
+            "formatted_price": "12,000",
+            "unit_of_area": "sq.ft.",
+            "display_area_type": "Built up area",
+            "inventory_configs": [{ "furnish_type_id": 3, "area_value_in_unit": 750 }]
+          }
+        ]
+      }
     }
   }
 }
@@ -424,6 +476,7 @@ data: {"reason":"response_complete"}
 ```
 
 #### 4.3.7 Text fallback: shortlist/contact template route
+`shortlist_property` / `contact_seller` template payloads intentionally use minimal property metadata (`id`, `type`) in current Phase 1 implementation.
 ```json
 {
   "sender": { "type": "user" },
@@ -475,8 +528,25 @@ data: {"reason":"response_complete"}
       "templateId": "nested_qna",
       "data": {
         "selections": [
-          { "questionId": "sub_intent_1", "title": "Which sector 32 are you referring to?", "options": [{ "id": "uuid1" }, { "id": "uuid2" }] },
-          { "questionId": "sub_intent_2", "title": "Which sector 21 are you referring to?", "options": [{ "id": "uuid3" }, { "id": "uuid4" }] }
+          {
+            "questionId": "sub_intent_1",
+            "title": "Which sector 32 are you referring to?",
+            "type": "locality_single_select",
+            "options": [
+              { "id": "uuid1", "title": "Sector 32, Gurgaon", "city": "Gurgaon", "type": "Locality" },
+              { "id": "uuid2", "title": "Sector 32, Faridabad", "city": "Faridabad", "type": "Locality" }
+            ]
+          },
+          {
+            "questionId": "sub_intent_2",
+            "title": "Which sector 21 are you referring to?",
+            "type": "locality_single_select",
+            "entity": "sector 21",
+            "options": [
+              { "id": "uuid3", "title": "Sector 21, Gurgaon", "city": "Gurgaon", "type": "Locality" },
+              { "id": "uuid4", "title": "Sector 21, Faridabad", "city": "Faridabad", "type": "Locality" }
+            ]
+          }
         ],
         "canSkip": true
       }
@@ -575,7 +645,27 @@ data: {"reason":"response_complete"}
     "sequenceNumber": 0,
     "isFinal": true,
     "messageType": "template",
-    "content": { "templateId": "download_brochure", "data": { "property": { "id": "p2", "type": "rent" } } }
+    "content": {
+      "templateId": "download_brochure",
+      "data": {
+        "property": {
+          "id": "p2",
+          "type": "rent",
+          "title": "3 BHK flat",
+          "short_address": [{ "display_name": "Sector 33" }, { "display_name": "Sohna" }, { "display_name": "Gurgaon" }],
+          "region_entities": [{ "name": "M3M Solitude Ralph Estate" }],
+          "is_rera_verified": false,
+          "is_verified": true,
+          "inventory_canonical_url": "https://example.com/property/p2",
+          "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
+          "property_tags": [],
+          "formatted_price": "30,000",
+          "unit_of_area": "sq.ft.",
+          "display_area_type": "Built up area",
+          "inventory_configs": [{ "furnish_type_id": 2, "area_value_in_unit": 4750 }]
+        }
+      }
+    }
   }
 }
 ```
