@@ -8,7 +8,9 @@ import {
   sendMessage,
   sendMessageStream,
   cancelRequest,
+  migrateChat,
 } from "@/lib/api";
+import { useAuth } from "@/components/auth/AuthProvider";
 import type { ChatEvent } from "@/lib/contract-types";
 import { ChatMessage } from "@/components/chat/ChatMessage";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -389,6 +391,8 @@ function ChatPageContent() {
   const prevReplyStatusRef = useRef<ReplyStatus>("idle");
   const demoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleSendTextRef = useRef<(text: string) => void>(() => {});
+  const hasMigratedRef = useRef(false);
+  const auth = useAuth();
   const showToast = useCallback((message: string) => toast.show(message), [toast]);
 
   lastMessagesRef.current = messages;
@@ -464,6 +468,27 @@ function ChatPageContent() {
       cancelled = true;
     };
   }, [isDemo]);
+
+  // Login-time migration (mock): move anon c1 history into logged-in c2 and switch FE to c2.
+  useEffect(() => {
+    if (!auth.isLoggedIn || !conversationId || hasMigratedRef.current) return;
+    hasMigratedRef.current = true;
+    (async () => {
+      try {
+        const res = await migrateChat(conversationId);
+        const newConversationId = res.newConversationId;
+        if (!newConversationId || newConversationId === conversationId) return;
+        setConversationId(newConversationId);
+        const hist = await getHistory(newConversationId, { page_size: INITIAL_PAGE_SIZE });
+        const list = hist.messages as StoredMessage[];
+        knownEventIdsRef.current = new Set(list.map((m) => m.eventId).filter(Boolean));
+        setMessages(list);
+        setHasMoreOlder(hist.hasMore);
+      } catch (e) {
+        console.error("chat migration failed", e);
+      }
+    })();
+  }, [auth.isLoggedIn, conversationId]);
 
   // Note: Phase-1 request-scoped streaming.
   // responseRequired=true uses send-message-streamed; responseRequired=false uses send-message JSON.

@@ -15,6 +15,35 @@ import {
 
 const CONV = "conv_1";
 const BOT = { type: "bot" as const, id: "re_bot" };
+const ML_RESPONSE_CONTEXT = {
+  service: "buy",
+  category: "residential",
+  city: "526acdc6c33455e9e4e9",
+  filters: {
+    poly: ["dce9290ec3fe8834a293"],
+    est: 194298,
+    region_entity_id: 31817,
+    region_entity_type: "project",
+    uuid: [],
+    qv_resale_id: 1234,
+    qv_rent_id: 12345,
+    apartment_type_id: [1, 2],
+    contact_person_id: [1, 2],
+    facing: ["east", "west"],
+    has_lift: true,
+    is_gated_community: true,
+    is_verified: true,
+    max_area: 4000,
+    max_poss: 0,
+    max_price: 4800000,
+    radius: 3000,
+    routing_range: 10,
+    routing_range_type: "time",
+    min_price: 100,
+    property_type_id: [1, 2],
+    type: "project",
+  },
+};
 
 function generateMessageId(): string {
   return `msg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 11)}`;
@@ -42,7 +71,11 @@ function botMessage(
       isFinal,
       messageType,
       visibility,
-      content,
+      content: {
+        ...content,
+        // Provisional strategy: include context in every ML response.
+        context: ML_RESPONSE_CONTEXT,
+      },
     },
   };
 }
@@ -154,7 +187,7 @@ export function getNextBotEvents(
   // If user explicitly mentions ambiguous sectors (e.g. "sector 32, sector 21"), we should route to nested_qna instead.
   if (
     messageType === "text" &&
-    matchText(textMsg ?? "", "locality carousel", "locality comparison") &&
+    matchText(textMsg ?? "", "locality carousel", "locality comparison", "trending localities") &&
     !/(sector\s*32|sector\s*21)/i.test(textMsg ?? "")
   ) {
     return [
@@ -382,7 +415,6 @@ export function getNextBotEvents(
                 options: SECTOR_21_OPTIONS.map((o) => ({ id: o.id, title: o.name, city: o.city, type: o.type })),
               },
             ],
-            canSkip: true,
           },
         },
         { sourceMessageId, sequenceNumber: 1, isFinal: true }
@@ -409,7 +441,6 @@ export function getNextBotEvents(
                 options: SECTOR_OPTIONS.map((o) => ({ id: o.id, title: o.name, city: o.city, type: o.type })),
               },
             ],
-            canSkip: true,
           },
         },
         { sourceMessageId, sequenceNumber: 0, isFinal: true }
@@ -435,7 +466,6 @@ export function getNextBotEvents(
                 options: SECTOR_21_OPTIONS.map((o) => ({ id: o.id, title: o.name, city: o.city, type: o.type })),
               },
             ],
-            canSkip: true,
           },
         },
         { sourceMessageId, sequenceNumber: 1, isFinal: true }

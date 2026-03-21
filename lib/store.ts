@@ -1,6 +1,10 @@
 import type { ChatEvent, SenderType } from "./contract-types";
 
-const CONV_ID = "conv_1";
+const DEFAULT_CONV_ID = "c1";
+const MIGRATED_CONV_ID = "c2";
+let activeAnonConversationId = DEFAULT_CONV_ID;
+let activeLoggedInConversationId: string | null = null;
+let loggedInSeeded = false;
 
 export type RequestState =
   | "PENDING"
@@ -43,25 +47,30 @@ function now() {
 }
 
 export function getConversationId(): { conversationId: string; isNew: boolean } {
-  const isNew = events.length === 0;
-  return { conversationId: CONV_ID, isNew };
+  const conversationId = activeLoggedInConversationId ?? activeAnonConversationId;
+  const isNew = events.filter((e) => e.conversationId === conversationId).length === 0;
+  return { conversationId, isNew };
 }
 
 export function getChats() {
   if (events.length === 0) {
     return { chats: [] };
   }
-  const last = events[events.length - 1];
-  const first = events[0];
-  return {
-    chats: [
-      {
-        conversationId: CONV_ID,
-        createdAt: first.createdAt,
-        lastActivityAt: last.createdAt,
-      },
-    ],
-  };
+  const convs = new Map<string, { first: string; last: string }>();
+  for (const ev of events) {
+    const cid = ev.conversationId ?? DEFAULT_CONV_ID;
+    const rec = convs.get(cid);
+    if (!rec) convs.set(cid, { first: ev.createdAt, last: ev.createdAt });
+    else rec.last = ev.createdAt;
+  }
+  const chats = [...convs.entries()]
+    .map(([conversationId, v]) => ({
+      conversationId,
+      createdAt: v.first,
+      lastActivityAt: v.last,
+    }))
+    .sort((a, b) => (a.lastActivityAt < b.lastActivityAt ? 1 : -1));
+  return { chats };
 }
 
 export function getHistory(
@@ -91,7 +100,7 @@ export function getHistory(
     const idx = list.findIndex((e) => e.eventId === options.messagesBefore);
     if (idx <= 0) {
       return {
-        conversationId: CONV_ID,
+        conversationId,
         messages: [],
         hasMore: false,
       };
@@ -101,7 +110,7 @@ export function getHistory(
     const messages = beforeList.slice(-pageSize);
     const messagesWithState = messages.map((e) => withRequestState(e));
     return {
-      conversationId: CONV_ID,
+      conversationId,
       messages: messagesWithState as StoredEvent[],
       hasMore,
     };
@@ -113,7 +122,7 @@ export function getHistory(
     list = idx >= 0 ? list.slice(idx + 1) : [];
     const messagesWithState = list.map((e) => withRequestState(e));
     return {
-      conversationId: CONV_ID,
+      conversationId,
       messages: messagesWithState as StoredEvent[],
       hasMore: false,
     };
@@ -125,7 +134,7 @@ export function getHistory(
 
   const messagesWithState = messages.map((e) => withRequestState(e));
   return {
-    conversationId: CONV_ID,
+    conversationId,
     messages: messagesWithState as StoredEvent[],
     hasMore,
   };
@@ -148,15 +157,15 @@ export function appendEvent(
   events.push(stored);
   // SSE is for bot → FE only; FE already has the user message from send-message response (dedupe)
   if (stored.sender.type === "bot") {
-    broadcast(CONV_ID, stored);
+    broadcast(stored.conversationId ?? DEFAULT_CONV_ID, stored);
   }
   return stored;
 }
 
-export function createRequest(userEventId: string): ChatRequest {
+export function createRequest(userEventId: string, conversationId: string = DEFAULT_CONV_ID): ChatRequest {
   const req: ChatRequest = {
     requestId: nextRequestId(),
-    conversationId: CONV_ID,
+    conversationId,
     userEventId,
     state: "PENDING",
     createdAt: now(),
@@ -240,6 +249,9 @@ export function getAllEvents(): StoredEvent[] {
 export function resetStore() {
   events.length = 0;
   requests.length = 0;
+  activeAnonConversationId = DEFAULT_CONV_ID;
+  activeLoggedInConversationId = null;
+  loggedInSeeded = false;
 }
 
 function getRequestByUserEventId(userEventId: string): ChatRequest | undefined {
@@ -274,4 +286,62 @@ function withRequestState(event: StoredEvent): StoredEvent {
     ...event,
     requestState: resolved,
   };
+}
+
+function pushEventWithoutBroadcast(event: Omit<StoredEvent, "eventId" | "createdAt"> & { eventId?: string; createdAt?: string }) {
+  const generatedEventId = event.eventId ?? nextEventId();
+  const stored: StoredEvent = {
+    ...event,
+    eventId: generatedEventId,
+    payload: {
+      ...event.payload,
+      messageId: event.payload?.messageId ?? generatedEventId,
+    },
+    createdAt: event.createdAt ?? now(),
+  };
+  events.push(stored);
+}
+
+function seedLoggedInConversationIfNeeded(conversationId: string) {
+  if (loggedInSeeded) return;
+  loggedInSeeded = true;
+  pushEventWithoutBroadcast({
+    conversationId,
+    sender: { type: "user" },
+    payload: {
+      messageType: "text",
+      content: { text: "Show me 3 BHK in Gurgaon" },
+    },
+    createdAt: "2026-01-06T10:00:00.000Z",
+  });
+  pushEventWithoutBroadcast({
+    conversationId,
+    sender: { type: "bot", id: "re_bot" },
+    payload: {
+      messageType: "text",
+      sourceMessageId: "msg_old_1",
+      sequenceNumber: 0,
+      isFinal: true,
+      content: { text: "Here are some older recommendations from your previous logged-in chat." },
+    },
+    createdAt: "2026-01-06T10:00:02.000Z",
+  });
+}
+
+export function migrateConversation(currentConversationId: string): { newConversationId: string; migrated: boolean } {
+  const newConversationId = MIGRATED_CONV_ID;
+  seedLoggedInConversationIfNeeded(newConversationId);
+
+  events.forEach((e) => {
+    if ((e.conversationId ?? DEFAULT_CONV_ID) === currentConversationId) {
+      e.conversationId = newConversationId;
+    }
+  });
+  requests.forEach((r) => {
+    if ((r.conversationId ?? DEFAULT_CONV_ID) === currentConversationId) {
+      r.conversationId = newConversationId;
+    }
+  });
+  activeLoggedInConversationId = newConversationId;
+  return { newConversationId, migrated: true };
 }

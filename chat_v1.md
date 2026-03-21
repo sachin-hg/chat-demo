@@ -7,10 +7,7 @@ This file is the canonical consolidated reference for architecture, API contract
 
 1. Property carousel metadata: `property_count` vs `hasViewMore`.
 2. Chat migration behavior when a user logs in mid-session.
-3. Passing context out of chat (options under discussion):
-   - Context in every ML response (seems most practical).
-   - Separate context event in stream (might not work properly).
-   - Separate API to pull context from ML (preferred).
+3. Context-out strategy is provisionally set to: include `context` in every ML response.
 
 Source documents merged:
 - `chat_system_architecture_v1.md`
@@ -303,9 +300,40 @@ data: {"reason":"response_complete"}
   "requestId": "req_123",
   "respondingToEventId": "evt_456",
   "status": "success",
-  "event": { "...": "Bot ChatEvent" }
+  "event": { "...": "Bot ChatEvent" },
+  "context": {
+    "service": "buy",
+    "category": "residential",
+    "city": "526acdc6c33455e9e4e9",
+    "filters": {
+      "poly": ["dce9290ec3fe8834a293"],
+      "est": 194298,
+      "region_entity_id": 31817,
+      "region_entity_type": "project",
+      "uuid": [],
+      "qv_resale_id": 1234,
+      "qv_rent_id": 12345,
+      "apartment_type_id": [1, 2],
+      "contact_person_id": [1, 2],
+      "facing": ["east", "west"],
+      "has_lift": true,
+      "is_gated_community": true,
+      "is_verified": true,
+      "max_area": 4000,
+      "max_poss": 0,
+      "max_price": 4800000,
+      "radius": 3000,
+      "routing_range": 10,
+      "routing_range_type": "time",
+      "min_price": 100,
+      "property_type_id": [1, 2],
+      "type": "project"
+    }
+  }
 }
 ```
+
+`context` is optional in contract shape, but current provisional strategy is to include it on all ML success responses. In current Phase 1 mock wiring, this is surfaced on each bot event under `payload.content.context` for FE consumption.
 
 ---
 
@@ -533,6 +561,34 @@ sequenceDiagram
 
 ---
 
+### 10.5 Conversation Migration After Login
+```mermaid
+sequenceDiagram
+    participant FE
+    participant BE
+    participant DB
+
+    Note over FE: User starts chat while logged out (_ga identity)
+    FE->>BE: GET /chats/get-conversation-id
+    BE-->>FE: { conversationId: "c1" }
+    FE->>BE: POST /chats/send-message* (multiple turns on c1)
+
+    Note over FE: User logs in from shortlist/contact/brochure flow
+    FE->>BE: POST /api/migrate-chat?currentConversationId=c1<br/>header: login_auth_token
+    alt Migration strategy enabled
+      BE->>DB: Move c1-tagged events/requests to c2
+      BE-->>FE: { newConversationId: "c2" }
+      FE->>BE: GET /chats/get-history?conversationId=c2
+      BE-->>FE: old c2 history + migrated c1 history
+      Note over FE: FE switches active conversationId to c2
+    else Migration strategy disabled
+      BE-->>FE: {}
+      Note over FE: FE continues on c1
+    end
+```
+
+---
+
 ## Appendix A: Implementation diversions (this app)
 
 This section records how the **chat-demo** implementation diverges from or extends the frozen spec above. The spec remains canonical; these notes describe actual behaviour in this codebase.
@@ -666,6 +722,10 @@ This section records how the **chat-demo** implementation diverges from or exten
             },
             "templateId": { "type": "string" },
             "data": { "type": "object" },
+            "context": {
+              "type": "object",
+              "description": "Optional ML response context snapshot. Provisional strategy: include in every ML response."
+            },
 
             // [Phase 2] fallbackText — not implemented in Phase 1
             "fallbackText": {
@@ -1272,8 +1332,7 @@ data: {"reason":"response_complete"}
               { "id": "uuid4", "title": "Sector 21", "city": "Faridabad", "type": "Locality" }
             ]
           }
-        ],
-        "canSkip": true
+        ]
       }
     }
   }
@@ -1617,8 +1676,7 @@ data: {"reason":"response_complete"}
         "selections": [
           { "questionId": "sub_intent_1", "title": "Which sector 32 are you referring to?" },
           { "questionId": "sub_intent_2", "title": "Which sector 21 are you referring to?" }
-        ],
-        "canSkip": true
+        ]
       }
     }
   }
@@ -1729,7 +1787,90 @@ data: {"reason":"response_complete"}
     "messageType": "template",
     "content": {
       "templateId": "property_carousel",
-      "data": { "property_count": 15, "properties": [{ "id": "p1" }, { "id": "p2" }, { "id": "p3" }] }
+      "data": {
+        // this is still under discussion, required to power "view all" button. discuss if this should be replaced with "hasViewMore"
+        "property_count": 15,
+        "service": "buy",
+        "category": "residential",
+        "city": "526acdc6c33455e9e4e9",
+        "filters": {
+          "poly": ["dce9290ec3fe8834a293"],
+          "est": 194298,
+          "region_entity_id": 31817,
+          "region_entity_type": "project",
+          "uuid": [],
+          "qv_resale_id": 1234,
+          "qv_rent_id": 12345,
+          "apartment_type_id": [1, 2],
+          "contact_person_id": [1, 2],
+          "facing": ["east", "west"],
+          "has_lift": true,
+          "is_gated_community": true,
+          "is_verified": true,
+          "max_area": 4000,
+          "max_poss": 0,
+          "max_price": 4800000,
+          "radius": 3000,
+          "routing_range": 10,
+          "routing_range_type": "time",
+          "min_price": 100,
+          "property_type_id": [1, 2],
+          "type": "project"
+        },
+        // structure should be similar to corresponding venus/casa APIs. this is just sample
+        "properties": [
+          {
+            "id": "p1",
+            "type": "project",
+            "title": "2, 3 BHK Apartments",
+            "name": "Godrej Air",
+            "short_address": [{ "display_name": "Sector 85" }, { "display_name": "Gurgaon" }],
+            "is_rera_verified": true,
+            "inventory_canonical_url": "https://example.com/property/p1",
+            "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
+            "property_tags": ["Ready to move"],
+            "formatted_min_price": "3 Cr",
+            "formatted_max_price": "3.5 Cr",
+            "unit_of_area": "sq.ft.",
+            "display_area_type": "Built up area",
+            "min_selected_area_in_unit": 2500,
+            "max_selected_area_in_unit": 4750,
+            "inventory_configs": []
+          },
+          {
+            "id": "p2",
+            "type": "rent",
+            "title": "3 BHK flat",
+            "short_address": [{ "display_name": "Sector 33" }, { "display_name": "Sohna" }, { "display_name": "Gurgaon" }],
+            "region_entities": [{ "name": "M3M Solitude Ralph Estate" }],
+            "is_rera_verified": false,
+            "is_verified": true,
+            "inventory_canonical_url": "https://example.com/property/p2",
+            "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
+            "property_tags": [],
+            "formatted_price": "30,000",
+            "unit_of_area": "sq.ft.",
+            "display_area_type": "Built up area",
+            "inventory_configs": [{ "furnish_type_id": 2, "area_value_in_unit": 4750 }]
+          },
+          {
+            "id": "p3",
+            "type": "resale",
+            "title": "3 BHK apartment",
+            "short_address": [{ "display_name": "Sector 33" }, { "display_name": "Sohna" }, { "display_name": "Gurgaon" }],
+            "region_entities": [{ "name": "M3M Solitude Ralph Estate" }],
+            "is_rera_verified": false,
+            "is_verified": true,
+            "inventory_canonical_url": "https://example.com/property/p3",
+            "thumb_image_url": "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=600",
+            "property_tags": ["Possession by March, 2026"],
+            "formatted_min_price": "3 Cr",
+            "unit_of_area": "sq.ft.",
+            "display_area_type": "Built up area",
+            "inventory_configs": [{ "furnish_type_id": null, "area_value_in_unit": 4750 }]
+          }
+        ]
+      }
     }
   }
 }
@@ -1746,6 +1887,7 @@ data: {"reason":"response_complete"}
 }
 ```
 #### 4.3.10.38 FE auto-action: location_shared without rendering share_location
+// Note: This line is explanatory only and not part of API contract payload.
 ```json
 {
   "sender": { "type": "system" },
@@ -1753,8 +1895,7 @@ data: {"reason":"response_complete"}
     "messageType": "user_action",
     "responseRequired": true,
     "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } }
-  },
-  "note": "auto-shared by FE without rendering share_location template"
+  }
 }
 ```
 #### 4.3.10.39 Bot template: property_carousel
@@ -1765,7 +1906,90 @@ data: {"reason":"response_complete"}
     "messageType": "template",
     "content": {
       "templateId": "property_carousel",
-      "data": { "property_count": 15, "properties": [{ "id": "p1" }, { "id": "p2" }, { "id": "p3" }] }
+      "data": {
+        // this is still under discussion, required to power "view all" button. discuss if this should be replaced with "hasViewMore"
+        "property_count": 15,
+        "service": "buy",
+        "category": "residential",
+        "city": "526acdc6c33455e9e4e9",
+        "filters": {
+          "poly": ["dce9290ec3fe8834a293"],
+          "est": 194298,
+          "region_entity_id": 31817,
+          "region_entity_type": "project",
+          "uuid": [],
+          "qv_resale_id": 1234,
+          "qv_rent_id": 12345,
+          "apartment_type_id": [1, 2],
+          "contact_person_id": [1, 2],
+          "facing": ["east", "west"],
+          "has_lift": true,
+          "is_gated_community": true,
+          "is_verified": true,
+          "max_area": 4000,
+          "max_poss": 0,
+          "max_price": 4800000,
+          "radius": 3000,
+          "routing_range": 10,
+          "routing_range_type": "time",
+          "min_price": 100,
+          "property_type_id": [1, 2],
+          "type": "project"
+        },
+        // structure should be similar to corresponding venus/casa APIs. this is just sample
+        "properties": [
+          {
+            "id": "p1",
+            "type": "project",
+            "title": "2, 3 BHK Apartments",
+            "name": "Godrej Air",
+            "short_address": [{ "display_name": "Sector 85" }, { "display_name": "Gurgaon" }],
+            "is_rera_verified": true,
+            "inventory_canonical_url": "https://example.com/property/p1",
+            "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
+            "property_tags": ["Ready to move"],
+            "formatted_min_price": "3 Cr",
+            "formatted_max_price": "3.5 Cr",
+            "unit_of_area": "sq.ft.",
+            "display_area_type": "Built up area",
+            "min_selected_area_in_unit": 2500,
+            "max_selected_area_in_unit": 4750,
+            "inventory_configs": []
+          },
+          {
+            "id": "p2",
+            "type": "rent",
+            "title": "3 BHK flat",
+            "short_address": [{ "display_name": "Sector 33" }, { "display_name": "Sohna" }, { "display_name": "Gurgaon" }],
+            "region_entities": [{ "name": "M3M Solitude Ralph Estate" }],
+            "is_rera_verified": false,
+            "is_verified": true,
+            "inventory_canonical_url": "https://example.com/property/p2",
+            "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
+            "property_tags": [],
+            "formatted_price": "30,000",
+            "unit_of_area": "sq.ft.",
+            "display_area_type": "Built up area",
+            "inventory_configs": [{ "furnish_type_id": 2, "area_value_in_unit": 4750 }]
+          },
+          {
+            "id": "p3",
+            "type": "resale",
+            "title": "3 BHK apartment",
+            "short_address": [{ "display_name": "Sector 33" }, { "display_name": "Sohna" }, { "display_name": "Gurgaon" }],
+            "region_entities": [{ "name": "M3M Solitude Ralph Estate" }],
+            "is_rera_verified": false,
+            "is_verified": true,
+            "inventory_canonical_url": "https://example.com/property/p3",
+            "thumb_image_url": "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=600",
+            "property_tags": ["Possession by March, 2026"],
+            "formatted_min_price": "3 Cr",
+            "unit_of_area": "sq.ft.",
+            "display_area_type": "Built up area",
+            "inventory_configs": [{ "furnish_type_id": null, "area_value_in_unit": 4750 }]
+          }
+        ]
+      }
     }
   }
 }
@@ -1869,13 +2093,30 @@ data: {"reason":"response_complete"}
 
 ### 4.4 Auth and identity headers
 
-`loginAuthToken` is removed from payload.  
 Apps should send identity via cookie headers:
 
 - `login_auth_token` (when available/authenticated),
 - otherwise `_ga` as unique identifier:
   - app clients: device identifier in `_ga`,
   - web FE: Google Analytics user identifier in `_ga`.
+
+### 4.4.1 Chat migration after login (mock contract)
+
+When a guest chat (`_ga`) becomes authenticated mid-session:
+
+1. FE has active `currentConversationId` (example: `c1`).
+2. FE calls:
+   - `POST /api/migrate-chat?currentConversationId=c1`
+   - header: `login_auth_token`
+3. BE behavior:
+   - if migration strategy is enabled, BE returns `{ "newConversationId": "c2" }` and updates stored rows from `c1` to `c2`.
+   - if disabled, BE may return `{}` (no switch).
+4. FE behavior after successful migration:
+   - switch active conversation to `c2`
+   - fetch history on `c2` (with/without cursors) and continue all next turns on `c2`
+   - include `login_auth_token` on subsequent calls.
+
+**Known edge case:** migration should be done when no in-flight turn is pending; otherwise late events can be split across pre/post migration boundaries.
 
 ---
 

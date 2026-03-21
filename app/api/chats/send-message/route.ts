@@ -26,9 +26,9 @@ export async function POST(request: NextRequest) {
 
   const stored = appendEvent({
     ...event,
-    conversationId: event.conversationId ?? "conv_1",
+    conversationId: event.conversationId ?? "c1",
   });
-  const requestRecord = createRequest(stored.eventId!);
+  const requestRecord = createRequest(stored.eventId!, stored.conversationId ?? "c1");
   completeRequest(requestRecord.requestId);
   stored.requestState = "COMPLETED";
 

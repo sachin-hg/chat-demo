@@ -7,9 +7,19 @@ import type {
 } from "./contract-types";
 
 const BASE = "";
+let loginAuthToken: string | null = null;
+
+function withAuthHeaders(headers: Record<string, string>): Record<string, string> {
+  if (!loginAuthToken) return headers;
+  return { ...headers, login_auth_token: loginAuthToken };
+}
+
+export function setLoginAuthToken(token: string | null): void {
+  loginAuthToken = token;
+}
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`);
+  const res = await fetch(`${BASE}${path}`, { headers: withAuthHeaders({}) });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -17,7 +27,7 @@ async function get<T>(path: string): Promise<T> {
 async function post<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: withAuthHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(await res.text());
@@ -79,10 +89,10 @@ export async function sendMessageStream(
 ): Promise<void> {
   const res = await fetch("/api/chats/send-message-streamed", {
     method: "POST",
-    headers: {
+    headers: withAuthHeaders({
       "Content-Type": "application/json",
       Accept: "text/event-stream",
-    },
+    }),
     body: JSON.stringify({ event }),
     signal: options?.signal,
   });
@@ -134,6 +144,16 @@ export async function sendMessageStream(
 
 export async function cancelRequest(eventId: string): Promise<{ ok: boolean }> {
   return post("/api/chats/cancel", { eventId });
+}
+
+export async function migrateChat(currentConversationId: string): Promise<{ newConversationId?: string }> {
+  const sp = new URLSearchParams({ currentConversationId });
+  const res = await fetch(`/api/migrate-chat?${sp}`, {
+    method: "POST",
+    headers: withAuthHeaders({}),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
 }
 
 export function getStreamUrl(conversationId: string): string {

@@ -24,6 +24,8 @@ export interface ChatPayloadContent {
   text?: string;
   templateId?: string;
   data?: Record<string, unknown>;
+  /** Optional ML response context snapshot for downstream consumers. */
+  context?: Record<string, unknown>;
   /** Set by FE when sending user_action; displayed as user bubble when visibility === "shown". */
   derivedLabel?: string;
 }

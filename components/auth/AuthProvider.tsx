@@ -2,6 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { LoginBottomSheet } from "@/components/chat/LoginBottomSheet";
+import { setLoginAuthToken } from "@/lib/api";
 
 type LoginReason = "shortlist" | "contact" | "brochure";
 
@@ -18,7 +19,7 @@ export function useAuth(): AuthContextValue {
   return ctx;
 }
 
-async function postAck(path: string, body: unknown): Promise<{ success: true }> {
+async function postAck(path: string, body: unknown): Promise<{ success: true; login_auth_token?: string }> {
   const res = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -54,7 +55,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const handleLoggedIn = useCallback(async () => {
     // Mock login API
-    await postAck("/api/auth/login", { ok: true });
+    const res = await postAck("/api/auth/login", { ok: true });
+    const token = res.login_auth_token ?? "mock_login_auth_token";
+    setLoginAuthToken(token);
+    window.dispatchEvent(new CustomEvent("chat:login-success", { detail: { login_auth_token: token } }));
     setIsLoggedIn(true);
     setLoginReason(null);
     if (resolveRef.current) {

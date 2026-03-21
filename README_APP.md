@@ -73,6 +73,9 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
     - **`event: connection_ack`** — immediate ack: `data: { "eventId": "...", "requestState": "PENDING" }`
     - **`event: chat_event`** — bot events streamed as they’re produced: `id: <eventId>`, `data: <JSON ChatEvent>`
     - **`event: connection_close`** — emitted when response is complete (`isFinal: true`) or stream inactivity reaches 15s.
+- `POST /api/migrate-chat?currentConversationId=c1` with `login_auth_token` header
+  - When migration strategy is enabled, BE returns `{ newConversationId: "c2" }` and merges/moves c1-tagged history to c2 in mock DB.
+  - FE switches to `c2`, reloads history, and continues the conversation on `c2`.
 
 ## UI Notes
 
