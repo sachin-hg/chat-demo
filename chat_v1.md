@@ -380,14 +380,20 @@ BE persistence semantics for ML outputs:
 
 ```json
 {
-  "sourceMessageId": "msg_u_456",
-  "messageState": "ERRORED_AT_ML",
   "event": {
-    "...": "ChatEventFromML"
-  },
-  "error": {
-    "code": "500",
-    "message": "Cannot process request"
+    "conversationId": "conv_1",
+    "sender": { "type": "bot" },
+    "sourceMessageId": "msg_u_456",
+    "messageType": "text",
+    "messageState": "ERRORED_AT_ML",
+    "sequenceNumber": 0,
+    "error": {
+      "code": "500",
+      "message": "Cannot process request"
+    },
+    "content": {
+      "text": "Something went wrong while processing this request."
+    }
   }
 }
 ```
