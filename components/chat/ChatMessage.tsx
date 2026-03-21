@@ -78,9 +78,9 @@ export function ChatMessage({
     );
   }
 
-  // user_action: only render if visibility === "shown" and derivedLabel set
+  // user_action: only render if isVisible === true and derivedLabel set
   if (messageType === "user_action") {
-    if (event.visibility === "shown" && content.derivedLabel) {
+    if (event.isVisible === true && content.derivedLabel) {
       // System/bot "user_action" should be rendered like bot text (not as a user bubble).
       if (sender.type === "system" || sender.type === "bot") {
         return (
@@ -185,7 +185,7 @@ export function ChatMessage({
                   sender: { type: "user" },
                   messageType: "user_action",
                   responseRequired: true,
-                  visibility: "shown",
+                  isVisible: true,
                   content: {
                     data: {
                       action: payloadData.action,
@@ -206,12 +206,12 @@ export function ChatMessage({
           body = (
             <LocalityInfo
               data={templateId === "locality_carousel" && data.localities != null ? { localities: data.localities } : data}
-              onAction={({ action, responseRequired, visibility, derivedLabel, locality }) =>
+              onAction={({ action, responseRequired, isVisible, derivedLabel, locality }) =>
                 onUserAction({
                   sender: { type: "user" },
                   messageType: "user_action",
                   responseRequired,
-                  visibility,
+                  isVisible,
                   content: {
                     data: { action, replyToMessageId: event.messageId ?? "", locality },
                     derivedLabel,

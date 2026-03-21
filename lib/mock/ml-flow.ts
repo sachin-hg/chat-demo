@@ -57,10 +57,10 @@ function botMessage(
     sourceMessageId: string;
     sequenceNumber?: number;
     messageState?: "IN_PROGRESS" | "COMPLETED" | "ERRORED_AT_ML";
-    visibility?: "shown" | "hidden";
+    isVisible?: boolean;
   }
 ): ChatEventFromML & { messageId?: string } {
-  const { sourceMessageId, sequenceNumber = 0, messageState = "COMPLETED", visibility } = options;
+  const { sourceMessageId, sequenceNumber = 0, messageState = "COMPLETED", isVisible } = options;
   return {
     messageId,
     conversationId: CONV,
@@ -70,7 +70,7 @@ function botMessage(
     messageState,
     summarisedChatContext: ML_RESPONSE_CONTEXT,
     messageType,
-    visibility,
+    isVisible,
     content,
   };
 }

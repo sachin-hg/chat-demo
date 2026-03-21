@@ -23,7 +23,7 @@ interface Props {
   onAction?: (args: {
     action: "show_properties_in_locality" | "learn_more_about_locality";
     responseRequired: boolean;
-    visibility: "shown" | "hidden";
+    isVisible: boolean;
     derivedLabel: string;
     locality: { localityUuid: string };
   }) => void;
@@ -107,7 +107,7 @@ export function LocalityInfo({ data, onAction, disabled = false }: Props) {
                     onAction?.({
                       action: "show_properties_in_locality",
                       responseRequired: true,
-                      visibility: "shown",
+                      isVisible: true,
                       derivedLabel: `Show properties in ${displayName}`,
                       locality: { localityUuid: locId },
                     })
@@ -124,7 +124,7 @@ export function LocalityInfo({ data, onAction, disabled = false }: Props) {
                     onAction?.({
                       action: "learn_more_about_locality",
                       responseRequired: true,
-                      visibility: "shown",
+                      isVisible: true,
                       derivedLabel: `Learn more about ${displayName}`,
                       locality: { localityUuid: locId },
                     })

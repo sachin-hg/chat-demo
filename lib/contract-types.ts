@@ -31,7 +31,7 @@ export interface ChatPayloadContent {
   templateId?: string;
   /** For user_action, data should include action-specific fields and may include replyToMessageId. */
   data?: Record<string, unknown>;
-  /** Set by FE when sending user_action; displayed as user bubble when visibility === "shown". */
+  /** Set by FE when sending user_action; displayed as user bubble when isVisible === true. */
   derivedLabel?: string;
 }
 
@@ -42,7 +42,7 @@ export interface ChatEventFromUser {
   messageType: MessageType;
   content: ChatPayloadContent;
   responseRequired: boolean;
-  visibility?: "shown" | "hidden";
+  isVisible?: boolean;
   // Used by send-message APIs for FE -> BE.
 }
 
@@ -84,7 +84,7 @@ export interface ChatEventFromML {
   error?: { code: string; message: string };
   /** Optional ML response context snapshot for downstream consumers. */
   summarisedChatContext?: Record<string, unknown>;
-  visibility?: "shown" | "hidden";
+  isVisible?: boolean;
   
   sequenceNumber: number;
   
@@ -103,7 +103,7 @@ export interface ChatEventToUser {
   createdAt: string;
 
   responseRequired: boolean; // mandatory where sender === user
-  visibility?: "shown" | "hidden"; // mandatory where sender === user && messageType === user_action
+  isVisible?: boolean; // mandatory where sender === user && messageType === user_action
   
   sequenceNumber?: number; // mandatory where sender === bot
   

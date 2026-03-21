@@ -62,7 +62,7 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
 
 ## API (aligned with spec)
 
-- `ChatEvent` is a **flat object** (no nested `payload` wrapper): top-level fields include `messageType`, `content`, `responseRequired`, `visibility`, `sourceMessageId`, and `sequenceNumber`.
+- `ChatEvent` is a **flat object** (no nested `payload` wrapper): top-level fields include `messageType`, `content`, `responseRequired`, `isVisible`, `sourceMessageId`, and `sequenceNumber`.
 - In FE-facing events, `sourceMessageId` is optional and typically not required for rendering.
 - `GET /api/chats/get-conversation-id` → `{ conversationId, isNew }` (`isNew` is demo-app convenience; not required for production clients)
 - Phase 1 identity mapping: BE keeps a stable 1:1 `conversationId` per `userId` (or per `_ga` for anonymous users), so the same user consistently gets the same conversation.

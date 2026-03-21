@@ -491,7 +491,7 @@ message_state VARCHAR
 summarised_chat_context JSONB
 response_required BOOLEAN
 sequence_number INT
-visibility ENUM('active','soft_deleted')
+is_visible BOOLEAN
 created_at TIMESTAMP
 updated_at TIMESTAMP
 ```
@@ -703,7 +703,7 @@ This section records how the **chat-demo** implementation diverges from or exten
 - **Every bot message MUST have `messageId`, `sourceMessageId`, `sequenceNumber`, and `messageState`**
 - **`sourceMessageId`** ties all bot response messages back to the user message that triggered them
 - In FE-facing events, `sourceMessageId` is optional and generally not required for rendering logic.
-- **`user_action` visibility**: hidden by default — only rendered when `visibility === "shown"` and `derivedLabel` is set
+- **`user_action` visibility**: hidden by default — only rendered when `isVisible === true` and `derivedLabel` is set
 - **For `user_action` replies to prior bot/template messages, use `content.data.replyToMessageId`** (instead of `messageId` inside `data`)
 - **`responseRequired`** on `user_action` and user `text`: tells ML whether to generate a response — always `true` for user text, conditional for user_action
 - **Templates are FE-owned** (custom rendering is allowed and expected)
@@ -744,9 +744,8 @@ This section records how the **chat-demo** implementation diverges from or exten
       "enum": ["context", "text", "template", "user_action", "markdown"],
       "description": "analytics is Phase 2 — not in Phase 1 schema."
     },
-    "visibility": {
-      "type": "string",
-      "enum": ["shown", "hidden"],
+    "isVisible": {
+      "type": "boolean",
       "description": "Only meaningful for messageType = user_action."
     },
     "content": {
@@ -819,7 +818,7 @@ This section records how the **chat-demo** implementation diverges from or exten
       "then": {
         "properties": {
           "content": {
-            // content.data is required; derivedLabel is required only when visibility = shown
+            // content.data is required; derivedLabel is required only when isVisible = true
             "required": ["data"]
           }
         }
@@ -851,8 +850,8 @@ This section records how the **chat-demo** implementation diverges from or exten
 | messageType = context | Do not render |
 | messageState = CANCELLED_BY_USER | Do not render |
 | messageState = ERRORED_AT_ML or TIMED_OUT_BY_BE | Render generic error text (“Something went wrong. Please try again.”) |
-| messageType = user_action AND visibility != shown | Do not render (hidden by default) |
-| messageType = user_action AND visibility = shown | Render derivedLabel |
+| messageType = user_action AND isVisible != true | Do not render (hidden by default) |
+| messageType = user_action AND isVisible = true | Render derivedLabel |
 | template supported | Render template |
 | markdown | Safe render |
 | action scope = template_item | Render per item — **[Phase 2]**  |
@@ -1094,7 +1093,7 @@ data: {"reason":"response_complete"}
   "sender": { "type": "system" },
   "messageType": "user_action",
   "responseRequired": false,
-  "visibility": "hidden",
+  "isVisible": false,
   "content": {
     "data": {
       "action": "shortlist",
@@ -1111,7 +1110,7 @@ data: {"reason":"response_complete"}
   "sender": { "type": "system" },
   "messageType": "user_action",
   "responseRequired": false,
-  "visibility": "shown",
+  "isVisible": true,
   "content": {
     "data": {
       "action": "crf_submitted",
@@ -1129,7 +1128,7 @@ data: {"reason":"response_complete"}
   "sender": { "type": "user" },
   "messageType": "user_action",
   "responseRequired": true,
-  "visibility": "shown",
+  "isVisible": true,
   "content": {
     "data": {
       "action": "learn_more_about_property",
@@ -1328,7 +1327,7 @@ data: {"reason":"response_complete"}
   "sender": { "type": "user" },
   "messageType": "user_action",
   "responseRequired": true,
-  "visibility": "shown",
+  "isVisible": true,
   "content": {
     "data": {
       "action": "nested_qna_selection",
@@ -1399,7 +1398,7 @@ data: {"reason":"response_complete"}
   "sender": { "type": "user" },
   "messageType": "user_action",
   "responseRequired": true,
-  "visibility": "shown",
+  "isVisible": true,
   "content": {
     "data": {
       "action": "learn_more_about_locality",
@@ -1518,7 +1517,7 @@ data: {"reason":"response_complete"}
   "sender": { "type": "user" },
   "messageType": "user_action",
   "responseRequired": true,
-  "visibility": "shown",
+  "isVisible": true,
   "content": {
     "data": {
       "action": "nested_qna_selection",
@@ -1577,7 +1576,7 @@ data: {"reason":"response_complete"}
   "sender": { "type": "user" },
   "messageType": "user_action",
   "responseRequired": true,
-  "visibility": "shown",
+  "isVisible": true,
   "content": {
     "data": {
       "action": "nested_qna_selection",
@@ -1629,7 +1628,7 @@ data: {"reason":"response_complete"}
   "sender": { "type": "user" },
   "messageType": "user_action",
   "responseRequired": true,
-  "visibility": "shown",
+  "isVisible": true,
   "content": {
     "data": {
       "action": "nested_qna_selection",
@@ -1988,7 +1987,7 @@ data: {"reason":"response_complete"}
   "sender": { "type": "system" },
   "messageType": "user_action",
   "responseRequired": false,
-  "visibility": "hidden",
+  "isVisible": false,
   "content": {
     "data": {
       "action": "brochure_downloaded",
@@ -2090,7 +2089,7 @@ function renderRichText(value: string) {
 }
 
 function renderEvent(event) {
-  const { messageType, content, visibility } = event;
+  const { messageType, content, isVisible } = event;
 
   if (messageType === "context") return;
   // [Phase 2] analytics: never render
@@ -2118,8 +2117,8 @@ function renderEvent(event) {
       break;
 
     case "user_action":
-      // hidden by default — only render when visibility is explicitly "shown"
-      if (visibility === "shown") {
+      // hidden by default — only render when isVisible is true
+      if (isVisible === true) {
         renderUserBubble(content.derivedLabel);
       }
       break;
@@ -2150,7 +2149,7 @@ This section documents current behavior in this repository where it differs from
 ### A.2 Rendering behavior
 
 - `context` and `analytics` are never rendered.
-- `user_action` is rendered only when `visibility === "shown"` and `derivedLabel` exists.
+- `user_action` is rendered only when `isVisible === true` and `derivedLabel` exists.
 - Transient templates are rendered only for latest bot message:
   - `share_location`, `shortlist_property`, `contact_seller`, `nested_qna`.
 - Input composer is hidden while sticky `nested_qna` is active.
@@ -2277,7 +2276,7 @@ HTML rendering support is dropped for Phase 1; treat content as markdown/plain t
 - `markdown`:
   - bot/system sender -> rendered through markdown renderer (`RichText` component).
 - `user_action`:
-  - render only when `visibility === "shown"` and `derivedLabel` exists.
+  - render only when `isVisible === true` and `derivedLabel` exists.
   - sender `system`/`bot` -> bot-side text style.
   - sender `user` -> user bubble.
 - `template`:
@@ -2316,12 +2315,12 @@ For final bot/system messages, FE may render a `FeedbackRow` (thumbs up/down + o
 
 ```ts
 function renderEvent(event: ChatEvent) {
-  const { sender, messageType, content, visibility } = event;
+  const { sender, messageType, content, isVisible } = event;
 
   if (messageType === "context" || messageType === "analytics") return null;
 
   if (messageType === "user_action") {
-    if (visibility !== "shown" || !content.derivedLabel) return null;
+    if (isVisible !== true || !content.derivedLabel) return null;
     return sender.type === "user"
       ? renderUserBubble(content.derivedLabel)
       : renderBotText(content.derivedLabel);

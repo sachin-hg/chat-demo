@@ -157,7 +157,7 @@ export function PropertyCarousel({
                     sender: { type: "system" },
                     messageType: "user_action",
                     responseRequired: false,
-                    visibility: "hidden",
+                    isVisible: false,
                     content: {
                       data: { action: "shortlist", replyToMessageId: messageId, property: propertyForMl },
                     },
@@ -259,7 +259,7 @@ export function PropertyCarousel({
                       sender: { type: "user" },
                       messageType: "user_action",
                       responseRequired: true,
-                      visibility: "shown",
+                      isVisible: true,
                       content: {
                         data: {
                           action: "learn_more_about_property",
@@ -292,7 +292,7 @@ export function PropertyCarousel({
                       sender: { type: "system" },
                       messageType: "user_action",
                       responseRequired: false,
-                      visibility: "shown",
+                      isVisible: true,
                       content: {
                         data: {
                           action: "crf_submitted",

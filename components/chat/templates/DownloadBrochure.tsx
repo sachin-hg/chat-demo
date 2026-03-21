@@ -74,7 +74,7 @@ export function DownloadBrochure({ data, messageId, onUserAction, disabled = fal
                 sender: { type: "system" },
                 messageType: "user_action",
                 responseRequired: false,
-                visibility: "shown",
+                isVisible: true,
                 content: {
                   data: { action: "location_denied" },
                   derivedLabel: "Login Failed. Can't proceed without logging in!",

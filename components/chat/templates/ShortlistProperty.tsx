@@ -10,7 +10,7 @@ function emitLoginFailed(onUserAction: (event: ChatEventFromUser) => void) {
     sender: { type: "system" },
     messageType: "user_action",
     responseRequired: false,
-    visibility: "shown",
+    isVisible: true,
     content: {
       data: { action: "location_denied" },
       derivedLabel: "Login Failed. Can't proceed without logging in!",
@@ -72,7 +72,7 @@ export function ShortlistProperty({ data, messageId, onUserAction, disabled = fa
       onUserAction({
         sender: { type: "system" },
         messageType: "user_action",
-        visibility: "shown",
+        isVisible: true,
         responseRequired: false,
         content: {
           data: {
