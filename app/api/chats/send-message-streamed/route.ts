@@ -28,14 +28,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let body: { event: ChatEventFromUser };
+  let event: ChatEventFromUser;
   try {
-    body = await request.json();
+    event = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { event } = body;
   if (!event?.sender?.type || !event?.messageType || !event?.conversationId) {
     return NextResponse.json({ error: "Invalid event" }, { status: 400 });
   }

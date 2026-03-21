@@ -7,7 +7,10 @@ This file is the canonical consolidated reference for architecture, API contract
 
 1. Property carousel metadata: `property_count` vs `hasViewMore`.
 2. Chat migration behavior when a user logs in mid-session.
-3. Context-out strategy is provisionally set to: include `context` in every ML response.
+3. Context-out strategy options (still open; current default is option 1):
+   - **Option 1 (current default):** include `summarisedChatContext` in every ML response.
+   - **Option 2:** FE calls a separate API to pull context from ML only when needed (reduces payload size, but can add latency).
+   - **Option 3:** ML emits context as a separate `context` message whenever context changes; in this mode ML also emits terminal `messageState` for the same `sourceMessageId` with that context update.
 
 ---
 
@@ -188,17 +191,15 @@ Returns latest 6 messages strictly after `msg_401` (e.g. `msg_402..msg_407`).
 
 ```json
 {
-  "event": {
-    "conversationId": "conv_1",
-    "sender": { "type": "user" },
-    "messageType": "text",
-    "content": { "text": "show me properties" }
-  }
+  "conversationId": "conv_1",
+  "sender": { "type": "user" },
+  "messageType": "text",
+  "content": { "text": "show me properties" }
 }
 ```
 
 **Interfaces**
-- Request body `event`: `ChatEventFromUser`
+- Request body: `ChatEventFromUser`
 - Response: `SendMessageResponse`
 
 **Response**
@@ -243,13 +244,13 @@ JSON only:
 
 ### 4.6 `POST /chats/send-message-streamed` (SSE)
 
-Request body is identical to `send-message`. This endpoint requires `Accept: text/event-stream`.
+Request body is a flattened `ChatEventFromUser` (no `event` envelope). This endpoint requires `Accept: text/event-stream`.
 
 Before dispatching to ML, BE authenticates with `login_auth_token` when present and forwards derived identity under `sender.userId` / `sender.gaId`.
 `sender.userId` is BE-derived from auth/identity request headers.
 
 **Interfaces**
-- FE -> BE request `event`: `ChatEventFromUser`
+- FE -> BE request body: `ChatEventFromUser`
 - BE -> ML dispatch event: `ChatEventToML`
 - ML -> BE event: `ChatEventFromML`
 - BE -> FE stream payload (`chat_event`): `ChatEventToUser`
@@ -324,46 +325,44 @@ data: {"reason":"response_complete"}
 
 ```json
 {
-  "event": {
-    "conversationId": "conv_1",
-    "sender": { "type": "bot" },
-    "sourceMessageId": "msg_u_456",
-    "messageType": "template",
-    "messageState": "COMPLETED",
-    "sequenceNumber": 0,
-    "summarisedChatContext": {
-      "service": "buy",
-      "category": "residential",
-      "city": "526acdc6c33455e9e4e9",
-      "filters": {
-        "poly": ["dce9290ec3fe8834a293"],
-        "est": 194298,
-        "region_entity_id": 31817,
-        "region_entity_type": "project",
-        "uuid": [],
-        "qv_resale_id": 1234,
-        "qv_rent_id": 12345,
-        "apartment_type_id": [1, 2],
-        "contact_person_id": [1, 2],
-        "facing": ["east", "west"],
-        "has_lift": true,
-        "is_gated_community": true,
-        "is_verified": true,
-        "max_area": 4000,
-        "max_poss": 0,
-        "max_price": 4800000,
-        "radius": 3000,
-        "routing_range": 10,
-        "routing_range_type": "time",
-        "min_price": 100,
-        "property_type_id": [1, 2],
-        "type": "project"
-      }
-    },
-    "content": {
-      "templateId": "property_carousel",
-      "data": { "...": "template payload" }
+  "conversationId": "conv_1",
+  "sender": { "type": "bot" },
+  "sourceMessageId": "msg_u_456",
+  "messageType": "template",
+  "messageState": "COMPLETED",
+  "sequenceNumber": 0,
+  "summarisedChatContext": {
+    "service": "buy",
+    "category": "residential",
+    "city": "526acdc6c33455e9e4e9",
+    "filters": {
+      "poly": ["dce9290ec3fe8834a293"],
+      "est": 194298,
+      "region_entity_id": 31817,
+      "region_entity_type": "project",
+      "uuid": [],
+      "qv_resale_id": 1234,
+      "qv_rent_id": 12345,
+      "apartment_type_id": [1, 2],
+      "contact_person_id": [1, 2],
+      "facing": ["east", "west"],
+      "has_lift": true,
+      "is_gated_community": true,
+      "is_verified": true,
+      "max_area": 4000,
+      "max_poss": 0,
+      "max_price": 4800000,
+      "radius": 3000,
+      "routing_range": 10,
+      "routing_range_type": "time",
+      "min_price": 100,
+      "property_type_id": [1, 2],
+      "type": "project"
     }
+  },
+  "content": {
+    "templateId": "property_carousel",
+    "data": { "...": "template payload" }
   }
 }
 ```
@@ -380,20 +379,18 @@ BE persistence semantics for ML outputs:
 
 ```json
 {
-  "event": {
-    "conversationId": "conv_1",
-    "sender": { "type": "bot" },
-    "sourceMessageId": "msg_u_456",
-    "messageType": "text",
-    "messageState": "ERRORED_AT_ML",
-    "sequenceNumber": 0,
-    "error": {
-      "code": "500",
-      "message": "Cannot process request"
-    },
-    "content": {
-      "text": "Something went wrong while processing this request."
-    }
+  "conversationId": "conv_1",
+  "sender": { "type": "bot" },
+  "sourceMessageId": "msg_u_456",
+  "messageType": "text",
+  "messageState": "ERRORED_AT_ML",
+  "sequenceNumber": 0,
+  "error": {
+    "code": "500",
+    "message": "Cannot process request"
+  },
+  "content": {
+    "text": "Something went wrong while processing this request."
   }
 }
 ```
@@ -840,6 +837,12 @@ This section records how the **chat-demo** implementation diverges from or exten
 | user_action | ✅ | ❌ | ✅ | yes when FE expects a response |
 
 *Analytics is **Phase 2** — not in Phase 1.*
+
+**Context-out options note**
+- Current default keeps `context` row as-is (`system` only) and carries context via `summarisedChatContext` on ML responses.
+- If option 3 (separate ML `context` message) is adopted, this matrix changes to:
+  - `context | ❌ | ✅ | ✅ | no`
+  - and ML sends context in a standalone `context` message shaped like the existing user/system context schema.
 
 ---
 

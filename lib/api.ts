@@ -60,7 +60,7 @@ export async function getHistory(
 }
 
 export async function sendMessage(event: ChatEventFromUser): Promise<SendMessageResponse> {
-  return post<SendMessageResponse>("/api/chats/send-message", { event });
+  return post<SendMessageResponse>("/api/chats/send-message", event);
 }
 
 function parseSseEventBlock(block: string): { event?: string; data?: string } {
@@ -94,7 +94,7 @@ export async function sendMessageStream(
       "Content-Type": "application/json",
       Accept: "text/event-stream",
     }),
-    body: JSON.stringify({ event }),
+    body: JSON.stringify(event),
     signal: options?.signal,
   });
 
