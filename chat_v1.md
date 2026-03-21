@@ -1468,95 +1468,322 @@ data: {"reason":"response_complete"}
 
 #### 4.3.10.18 User text: tell more about sector 21
 ```json
-{ "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "tell more about sector 21" } } }
+{
+  "sender": { "type": "user" },
+  "payload": {
+    "messageType": "text",
+    "responseRequired": true,
+    "content": { "text": "tell more about sector 21" }
+  }
+}
 ```
 #### 4.3.10.19 Bot template: nested_qna for sector 21
 ```json
-{ "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "nested_qna", "data": { "selections": [{ "questionId": "sub_intent_2", "title": "Which sector 21 are you referring to?", "type": "locality_single_select", "options": [{ "id": "uuid3", "title": "Sector 21", "city": "Gurgaon", "type": "Locality" }, { "id": "uuid4", "title": "Sector 21", "city": "Faridabad", "type": "Locality" }] }] } } } }
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageType": "template",
+    "content": {
+      "templateId": "nested_qna",
+      "data": {
+        "selections": [
+          {
+            "questionId": "sub_intent_2",
+            "title": "Which sector 21 are you referring to?",
+            "type": "locality_single_select",
+            "options": [
+              { "id": "uuid3", "title": "Sector 21", "city": "Gurgaon", "type": "Locality" },
+              { "id": "uuid4", "title": "Sector 21", "city": "Faridabad", "type": "Locality" }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
 ```
 #### 4.3.10.20 User action: selects first sector 21 option
 ```json
-{ "sender": { "type": "user" }, "payload": { "messageType": "user_action", "responseRequired": true, "visibility": "shown", "content": { "data": { "action": "nested_qna_selection", "selections": [{ "questionId": "sub_intent_2", "selection": "uuid3" }] }, "derivedLabel": "Q. Which sector 21 are you referring to?\nA. Sector 21, Gurgaon" } } }
+{
+  "sender": { "type": "user" },
+  "payload": {
+    "messageType": "user_action",
+    "responseRequired": true,
+    "visibility": "shown",
+    "content": {
+      "data": {
+        "action": "nested_qna_selection",
+        "selections": [{ "questionId": "sub_intent_2", "selection": "uuid3" }]
+      },
+      "derivedLabel": "Q. Which sector 21 are you referring to?\nA. Sector 21, Gurgaon"
+    }
+  }
+}
 ```
 #### 4.3.10.21 Bot markdown: learn more sector 21
 ```json
-{ "sender": { "type": "bot" }, "payload": { "messageType": "markdown", "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" } } }
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageType": "markdown",
+    "content": {
+      "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?"
+    }
+  }
+}
 ```
 #### 4.3.10.22 User text: to learn more about sector 32
 ```json
-{ "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "to learn more about sector 32" } } }
+{
+  "sender": { "type": "user" },
+  "payload": {
+    "messageType": "text",
+    "responseRequired": true,
+    "content": { "text": "to learn more about sector 32" }
+  }
+}
 ```
 #### 4.3.10.23 Bot template: nested_qna for sector 32
 ```json
-{ "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "nested_qna", "data": { "selections": [{ "questionId": "sub_intent_1", "title": "Which sector 32 are you referring to?", "type": "locality_single_select", "options": [{ "id": "uuid1", "title": "Sector 32", "city": "Gurgaon", "type": "Locality" }, { "id": "uuid2", "title": "Sector 32", "city": "Faridabad", "type": "Locality" }] }] } } } }
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageType": "template",
+    "content": {
+      "templateId": "nested_qna",
+      "data": {
+        "selections": [
+          {
+            "questionId": "sub_intent_1",
+            "title": "Which sector 32 are you referring to?",
+            "type": "locality_single_select",
+            "options": [
+              { "id": "uuid1", "title": "Sector 32", "city": "Gurgaon", "type": "Locality" },
+              { "id": "uuid2", "title": "Sector 32", "city": "Faridabad", "type": "Locality" }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
 ```
 #### 4.3.10.24 User action: types sector 32 faridabad
 ```json
-{ "sender": { "type": "user" }, "payload": { "messageType": "user_action", "responseRequired": true, "visibility": "shown", "content": { "data": { "action": "nested_qna_selection", "selections": [{ "questionId": "sub_intent_1", "text": "sector 32 faridabad" }] }, "derivedLabel": "Q. Which sector 32 are you referring to?\nA. sector 32 faridabad" } } }
+{
+  "sender": { "type": "user" },
+  "payload": {
+    "messageType": "user_action",
+    "responseRequired": true,
+    "visibility": "shown",
+    "content": {
+      "data": {
+        "action": "nested_qna_selection",
+        "selections": [{ "questionId": "sub_intent_1", "text": "sector 32 faridabad" }]
+      },
+      "derivedLabel": "Q. Which sector 32 are you referring to?\nA. sector 32 faridabad"
+    }
+  }
+}
 ```
 #### 4.3.10.25 Bot markdown: learn more sector 32
 ```json
-{ "sender": { "type": "bot" }, "payload": { "messageType": "markdown", "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" } } }
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageType": "markdown",
+    "content": {
+      "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?"
+    }
+  }
+}
 ```
 #### 4.3.10.26 User text: locality comparison of sector 32, sector 21
 ```json
-{ "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "locality comparison of sector 32, sector 21" } } }
+{
+  "sender": { "type": "user" },
+  "payload": {
+    "messageType": "text",
+    "responseRequired": true,
+    "content": { "text": "locality comparison of sector 32, sector 21" }
+  }
+}
 ```
 #### 4.3.10.27 Bot template: nested_qna for sector 32 + sector 21
 ```json
-{ "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "nested_qna", "data": { "selections": [{ "questionId": "sub_intent_1", "title": "Which sector 32 are you referring to?" }, { "questionId": "sub_intent_2", "title": "Which sector 21 are you referring to?" }], "canSkip": true } } } }
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageType": "template",
+    "content": {
+      "templateId": "nested_qna",
+      "data": {
+        "selections": [
+          { "questionId": "sub_intent_1", "title": "Which sector 32 are you referring to?" },
+          { "questionId": "sub_intent_2", "title": "Which sector 21 are you referring to?" }
+        ],
+        "canSkip": true
+      }
+    }
+  }
+}
 ```
 #### 4.3.10.28 User action: sector 32 gurgaon + skip sector 21
 ```json
-{ "sender": { "type": "user" }, "payload": { "messageType": "user_action", "responseRequired": true, "visibility": "shown", "content": { "data": { "action": "nested_qna_selection", "selections": [{ "questionId": "sub_intent_1", "text": "sector 32 gurgaon" }, { "questionId": "sub_intent_2", "skipped": true }] }, "derivedLabel": "Q. Which sector 32 are you referring to?\nA. sector 32 gurgaon\n\nQ. Which sector 21 are you referring to?\nA. Skipped" } } }
+{
+  "sender": { "type": "user" },
+  "payload": {
+    "messageType": "user_action",
+    "responseRequired": true,
+    "visibility": "shown",
+    "content": {
+      "data": {
+        "action": "nested_qna_selection",
+        "selections": [
+          { "questionId": "sub_intent_1", "text": "sector 32 gurgaon" },
+          { "questionId": "sub_intent_2", "skipped": true }
+        ]
+      },
+      "derivedLabel": "Q. Which sector 32 are you referring to?\nA. sector 32 gurgaon\n\nQ. Which sector 21 are you referring to?\nA. Skipped"
+    }
+  }
+}
 ```
 #### 4.3.10.29 Bot markdown: learn more sector 32 gurgaon
 ```json
-{ "sender": { "type": "bot" }, "payload": { "messageType": "markdown", "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" } } }
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageType": "markdown",
+    "content": {
+      "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?"
+    }
+  }
+}
 ```
 #### 4.3.10.30 User text: show properties near me
 ```json
-{ "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "show properties near me" } } }
+{
+  "sender": { "type": "user" },
+  "payload": {
+    "messageType": "text",
+    "responseRequired": true,
+    "content": { "text": "show properties near me" }
+  }
+}
 ```
 #### 4.3.10.31 Bot template: share_location
 ```json
-{ "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "share_location", "data": {} } } }
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageType": "template",
+    "content": { "templateId": "share_location", "data": {} }
+  }
+}
 ```
 #### 4.3.10.32 FE action: location_denied
 ```json
-{ "sender": { "type": "system" }, "payload": { "messageType": "user_action", "responseRequired": true, "content": { "data": { "action": "location_denied" } } } }
+{
+  "sender": { "type": "system" },
+  "payload": {
+    "messageType": "user_action",
+    "responseRequired": true,
+    "content": { "data": { "action": "location_denied" } }
+  }
+}
 ```
 #### 4.3.10.33 User text: properties near me (retry)
 ```json
-{ "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "properties near me" } } }
+{
+  "sender": { "type": "user" },
+  "payload": {
+    "messageType": "text",
+    "responseRequired": true,
+    "content": { "text": "properties near me" }
+  }
+}
 ```
 #### 4.3.10.34 Bot template: share_location again
 ```json
-{ "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "share_location", "data": {} } } }
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageType": "template",
+    "content": { "templateId": "share_location", "data": {} }
+  }
+}
 ```
 #### 4.3.10.35 FE action: location_shared
 ```json
-{ "sender": { "type": "system" }, "payload": { "messageType": "user_action", "responseRequired": true, "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } } } }
+{
+  "sender": { "type": "system" },
+  "payload": {
+    "messageType": "user_action",
+    "responseRequired": true,
+    "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } }
+  }
+}
 ```
 #### 4.3.10.36 Bot template: property_carousel
 ```json
-{ "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "property_carousel", "data": { "property_count": 15, "properties": [{ "id": "p1" }, { "id": "p2" }, { "id": "p3" }] } } } }
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageType": "template",
+    "content": {
+      "templateId": "property_carousel",
+      "data": { "property_count": 15, "properties": [{ "id": "p1" }, { "id": "p2" }, { "id": "p3" }] }
+    }
+  }
+}
 ```
 #### 4.3.10.37 User text: 3bhk properties near me
 ```json
-{ "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "3bhk properties near me" } } }
+{
+  "sender": { "type": "user" },
+  "payload": {
+    "messageType": "text",
+    "responseRequired": true,
+    "content": { "text": "3bhk properties near me" }
+  }
+}
 ```
 #### 4.3.10.38 FE auto-action: location_shared without rendering share_location
 ```json
-{ "sender": { "type": "system" }, "payload": { "messageType": "user_action", "responseRequired": true, "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } } }, "note": "auto-shared by FE without rendering share_location template" }
+{
+  "sender": { "type": "system" },
+  "payload": {
+    "messageType": "user_action",
+    "responseRequired": true,
+    "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } }
+  },
+  "note": "auto-shared by FE without rendering share_location template"
+}
 ```
 #### 4.3.10.39 Bot template: property_carousel
 ```json
-{ "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "property_carousel", "data": { "property_count": 15, "properties": [{ "id": "p1" }, { "id": "p2" }, { "id": "p3" }] } } } }
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageType": "template",
+    "content": {
+      "templateId": "property_carousel",
+      "data": { "property_count": 15, "properties": [{ "id": "p1" }, { "id": "p2" }, { "id": "p3" }] }
+    }
+  }
+}
 ```
 #### 4.3.10.40 User text: show me more properties in sector 32, sector 21
 ```json
-{ "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "show me more properties in sector 32, sector 21" } } }
+{
+  "sender": { "type": "user" },
+  "payload": {
+    "messageType": "text",
+    "responseRequired": true,
+    "content": { "text": "show me more properties in sector 32, sector 21" }
+  }
+}
 ```
 
 #### 4.3.11 Location actions from FE template
