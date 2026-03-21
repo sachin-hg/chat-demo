@@ -171,7 +171,7 @@ Returns latest 6 messages strictly after `evt_401` (e.g. `evt_402..evt_407`).
 
 ---
 
-### 4.4 `POST /chats/send-message`
+### 4.4 `POST /chats/send-message` (non-streaming)
 
 ```json
 {
@@ -187,25 +187,14 @@ Returns latest 6 messages strictly after `evt_401` (e.g. `evt_402..evt_407`).
 ```
 
 **Response**
-If `Accept: text/event-stream`, the BE returns an SSE stream (Phase 1 merged transport).
-
-**SSE (example)**
-```txt
-event: connection_ack
-data: {"eventId":"evt_301","requestState":"PENDING"}
-
-id: evt_401
-event: chat_event
-data: {JSON_CHAT_EVENT}
-
-event: connection_close
-data: {"reason":"response_complete"}
-```
-
-> **Important:** If `Accept` is not `text/event-stream`, the BE returns JSON (non-streaming mode):
+JSON only:
 ```json
-{ "eventId": "evt_301", "requestState": "PENDING" }
+{ "eventId": "evt_301", "requestState": "COMPLETED" }
 ```
+
+**Usage**
+- Canonical for fire-and-forget turns (`responseRequired === false`).
+- If `responseRequired === true` (or user text), FE must use `POST /chats/send-message-streamed`.
 
 **Message event enrichment**
 - Each persisted message may include top-level `requestState` with one of:
@@ -232,10 +221,26 @@ data: {"reason":"response_complete"}
 
 ---
 
-### 4.6 Streaming responses (Phase 1)
+### 4.6 `POST /chats/send-message-streamed` (SSE)
 
-In Phase 1, FE opens a new stream **per message** by calling `POST /chats/send-message` with
-`Accept: text/event-stream`. This eliminates the need for a long-lived `GET /chats/stream` connection.
+Request body is identical to `send-message`. This endpoint requires `Accept: text/event-stream`.
+
+**SSE (example)**
+```txt
+event: connection_ack
+data: {"eventId":"evt_301","requestState":"PENDING"}
+
+id: evt_401
+event: chat_event
+data: {JSON_CHAT_EVENT}
+
+event: connection_close
+data: {"reason":"response_complete"}
+```
+
+**Usage**
+- Canonical for response-required turns (`responseRequired === true` and user text).
+- One request-scoped stream per turn; no long-lived `GET /chats/stream` connection.
 
 ### 4.7 FE Request UI Semantics (canonical)
 
@@ -366,7 +371,7 @@ The stream uses the following **event** values and comment lines:
   - final bot response emitted (`isFinal === true`)
 
 ### FE
-- Treat each `send-message` stream as request-scoped and terminal on `connection_close`.
+- Treat each `send-message-streamed` stream as request-scoped and terminal on `connection_close`.
 
 ---
 
@@ -443,7 +448,7 @@ sequenceDiagram
     participant BE as Chat BE
     participant ML as ML Engine
 
-    FE->>BE: POST /chats/send-message (Accept: text/event-stream)
+    FE->>BE: POST /chats/send-message-streamed (Accept: text/event-stream)
     BE->>BE: persist user event (PENDING)
     BE-->>FE: SSE connection_ack {eventId, requestState:PENDING}
     BE->>ML: invoke ML (method call)
@@ -462,7 +467,7 @@ sequenceDiagram
     participant BE
     participant ML
 
-    FE->>BE: POST /chats/send-message (Accept: text/event-stream)
+    FE->>BE: POST /chats/send-message-streamed (Accept: text/event-stream)
     BE-->>FE: SSE connection_ack {eventId, requestState:PENDING}
     BE->>ML: enqueue request
 
@@ -483,7 +488,7 @@ sequenceDiagram
     participant BE
     participant ML
 
-    FE->>BE: POST /chats/send-message (Accept: text/event-stream)
+    FE->>BE: POST /chats/send-message-streamed (Accept: text/event-stream)
     BE-->>FE: SSE connection_ack {eventId, requestState:PENDING}
     BE->>ML: enqueue request
 
@@ -504,7 +509,7 @@ sequenceDiagram
     participant FE
     participant BE
 
-    FE->>BE: POST /chats/send-message (Accept: text/event-stream)
+    FE->>BE: POST /chats/send-message-streamed (Accept: text/event-stream)
     BE-->>FE: SSE connection_ack + chat_event(s)
     BE-->>FE: SSE connection_close (request-scoped stream ends)
 
@@ -513,7 +518,7 @@ sequenceDiagram
     FE->>BE: GET /chats/get-history?messages_after=evt_401
     BE-->>FE: missed messages
 
-    FE->>BE: Next turn opens a fresh POST /chats/send-message stream
+    FE->>BE: Next turn opens a fresh POST /chats/send-message-streamed stream
 
 ```
 
@@ -836,7 +841,7 @@ Property payload shape reference APIs (for template `data.property` / `data.prop
 ---
 ### 4.2 Transport-level SSE examples
 
-`POST /chats/send-message` with `Accept: text/event-stream`:
+`POST /chats/send-message-streamed` with `Accept: text/event-stream`:
 
 ```txt
 event: connection_ack
@@ -854,7 +859,7 @@ event: connection_close
 data: {"reason":"response_complete"}
 ```
 
-> **Important:** If `Accept` is not `text/event-stream`, BE responds in non-streaming JSON mode with `{ eventId, requestState }`.
+> **Important:** For non-streaming turns (`responseRequired: false`), FE uses `POST /chats/send-message` and receives JSON `{ eventId, requestState: "COMPLETED" }`.
 
 ---
 
@@ -926,6 +931,34 @@ data: {"reason":"response_complete"}
       "templateId": "property_carousel",
       "data": {
         // structure should be similar to corresponding venus/casa APIs. this is just sample
+        "property_count": 15,
+        "service": "buy",
+        "category": "residential",
+        "city": "526acdc6c33455e9e4e9",
+        "filters": {
+          "poly": ["dce9290ec3fe8834a293"],
+          "est": 194298,
+          "region_entity_id": 31817,
+          "region_entity_type": "project",
+          "uuid": [],
+          "qv_resale_id": 1234,
+          "qv_rent_id": 12345,
+          "apartment_type_id": [1, 2],
+          "contact_person_id": [1, 2],
+          "facing": ["east", "west"],
+          "has_lift": true,
+          "is_gated_community": true,
+          "is_verified": true,
+          "max_area": 4000,
+          "max_poss": 0,
+          "max_price": 4800000,
+          "radius": 3000,
+          "routing_range": 10,
+          "routing_range_type": "time",
+          "min_price": 100,
+          "property_type_id": [1, 2],
+          "type": "project"
+        },
         "properties": [
           {
             "id": "p1",
@@ -1023,6 +1056,52 @@ data: {"reason":"response_complete"}
 }
 ```
 
+#### 4.3.7 FE action: learn_more_about_property -> markdown replies
+```json
+{
+  "sender": { "type": "user" },
+  "payload": {
+    "messageType": "user_action",
+    "responseRequired": true,
+    "visibility": "shown",
+    "content": {
+      "data": {
+        "action": "learn_more_about_property",
+        "messageId": "msg_b_011",
+        "property": { "id": "p1", "type": "project" }
+      },
+      "derivedLabel": "Tell me more about Godrej Air"
+    }
+  }
+}
+```
+```json
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageId": "msg_b_018",
+    "sourceMessageId": "msg_u_018",
+    "sequenceNumber": 0,
+    "isFinal": false,
+    "messageType": "markdown",
+    "content": { "text": "# Godrej Air\n📍 Sector 85, Gurgaon\n\nProperty details..." }
+  }
+}
+```
+```json
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageId": "msg_b_019",
+    "sourceMessageId": "msg_u_018",
+    "sequenceNumber": 1,
+    "isFinal": true,
+    "messageType": "markdown",
+    "content": { "text": "## More details\nAmenities, configuration, pricing..." }
+  }
+}
+```
+
 #### 4.3.7 Text fallback: shortlist/contact template route
 ```json
 {
@@ -1097,6 +1176,45 @@ data: {"reason":"response_complete"}
           "display_area_type": "Built up area",
           "inventory_configs": [{ "furnish_type_id": 2, "area_value_in_unit": 4750 }]
         }
+      }
+    }
+  }
+}
+```
+
+#### Locality carousel sample (ML response)
+```json
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageId": "msg_b_025",
+    "sourceMessageId": "msg_u_025",
+    "sequenceNumber": 0,
+    "isFinal": true,
+    "messageType": "template",
+    "content": {
+      "templateId": "locality_carousel",
+      "data": {
+        "localities": [
+          {
+            "id": "l1",
+            "name": "Sector 32",
+            "city": "Gurgaon",
+            "url": "https://example.com/locality/sector-32-gurgaon",
+            "image": "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=1200&auto=format&fit=crop&q=80",
+            "priceTrend": 26.7,
+            "rating": 4
+          },
+          {
+            "id": "l3",
+            "name": "Sector 21",
+            "city": "Gurgaon",
+            "url": "https://example.com/locality/sector-21-gurgaon",
+            "image": "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1200&auto=format&fit=crop&q=80",
+            "priceTrend": 22,
+            "rating": 4
+          }
+        ]
       }
     }
   }
@@ -1178,6 +1296,192 @@ data: {"reason":"response_complete"}
 ```
 
 #### 4.3.10 Near-me flow (ML always sends share_location)
+After `4.3.9`, the implemented demo flow includes these canonical examples:
+
+```json
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageId": "msg_b_031",
+    "sourceMessageId": "msg_u_030",
+    "sequenceNumber": 0,
+    "isFinal": false,
+    "messageType": "markdown",
+    "content": { "text": "# Sector 32, Gurgaon\nLocality learn-more summary..." }
+  }
+}
+```
+```json
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageId": "msg_b_032",
+    "sourceMessageId": "msg_u_030",
+    "sequenceNumber": 1,
+    "isFinal": true,
+    "messageType": "markdown",
+    "content": { "text": "# Sector 21, Gurgaon\nLocality learn-more summary..." }
+  }
+}
+```
+```json
+{
+  "sender": { "type": "user" },
+  "payload": {
+    "messageType": "text",
+    "responseRequired": true,
+    "content": { "text": "show trending localities similar to these" }
+  }
+}
+```
+```json
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageId": "msg_b_033",
+    "sourceMessageId": "msg_u_033",
+    "sequenceNumber": 0,
+    "isFinal": true,
+    "messageType": "template",
+    "content": {
+      "templateId": "locality_carousel",
+      "data": {
+        "localities": [
+          { "id": "l1", "name": "Sector 32", "city": "Gurgaon", "url": "https://example.com/locality/sector-32-gurgaon", "priceTrend": 26.7, "rating": 4 },
+          { "id": "l3", "name": "Sector 21", "city": "Gurgaon", "url": "https://example.com/locality/sector-21-gurgaon", "priceTrend": 22, "rating": 4 }
+        ]
+      }
+    }
+  }
+}
+```
+```json
+{
+  "sender": { "type": "user" },
+  "payload": {
+    "messageType": "user_action",
+    "responseRequired": true,
+    "visibility": "shown",
+    "content": {
+      "data": {
+        "action": "learn_more_about_locality",
+        "messageId": "msg_b_033",
+        "locality": { "localityUuid": "l1" }
+      },
+      "derivedLabel": "Learn more about Sector 32"
+    }
+  }
+}
+```
+```json
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageId": "msg_b_034",
+    "sourceMessageId": "msg_u_034",
+    "sequenceNumber": 0,
+    "isFinal": true,
+    "messageType": "markdown",
+    "content": { "text": "# Sector 32\nLocality learn-more details..." }
+  }
+}
+```
+```json
+{
+  "sender": { "type": "user" },
+  "payload": {
+    "messageType": "text",
+    "responseRequired": true,
+    "content": { "text": "show price trends of this locality" }
+  }
+}
+```
+```json
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageId": "msg_b_035",
+    "sourceMessageId": "msg_u_035",
+    "sequenceNumber": 0,
+    "isFinal": true,
+    "messageType": "markdown",
+    "content": { "text": "# Price Trend\nQ1-Q4 trend markdown..." }
+  }
+}
+```
+```json
+{
+  "sender": { "type": "user" },
+  "payload": {
+    "messageType": "text",
+    "responseRequired": true,
+    "content": { "text": "show rating reviews of this locality" }
+  }
+}
+```
+```json
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageId": "msg_b_036",
+    "sourceMessageId": "msg_u_036",
+    "sequenceNumber": 0,
+    "isFinal": true,
+    "messageType": "markdown",
+    "content": { "text": "# Rating & Reviews\nLocality review markdown..." }
+  }
+}
+```
+```json
+{
+  "sender": { "type": "user" },
+  "payload": {
+    "messageType": "text",
+    "responseRequired": true,
+    "content": { "text": "show transaction data of this locality" }
+  }
+}
+```
+```json
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageId": "msg_b_037",
+    "sourceMessageId": "msg_u_037",
+    "sequenceNumber": 0,
+    "isFinal": true,
+    "messageType": "markdown",
+    "content": { "text": "# Transaction Data\nTransaction markdown..." }
+  }
+}
+```
+
+Implemented demo-flow alignment for the later sequence (steps 18-40):
+
+18. user asks `tell more about sector 21`  
+19. bot replies nested_qna: which sector 21  
+20. user selects first option  
+21. bot replies learn-more markdown for sector 21  
+22. user asks `to learn more about sector 32`  
+23. bot replies nested_qna: which sector 32  
+24. user types `sector 32 faridabad` in template textbox  
+25. bot replies learn-more markdown for sector 32  
+26. user asks `locality comparison of sector 32, sector 21`  
+27. bot replies nested_qna for sector 32 + sector 21  
+28. user enters `sector 32 gurgaon` and skips sector 21  
+29. bot replies learn-more markdown for sector 32 gurgaon  
+30. user says `show properties near me`  
+31. bot replies with location request (`share_location`)  
+32. user denies location  
+33. user says `properties near me` again  
+34. bot asks location permission again  
+35. user grants location this time  
+36. bot replies with property carousel  
+37. user says `3bhk properties near me`  
+38. location already available; FE auto-sends location_shared without rendering share_location template  
+39. bot replies with property carousel  
+40. user continues with property learn-more + brochure flow + nested_qna for `show me more properties in sector 32, sector 21`
+
 ```json
 {
   "sender": { "type": "user" },
@@ -1319,6 +1623,9 @@ Apps should send identity via cookie headers:
   - `CANCELLED_BY_USER`: do not render
 - Transient templates (`share_location`, `shortlist_property`, `contact_seller`, `nested_qna`) are rendered only when they are the latest message to prevent stale CTA/template duplication in history.
 - Sticky `nested_qna`: while active as latest message, FE hides the text composer to avoid parallel free-text input during structured disambiguation.
+- `property_carousel`: title row is clickable and opens `inventory_canonical_url` in a new tab.
+- `property_carousel`: when `property_count > properties.length`, FE shows a trailing **View all** card that opens `getSRPUrl(service, category, city, filters)` in a new tab.
+- `locality_carousel`: locality name is clickable and opens locality `url` in a new tab.
 - Nested QnA contract:
   - bot template uses `template.data.selections[]` with `questionId` + options
   - FE submit uses `user_action` with `action: "nested_qna_selection"` and `selections`.
@@ -1407,11 +1714,13 @@ This section documents current behavior in this repository where it differs from
 
 ### A.1 Transport and request lifecycle
 
-- FE uses `POST /api/chats/send-message` with `Accept: text/event-stream` **per outbound message/action**.
+- FE uses:
+  - `POST /api/chats/send-message-streamed` for `responseRequired: true`
+  - `POST /api/chats/send-message` for `responseRequired: false`
 - Stream sequence is:
   - `connection_ack` (immediate),
   - `chat_event` (0..N),
-  - `connection_close` (`reason` in `response_complete | response_not_required | inactivity_15s`).
+  - `connection_close` (`reason` in `response_complete | inactivity_15s`).
 - FE reply timeout is 25s (`replyStatus: timeout`), with Retry and Dismiss; FE then relies on polling (`get-history` with `messages_after`) until response arrives for that message.
 - Canonical stream/cancel/runtime semantics are defined in §4.5 and examples in §4.2.
 
@@ -1487,8 +1796,9 @@ This section documents current behavior in this repository where it differs from
   - one line per property.
   - project example format: `<projectName> in <address>. <area-range> <title> <price>. link: <url>`.
   - rent/resale format: `<title> in <address> for <price>. link: <url>`.
+  - when `property_count > properties.length`, copy includes: `View all: <srpUrl>` where `srpUrl = getSRPUrl(service, category, city, filters)`.
 - `template: locality_carousel`: computed by `getClipboardTextForLocalityCarousel(data)`.
-  - one line per locality: `<name> (<rating>/5, <growth>% YoY)[ - <link>]`.
+  - one line per locality: `<name> (<rating>/5, <growth>% YoY)[ - <url>]`.
 - `template: download_brochure`: computed by `getClipboardTextForDownloadBrochure(data)`.
   - `<projectName> - <priceRange> - <brochureUrl>` (available parts only).
 - No copy row/button for templates that do not provide `copyText` (for example `share_location`, `nested_qna`, `shortlist_property`, `contact_seller`).

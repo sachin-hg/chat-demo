@@ -77,7 +77,7 @@ export async function sendMessageStream(
   },
   options?: { signal?: AbortSignal }
 ): Promise<void> {
-  const res = await fetch("/api/chats/send-message", {
+  const res = await fetch("/api/chats/send-message-streamed", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

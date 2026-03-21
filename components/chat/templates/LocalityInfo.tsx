@@ -14,6 +14,7 @@ interface Locality {
   priceTrend?: number;
   priceTrendLabel?: string;
   rating?: number;
+  url?: string;
   link?: string;
 }
 
@@ -43,6 +44,7 @@ export function LocalityInfo({ data, onAction, disabled = false }: Props) {
         const image = loc.image ?? "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=400";
         const trend = loc.priceTrend ?? 0;
         const rating = loc.rating ?? 4;
+        const localityUrl = loc.url ?? loc.link;
         const isUp = trend >= 0;
         const displayName = name || city || "Locality";
 
@@ -57,7 +59,18 @@ export function LocalityInfo({ data, onAction, disabled = false }: Props) {
               <Image src={image} alt={name} fill className="object-cover" unoptimized sizes="262px" />
             </div>
             <div className="p-4">
-              <p className="font-semibold text-sm text-[#111] truncate">{name || "Locality"}</p>
+              {localityUrl ? (
+                <a
+                  href={localityUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block font-semibold text-sm text-[#111] truncate hover:underline"
+                >
+                  {name || "Locality"}
+                </a>
+              ) : (
+                <p className="font-semibold text-sm text-[#111] truncate">{name || "Locality"}</p>
+              )}
 
               <div className="flex gap-3 mt-3">
                 <div className="flex-1 min-w-0 rounded-xl bg-[#FAFAFA] border border-[#e1e2e8] p-2.5">
@@ -142,7 +155,8 @@ export function getClipboardTextForLocalityCarousel(templateData: Record<string,
       const rating = loc.rating ?? 4;
       const trend = loc.priceTrend ?? 0;
       const growth = `${Math.abs(trend)}% YoY`;
-      const linkPart = loc.link ? ` - ${loc.link}` : "";
+      const link = loc.url ?? loc.link;
+      const linkPart = link ? ` - ${link}` : "";
       return `${name} (${rating}/5, ${growth})${linkPart}`;
     })
     .filter(Boolean);

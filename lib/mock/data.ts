@@ -20,7 +20,8 @@ export interface LocalityData {
   highlights: string[];
   pros: string[];
   cons: string[];
-  link?: string; // link to locality details page
+  url?: string; // link to locality details page
+  link?: string; // backward compatibility
   priceTrend: number; // % change in last 1 year, e.g. 26.7 = +26.7%
   rating: number;     // 1-5
 }
@@ -206,6 +207,7 @@ export const MOCK_LOCALITY_SECTOR_32_GURGAON = {
   id: "l1",
   name: "Sector 32",
   city: "Gurgaon",
+  url: "https://example.com/locality/sector-32-gurgaon",
   image: "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=1200&auto=format&fit=crop&q=80",
   priceTrend: 26.7,
   rating: 4,
@@ -214,6 +216,7 @@ export const MOCK_LOCALITY_SECTOR_21_GURGAON = {
   id: "l3",
   name: "Sector 21",
   city: "Gurgaon",
+  url: "https://example.com/locality/sector-21-gurgaon",
   image: "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1200&auto=format&fit=crop&q=80",
   priceTrend: 22,
   rating: 4,

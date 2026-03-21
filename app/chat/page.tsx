@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import {
   getConversationId,
   getHistory,
+  sendMessage,
   sendMessageStream,
   cancelRequest,
 } from "@/lib/api";
@@ -435,10 +436,7 @@ function ChatPageContent() {
         setConversationId(cid);
         // Context is fire-and-forget in Phase 1 (no response expected).
         // Sent on each chat open to keep ML context fresh.
-        sendMessageStream(
-          buildContextEvent(cid),
-          { onAck: () => {}, onChatEvent: () => {} },
-        ).catch(() => {});
+        sendMessage(buildContextEvent(cid)).catch(() => {});
         const hist = await getHistory(cid, { page_size: INITIAL_PAGE_SIZE });
         if (cancelled) return;
         const list = hist.messages as StoredMessage[];
@@ -456,8 +454,8 @@ function ChatPageContent() {
     };
   }, [isDemo]);
 
-  // Note: Phase-1 merged transport. We no longer keep a long-lived SSE connection.
-  // Instead, each send-message call opens its own stream and we append bot events from it.
+  // Note: Phase-1 request-scoped streaming.
+  // responseRequired=true uses send-message-streamed; responseRequired=false uses send-message JSON.
 
   useEffect(() => {
     const lastId = messages[messages.length - 1]?.eventId;
@@ -666,44 +664,67 @@ function ChatPageContent() {
       const expectsResponse = fullEvent.payload.responseRequired === true;
 
       try {
-        await sendMessageStream(
-          fullEvent,
-          {
-            onAck: (ack) => {
-              ackReceived = true;
-              currentPendingLocalEventIdRef.current = null;
-              if (cancelledPendingLocalIdsRef.current.has(pendingId)) {
-                cancelledPendingLocalIdsRef.current.delete(pendingId);
+        if (!expectsResponse) {
+          const ack = await sendMessage(fullEvent);
+          ackReceived = true;
+          currentPendingLocalEventIdRef.current = null;
+          if (cancelledPendingLocalIdsRef.current.has(pendingId)) {
+            cancelledPendingLocalIdsRef.current.delete(pendingId);
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.eventId === pendingId
+                  ? { ...m, eventId: ack.eventId, requestState: "CANCELLED_BY_USER" }
+                  : m
+              )
+            );
+            cancelRequest(ack.eventId).catch(() => {});
+            return;
+          }
+          lastRequestEventIdRef.current = ack.eventId;
+          knownEventIdsRef.current.add(ack.eventId);
+          setMessages((prev) =>
+            prev.map((m) => (m.eventId === pendingId ? { ...m, eventId: ack.eventId } : m))
+          );
+          setReplyStatus("idle");
+        } else {
+          await sendMessageStream(
+            fullEvent,
+            {
+              onAck: (ack) => {
+                ackReceived = true;
+                currentPendingLocalEventIdRef.current = null;
+                if (cancelledPendingLocalIdsRef.current.has(pendingId)) {
+                  cancelledPendingLocalIdsRef.current.delete(pendingId);
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.eventId === pendingId
+                        ? { ...m, eventId: ack.eventId, requestState: "CANCELLED_BY_USER" }
+                        : m
+                    )
+                  );
+                  cancelRequest(ack.eventId).catch(() => {});
+                  return;
+                }
+                lastRequestEventIdRef.current = ack.eventId;
+                knownEventIdsRef.current.add(ack.eventId);
                 setMessages((prev) =>
-                  prev.map((m) =>
-                    m.eventId === pendingId
-                      ? { ...m, eventId: ack.eventId, requestState: "CANCELLED_BY_USER" }
-                      : m
-                  )
+                  prev.map((m) => (m.eventId === pendingId ? { ...m, eventId: ack.eventId } : m))
                 );
-                cancelRequest(ack.eventId).catch(() => {});
-                return;
-              }
-              lastRequestEventIdRef.current = ack.eventId;
-              knownEventIdsRef.current.add(ack.eventId);
-              setMessages((prev) =>
-                prev.map((m) => (m.eventId === pendingId ? { ...m, eventId: ack.eventId } : m))
-              );
 
-              if (expectsResponse) startAwaitingReply(ack.eventId);
-              else setReplyStatus("idle");
+                startAwaitingReply(ack.eventId);
+              },
+              onChatEvent: (botEvent) => {
+                if (!botEvent.eventId || knownEventIdsRef.current.has(botEvent.eventId)) return;
+                knownEventIdsRef.current.add(botEvent.eventId);
+                setMessages((prev) => [...prev, botEvent]);
+                if (botEvent.sender?.type === "bot" && botEvent.payload.isFinal === true) {
+                  clearReplyWaiting();
+                }
+              },
             },
-            onChatEvent: (botEvent) => {
-              if (!botEvent.eventId || knownEventIdsRef.current.has(botEvent.eventId)) return;
-              knownEventIdsRef.current.add(botEvent.eventId);
-              setMessages((prev) => [...prev, botEvent]);
-              if (botEvent.sender?.type === "bot" && botEvent.payload.isFinal === true) {
-                clearReplyWaiting();
-              }
-            },
-          },
-          { signal: abortController.signal }
-        );
+            { signal: abortController.signal }
+          );
+        }
       } catch (e) {
         // Abort can happen on cancel/timeout; don't flip UI into "error".
         if (abortController.signal.aborted) return;

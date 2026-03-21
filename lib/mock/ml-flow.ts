@@ -84,6 +84,40 @@ function matchWholeWord(text: string, ...words: string[]): boolean {
   });
 }
 
+function buildPropertyCarouselData(properties: typeof MOCK_PROPERTY_CAROUSEL_CARDS) {
+  return {
+    property_count: 15,
+    service: "buy",
+    category: "residential",
+    city: "526acdc6c33455e9e4e9",
+    filters: {
+      poly: ["dce9290ec3fe8834a293"],
+      est: 194298,
+      region_entity_id: 31817,
+      region_entity_type: "project",
+      uuid: [],
+      qv_resale_id: 1234,
+      qv_rent_id: 12345,
+      apartment_type_id: [1, 2],
+      contact_person_id: [1, 2],
+      facing: ["east", "west"],
+      has_lift: true,
+      is_gated_community: true,
+      is_verified: true,
+      max_area: 4000,
+      max_poss: 0,
+      max_price: 4800000,
+      radius: 3000,
+      routing_range: 10,
+      routing_range_type: "time",
+      min_price: 100,
+      property_type_id: [1, 2],
+      type: "project",
+    },
+    properties,
+  };
+}
+
 export function getNextBotEvents(
   userEvent: ChatEvent,
   recentEvents: ChatEvent[]
@@ -226,7 +260,7 @@ export function getNextBotEvents(
       botMessage(
         generateMessageId(),
         "template",
-        { templateId: "property_carousel", data: { properties } },
+        { templateId: "property_carousel", data: buildPropertyCarouselData(properties) },
         { sourceMessageId, sequenceNumber: 0, isFinal: true }
       ),
     ];
@@ -242,7 +276,7 @@ export function getNextBotEvents(
       botMessage(
         generateMessageId(),
         "template",
-        { templateId: "property_carousel", data: { properties } },
+        { templateId: "property_carousel", data: buildPropertyCarouselData(properties) },
         { sourceMessageId, sequenceNumber: 1, isFinal: true }
       ),
     ];
@@ -292,7 +326,7 @@ export function getNextBotEvents(
       botMessage(
         generateMessageId(),
         "template",
-        { templateId: "property_carousel", data: { properties } },
+        { templateId: "property_carousel", data: buildPropertyCarouselData(properties) },
         { sourceMessageId, sequenceNumber: 1, isFinal: true }
       ),
     ];

@@ -7,10 +7,17 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import type { ChatEvent } from "@/lib/contract-types";
 import type { PropertyCarouselCard } from "@/lib/mock/data";
 
+type SrpFilters = Record<string, unknown>;
+
 interface Props {
   properties: PropertyCarouselCard[];
   messageId: string;
   onUserAction: (event: ChatEvent) => void;
+  propertyCount?: number;
+  service?: string;
+  category?: string;
+  city?: string;
+  filters?: SrpFilters;
 
   disabled?: boolean;
 }
@@ -25,7 +32,17 @@ async function postAck(path: string, body: unknown): Promise<{ success: true }> 
   return res.json();
 }
 
-export function PropertyCarousel({ properties, messageId, onUserAction, disabled = false }: Props) {
+export function PropertyCarousel({
+  properties,
+  messageId,
+  onUserAction,
+  propertyCount,
+  service,
+  category,
+  city,
+  filters,
+  disabled = false,
+}: Props) {
   const [shortlisted, setShortlisted] = useState<Set<string>>(new Set());
   const toast = useToast();
   const auth = useAuth();
@@ -50,6 +67,8 @@ export function PropertyCarousel({ properties, messageId, onUserAction, disabled
     if (!trimmed) return "";
     return trimmed.startsWith("₹") ? trimmed : `₹${trimmed}`;
   };
+  const hasMoreResults = typeof propertyCount === "number" && propertyCount > properties.length;
+  const viewAllUrl = hasMoreResults ? getSRPUrl(service, category, city, filters) : "";
 
   return (
     <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4" style={{ scrollSnapType: "x mandatory" }} data-demo="property-carousel">
@@ -181,7 +200,14 @@ export function PropertyCarousel({ properties, messageId, onUserAction, disabled
 
               {p.type !== "project" ? (
                 <>
-                  <p className="text-[18px] leading-[1.15] font-semibold text-[#111] truncate">{p.title}</p>
+                  <a
+                    href={p.inventory_canonical_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-[18px] leading-[1.15] font-semibold text-[#111] truncate hover:underline"
+                  >
+                    {p.title}
+                  </a>
                   {/* Keep subtitle row spacing only for mixed card sets (project + rent/resale). */}
                   {hasProjectCard && (
                     <p className="text-[15px] leading-[1.2] font-semibold text-[#111] mt-1 truncate invisible">.</p>
@@ -190,7 +216,14 @@ export function PropertyCarousel({ properties, messageId, onUserAction, disabled
               ) : (
                 <>
                   <p className="text-[20px] leading-[1.15] font-semibold text-[#111] truncate">{p.name}</p>
-                  <p className="text-[15px] leading-[1.2] font-semibold text-[#111] mt-1 truncate">{p.title ?? ""}</p>
+                  <a
+                    href={p.inventory_canonical_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-[15px] leading-[1.2] font-semibold text-[#111] mt-1 truncate hover:underline"
+                  >
+                    {p.title ?? ""}
+                  </a>
                 </>
               )}
 
@@ -288,13 +321,55 @@ export function PropertyCarousel({ properties, messageId, onUserAction, disabled
           </div>
         );
       })}
+      {hasMoreResults && (
+        <div
+          className="flex-shrink-0 w-[262px] rounded-[24px] bg-white border border-[#e1e2e8] overflow-hidden"
+          style={{ scrollSnapAlign: "start" }}
+        >
+          <div className="h-full min-h-[380px] p-4 flex flex-col items-center justify-center text-center">
+            <p className="text-sm text-[#767676] mb-4">
+              Showing {properties.length} of {propertyCount} properties
+            </p>
+            <button
+              type="button"
+              data-demo-action="view-all"
+              disabled={disabled}
+              className="h-12 px-5 rounded-lg bg-[#5E23DC] text-white text-sm font-medium hover:bg-[#4a1bb5] transition-colors disabled:opacity-40"
+              onClick={() => {
+                if (disabled) return;
+                window.open(viewAllUrl, "_blank", "noopener,noreferrer");
+              }}
+            >
+              View all
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+export function getSRPUrl(
+  service?: string,
+  category?: string,
+  city?: string,
+  filters?: SrpFilters
+): string {
+  const encodedFilters = encodeURIComponent(JSON.stringify(filters ?? {}));
+  return `https://example.com/srp?service=${encodeURIComponent(service ?? "")}&category=${encodeURIComponent(category ?? "")}&city=${encodeURIComponent(city ?? "")}&filters=${encodedFilters}`;
 }
 
 export function getClipboardTextForPropertyCarousel(templateData: Record<string, unknown>): string | null {
   const props = (templateData.properties as unknown[]) ?? [];
   if (!Array.isArray(props) || props.length === 0) return null;
+  const propertyCount = typeof templateData.property_count === "number" ? templateData.property_count : undefined;
+  const service = typeof templateData.service === "string" ? templateData.service : undefined;
+  const category = typeof templateData.category === "string" ? templateData.category : undefined;
+  const city = typeof templateData.city === "string" ? templateData.city : undefined;
+  const filters =
+    typeof templateData.filters === "object" && templateData.filters !== null
+      ? (templateData.filters as SrpFilters)
+      : undefined;
 
   const lines = props
     .map((p) => p as Partial<PropertyCarouselCard>)
@@ -340,6 +415,10 @@ export function getClipboardTextForPropertyCarousel(templateData: Record<string,
       return `${title} in ${addressText} for ${priceText}. link: ${url}`.replace(/\s+/g, " ").trim();
     })
     .filter(Boolean);
+
+  if (typeof propertyCount === "number" && propertyCount > props.length) {
+    lines.push(`View all: ${getSRPUrl(service, category, city, filters)}`);
+  }
 
   return lines.length ? lines.join("\n") : null;
 }

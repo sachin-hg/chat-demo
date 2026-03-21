@@ -166,6 +166,11 @@ export function ChatMessage({
               properties={(Array.isArray((data as any).properties) ? ((data as any).properties as any) : []) ?? []}
               messageId={payload.messageId ?? ""}
               onUserAction={onUserAction}
+              propertyCount={typeof (data as any).property_count === "number" ? (data as any).property_count : undefined}
+              service={typeof (data as any).service === "string" ? (data as any).service : undefined}
+              category={typeof (data as any).category === "string" ? (data as any).category : undefined}
+              city={typeof (data as any).city === "string" ? (data as any).city : undefined}
+              filters={typeof (data as any).filters === "object" && (data as any).filters !== null ? (data as any).filters : undefined}
               disabled={actionsDisabled}
             />
           );

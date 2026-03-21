@@ -30,6 +30,7 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
 - **Property discovery**:
   - `show me properties` / `show me properties according to my preference` → intro text + `property_carousel`.
   - Carousel cards support shortlist, contact, and learn-more actions.
+  - `property_carousel` payload also includes `property_count`, `service`, `category`, `city`, `filters` to support SRP deep-linking from FE.
 - **Shortlist/contact/brochure**:
   - Shortlist and contact actions are primarily FE-driven (with hidden/shown `user_action` events).
   - Text fallback `shortlist this property` returns `shortlist_property`.
@@ -37,6 +38,7 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
   - `show me brochure` returns `download_brochure`; brochure click sends hidden `brochure_downloaded`.
 - **Locality and nested QnA**:
   - `locality comparison` → `locality_carousel` (except explicit `sector 32/21` ambiguity).
+  - Locality carousel items include sample `url`; locality name opens it in a new tab.
   - `sector 32 + sector 21` (or explicit ambiguity) → `nested_qna`.
   - `learn more about sector 32` (without sector 21) → single-question `nested_qna`.
   - `nested_qna_selection` returns locality learn-more markdown in mock flow.
@@ -50,8 +52,11 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
 ## Stack (Phase 1)
 
 - **BE/ML**: Co-located in the same service (method calls; **no Kafka** in Phase 1).
-- **BE**: Next.js API routes (`/api/chats/*`): get-conversation-id, get-chats, get-history, **send-message (streaming)**, cancel.
-- **FE**: Single chat page; opens a **new stream per message** via `sendMessageStream` (no long-lived SSE subscription).
+- **BE**: Next.js API routes (`/api/chats/*`): get-conversation-id, get-chats, get-history, **send-message (JSON)**, **send-message-streamed (SSE)**, cancel.
+- **FE**:
+  - uses `send-message-streamed` for `responseRequired=true` turns
+  - uses `send-message` for `responseRequired=false` fire-and-forget turns
+  - keeps request-scoped streams (no long-lived SSE subscription)
 - **Mock**: In-memory event log and request state; mock “ML” in `lib/mock/ml-flow.ts` returns the next bot message(s) per contract examples.
 - **Data**: Mock properties/localities and derived markdown data in `lib/mock/data.ts`.
 
@@ -59,20 +64,26 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
 
 - `GET /api/chats/get-conversation-id` → `{ conversationId, isNew }` (`isNew` is demo-app convenience; not required for production clients)
 - `GET /api/chats/get-history?conversationId=...` with optional `page_size` (default 6), and optional cursor `messages_before` or `messages_after`.
-- `POST /api/chats/send-message` body `{ event: ChatEvent }`
-  - If `Accept: text/event-stream`, the response is an SSE stream:
+- `POST /api/chats/send-message` body `{ event: ChatEvent }` (JSON-only)
+  - Used for `responseRequired=false` turns.
+  - Returns JSON `{ eventId, requestState }` (current app returns `requestState: "COMPLETED"`).
+- `POST /api/chats/send-message-streamed` body `{ event: ChatEvent }` with `Accept: text/event-stream`
+  - Used for `responseRequired=true` turns.
+  - SSE events:
     - **`event: connection_ack`** — immediate ack: `data: { "eventId": "...", "requestState": "PENDING" }`
     - **`event: chat_event`** — bot events streamed as they’re produced: `id: <eventId>`, `data: <JSON ChatEvent>`
-    - **`event: connection_close`** — emitted when response is complete (`isFinal: true`), response is not required, or stream inactivity reaches 15s.
-  - **Important:** if `Accept` is not `text/event-stream`, this endpoint returns JSON `{ eventId, requestState }` (non-streaming mode).
+    - **`event: connection_close`** — emitted when response is complete (`isFinal: true`) or stream inactivity reaches 15s.
 
 ## UI Notes
 
 - Transient templates (`share_location`, `shortlist_property`, `contact_seller`, `nested_qna`) are rendered only for the latest bot message.
+- Property carousel title opens `inventory_canonical_url` in a new tab.
+- Property carousel shows a trailing **View all** card when `property_count > properties.length`; click opens `getSRPUrl(service, category, city, filters)` in a new tab.
+- Locality carousel locality name opens locality `url` in a new tab.
 - `context` and `analytics` messages are never rendered.
 - Input is hidden while sticky `nested_qna` is active.
 - Reply timeout is 25s with Retry/Dismiss; FE then relies on polling (`get-history` with `messages_after`) until response arrives for that message.
 
 ## Implementation divergences
 
-See **Appendix A** in `chat_system_architecture_v1.md` for implementation-specific behavior that diverges from frozen v1.0.
+See **Appendix A** in `chat_v1.md` for implementation-specific behavior that diverges from frozen v1.0.
