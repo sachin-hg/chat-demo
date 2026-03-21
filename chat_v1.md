@@ -1392,7 +1392,7 @@ data: {"reason":"response_complete"}
     "sequenceNumber": 0,
     "isFinal": true,
     "messageType": "markdown",
-    "content": { "text": "# Sector 32\nLocality learn-more details..." }
+    "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" }
   }
 }
 ```
@@ -1415,7 +1415,7 @@ data: {"reason":"response_complete"}
     "sequenceNumber": 0,
     "isFinal": true,
     "messageType": "markdown",
-    "content": { "text": "# Price Trend\nQ1-Q4 trend markdown..." }
+    "content": { "text": "# Price Trends for Sector 86\n\n---\n\n## Average Price\n\n₹12,220 / sq ft\n\n## 1-Year Growth\n\n11.43%\n\n## Available Properties\n\n188\n\n---\n\n## Price Range\n\n- Minimum – ₹5,666 / sq ft\n- Maximum – ₹29,841 / sq ft\n\n---\n\n## 2025 Quarterly Trends\n\n- Q1 – ₹10,691 / sq ft\n- Q2 – ₹11,442 / sq ft\n- Q3 – ₹11,242 / sq ft\n- Q4 – ₹12,220 / sq ft\n\n---\n\n## Latest Update\n\nQ1 2026 – ₹11,850 / sq ft\n\n---\n\nThis data helps you make informed property decisions." }
   }
 }
 ```
@@ -1438,7 +1438,7 @@ data: {"reason":"response_complete"}
     "sequenceNumber": 0,
     "isFinal": true,
     "messageType": "markdown",
-    "content": { "text": "# Rating & Reviews\nLocality review markdown..." }
+    "content": { "text": "# Locality Ratings & Reviews — Sector 46, Gurgaon\n\n---\n\n## Overall Rating\n⭐ **4.09 / 5.0**\nBased on 11 reviews\n\n---\n\n## Rating Distribution\n- 4-star – 9 reviews (82%)\n- 3-star – 2 reviews (18%)\n\n---\n\n## Category Breakdown\n\nSchools & Hospitals – 4.30 / 5.0\nMarkets & Malls – 4.10 / 5.0\nSafety & Security – 4.00 / 5.0\nPublic Transport – 3.80 / 5.0\nTraffic & Roads – 3.70 / 5.0\nCleanliness – 4.20 / 5.0\n\n---\n\n## Key Insights\n\n### Top strengths\n- Good schools and healthcare nearby\n- Strong neighborhood safety perception\n- Everyday shopping options are convenient\n\n### Areas to consider\n\n- Peak-hour traffic congestion on internal roads\n- Public transport access can improve in some pockets\n\n---\n\nRatings are based on user feedback and may change as new reviews are added." }
   }
 }
 ```
@@ -1461,63 +1461,102 @@ data: {"reason":"response_complete"}
     "sequenceNumber": 0,
     "isFinal": true,
     "messageType": "markdown",
-    "content": { "text": "# Transaction Data\nTransaction markdown..." }
+    "content": { "text": "# Transaction Data Analysis\n\n---\n\n## Project Details\n\nName: Godrej Gold County\nLocation: Tumkur Road, Bengaluru\nTotal Transactions: 395\n\n---\n\n## Transaction Breakdown\n\nSales: 272 | Mortgages: 123\n\n---\n\n## Area Statistics\n\nAverage Area: 2,550.0 sq ft\nSize Range: 1,200.0 – 3,800.0 sq ft\n\n---\n\n## Recent Activity (Last 6 Months)\n\nActive Transactions: 28 | Recent Mortgages: 11\n\n---\n\n## Latest Transactions\n\n- Unit A-1203 – 3 BHK | 2,420 sq ft | ₹2.35 Cr | 2026-01-12\n- Unit B-904 – 4 BHK | 3,180 sq ft | ₹3.12 Cr | 2025-12-28\n- Unit C-701 – 3 BHK | 2,150 sq ft | ₹2.08 Cr | 2025-12-14\n\n---\n\n## Market Insights\n\nLeased Properties: 54 (13.67%)\nMarket Activity: Stable with moderate upward demand\n\n---\nData based on registered transactions and may have slight reporting delay.\nWould you like a unit-type wise transaction split for this project?" }
   }
 }
 ```
 
-Examples for implemented steps 18-40:
-
+#### 4.3.10.18 User text: tell more about sector 21
 ```json
-[
-  { "step": 18, "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "tell more about sector 21" } } },
-  { "step": 19, "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "nested_qna", "data": { "selections": [{ "questionId": "sub_intent_2", "title": "Which sector 21 are you referring to?", "type": "locality_single_select", "options": [{ "id": "uuid3", "title": "Sector 21", "city": "Gurgaon", "type": "Locality" }, { "id": "uuid4", "title": "Sector 21", "city": "Faridabad", "type": "Locality" }] }] } } } },
-  { "step": 20, "sender": { "type": "user" }, "payload": { "messageType": "user_action", "responseRequired": true, "visibility": "shown", "content": { "data": { "action": "nested_qna_selection", "selections": [{ "questionId": "sub_intent_2", "selection": "uuid3" }] }, "derivedLabel": "Q. Which sector 21 are you referring to?\nA. Sector 21, Gurgaon" } } },
-  { "step": 21, "sender": { "type": "bot" }, "payload": { "messageType": "markdown", "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" } } },
-  { "step": 22, "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "to learn more about sector 32" } } },
-  { "step": 23, "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "nested_qna", "data": { "selections": [{ "questionId": "sub_intent_1", "title": "Which sector 32 are you referring to?", "type": "locality_single_select", "options": [{ "id": "uuid1", "title": "Sector 32", "city": "Gurgaon", "type": "Locality" }, { "id": "uuid2", "title": "Sector 32", "city": "Faridabad", "type": "Locality" }] }] } } } },
-  { "step": 24, "sender": { "type": "user" }, "payload": { "messageType": "user_action", "responseRequired": true, "visibility": "shown", "content": { "data": { "action": "nested_qna_selection", "selections": [{ "questionId": "sub_intent_1", "text": "sector 32 faridabad" }] }, "derivedLabel": "Q. Which sector 32 are you referring to?\nA. sector 32 faridabad" } } },
-  { "step": 25, "sender": { "type": "bot" }, "payload": { "messageType": "markdown", "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" } } },
-  { "step": 26, "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "locality comparison of sector 32, sector 21" } } },
-  { "step": 27, "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "nested_qna", "data": { "selections": [{ "questionId": "sub_intent_1", "title": "Which sector 32 are you referring to?" }, { "questionId": "sub_intent_2", "title": "Which sector 21 are you referring to?" }], "canSkip": true } } } },
-  { "step": 28, "sender": { "type": "user" }, "payload": { "messageType": "user_action", "responseRequired": true, "visibility": "shown", "content": { "data": { "action": "nested_qna_selection", "selections": [{ "questionId": "sub_intent_1", "text": "sector 32 gurgaon" }, { "questionId": "sub_intent_2", "skipped": true }] }, "derivedLabel": "Q. Which sector 32 are you referring to?\nA. sector 32 gurgaon\n\nQ. Which sector 21 are you referring to?\nA. Skipped" } } },
-  { "step": 29, "sender": { "type": "bot" }, "payload": { "messageType": "markdown", "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" } } },
-  { "step": 30, "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "show properties near me" } } },
-  { "step": 31, "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "share_location", "data": {} } } },
-  { "step": 32, "sender": { "type": "system" }, "payload": { "messageType": "user_action", "responseRequired": true, "content": { "data": { "action": "location_denied" } } } },
-  { "step": 33, "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "properties near me" } } },
-  { "step": 34, "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "share_location", "data": {} } } },
-  { "step": 35, "sender": { "type": "system" }, "payload": { "messageType": "user_action", "responseRequired": true, "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } } } },
-  { "step": 36, "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "property_carousel", "data": { "property_count": 15, "properties": [{ "id": "p1" }, { "id": "p2" }, { "id": "p3" }] } } } },
-  { "step": 37, "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "3bhk properties near me" } } },
-  { "step": 38, "sender": { "type": "system" }, "payload": { "messageType": "user_action", "responseRequired": true, "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } } }, "note": "auto-shared by FE without rendering share_location template" },
-  { "step": 39, "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "property_carousel", "data": { "property_count": 15, "properties": [{ "id": "p1" }, { "id": "p2" }, { "id": "p3" }] } } } },
-  { "step": 40, "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "show me more properties in sector 32, sector 21" } } }
-]
+{ "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "tell more about sector 21" } } }
 ```
-
+#### 4.3.10.19 Bot template: nested_qna for sector 21
 ```json
-{
-  "sender": { "type": "user" },
-  "payload": {
-    "messageType": "text",
-    "responseRequired": true,
-    "content": { "text": "show properties near me" }
-  }
-}
+{ "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "nested_qna", "data": { "selections": [{ "questionId": "sub_intent_2", "title": "Which sector 21 are you referring to?", "type": "locality_single_select", "options": [{ "id": "uuid3", "title": "Sector 21", "city": "Gurgaon", "type": "Locality" }, { "id": "uuid4", "title": "Sector 21", "city": "Faridabad", "type": "Locality" }] }] } } } }
 ```
+#### 4.3.10.20 User action: selects first sector 21 option
 ```json
-{
-  "sender": { "type": "bot" },
-  "payload": {
-    "messageId": "msg_b_040",
-    "sourceMessageId": "msg_u_040",
-    "sequenceNumber": 0,
-    "isFinal": true,
-    "messageType": "template",
-    "content": { "templateId": "share_location", "data": {} }
-  }
-}
+{ "sender": { "type": "user" }, "payload": { "messageType": "user_action", "responseRequired": true, "visibility": "shown", "content": { "data": { "action": "nested_qna_selection", "selections": [{ "questionId": "sub_intent_2", "selection": "uuid3" }] }, "derivedLabel": "Q. Which sector 21 are you referring to?\nA. Sector 21, Gurgaon" } } }
+```
+#### 4.3.10.21 Bot markdown: learn more sector 21
+```json
+{ "sender": { "type": "bot" }, "payload": { "messageType": "markdown", "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" } } }
+```
+#### 4.3.10.22 User text: to learn more about sector 32
+```json
+{ "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "to learn more about sector 32" } } }
+```
+#### 4.3.10.23 Bot template: nested_qna for sector 32
+```json
+{ "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "nested_qna", "data": { "selections": [{ "questionId": "sub_intent_1", "title": "Which sector 32 are you referring to?", "type": "locality_single_select", "options": [{ "id": "uuid1", "title": "Sector 32", "city": "Gurgaon", "type": "Locality" }, { "id": "uuid2", "title": "Sector 32", "city": "Faridabad", "type": "Locality" }] }] } } } }
+```
+#### 4.3.10.24 User action: types sector 32 faridabad
+```json
+{ "sender": { "type": "user" }, "payload": { "messageType": "user_action", "responseRequired": true, "visibility": "shown", "content": { "data": { "action": "nested_qna_selection", "selections": [{ "questionId": "sub_intent_1", "text": "sector 32 faridabad" }] }, "derivedLabel": "Q. Which sector 32 are you referring to?\nA. sector 32 faridabad" } } }
+```
+#### 4.3.10.25 Bot markdown: learn more sector 32
+```json
+{ "sender": { "type": "bot" }, "payload": { "messageType": "markdown", "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" } } }
+```
+#### 4.3.10.26 User text: locality comparison of sector 32, sector 21
+```json
+{ "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "locality comparison of sector 32, sector 21" } } }
+```
+#### 4.3.10.27 Bot template: nested_qna for sector 32 + sector 21
+```json
+{ "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "nested_qna", "data": { "selections": [{ "questionId": "sub_intent_1", "title": "Which sector 32 are you referring to?" }, { "questionId": "sub_intent_2", "title": "Which sector 21 are you referring to?" }], "canSkip": true } } } }
+```
+#### 4.3.10.28 User action: sector 32 gurgaon + skip sector 21
+```json
+{ "sender": { "type": "user" }, "payload": { "messageType": "user_action", "responseRequired": true, "visibility": "shown", "content": { "data": { "action": "nested_qna_selection", "selections": [{ "questionId": "sub_intent_1", "text": "sector 32 gurgaon" }, { "questionId": "sub_intent_2", "skipped": true }] }, "derivedLabel": "Q. Which sector 32 are you referring to?\nA. sector 32 gurgaon\n\nQ. Which sector 21 are you referring to?\nA. Skipped" } } }
+```
+#### 4.3.10.29 Bot markdown: learn more sector 32 gurgaon
+```json
+{ "sender": { "type": "bot" }, "payload": { "messageType": "markdown", "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" } } }
+```
+#### 4.3.10.30 User text: show properties near me
+```json
+{ "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "show properties near me" } } }
+```
+#### 4.3.10.31 Bot template: share_location
+```json
+{ "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "share_location", "data": {} } } }
+```
+#### 4.3.10.32 FE action: location_denied
+```json
+{ "sender": { "type": "system" }, "payload": { "messageType": "user_action", "responseRequired": true, "content": { "data": { "action": "location_denied" } } } }
+```
+#### 4.3.10.33 User text: properties near me (retry)
+```json
+{ "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "properties near me" } } }
+```
+#### 4.3.10.34 Bot template: share_location again
+```json
+{ "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "share_location", "data": {} } } }
+```
+#### 4.3.10.35 FE action: location_shared
+```json
+{ "sender": { "type": "system" }, "payload": { "messageType": "user_action", "responseRequired": true, "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } } } }
+```
+#### 4.3.10.36 Bot template: property_carousel
+```json
+{ "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "property_carousel", "data": { "property_count": 15, "properties": [{ "id": "p1" }, { "id": "p2" }, { "id": "p3" }] } } } }
+```
+#### 4.3.10.37 User text: 3bhk properties near me
+```json
+{ "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "3bhk properties near me" } } }
+```
+#### 4.3.10.38 FE auto-action: location_shared without rendering share_location
+```json
+{ "sender": { "type": "system" }, "payload": { "messageType": "user_action", "responseRequired": true, "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } } }, "note": "auto-shared by FE without rendering share_location template" }
+```
+#### 4.3.10.39 Bot template: property_carousel
+```json
+{ "sender": { "type": "bot" }, "payload": { "messageType": "template", "content": { "templateId": "property_carousel", "data": { "property_count": 15, "properties": [{ "id": "p1" }, { "id": "p2" }, { "id": "p3" }] } } } }
+```
+#### 4.3.10.40 User text: show me more properties in sector 32, sector 21
+```json
+{ "sender": { "type": "user" }, "payload": { "messageType": "text", "responseRequired": true, "content": { "text": "show me more properties in sector 32, sector 21" } } }
 ```
 
 #### 4.3.11 Location actions from FE template
