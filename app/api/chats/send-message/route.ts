@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { appendEvent, createRequest, completeRequest, getRequestStateByUserMessageId } from "@/lib/store";
-import type { ChatEvent } from "@/lib/contract-types";
+import { appendEvent, createRequest, completeRequest, getMessageStateByUserMessageId } from "@/lib/store";
+import type { ChatEventFromUser } from "@/lib/contract-types";
 
 export async function POST(request: NextRequest) {
-  let body: { event: ChatEvent };
+  let body: { event: ChatEventFromUser };
   try {
     body = await request.json();
   } catch {
@@ -11,12 +11,12 @@ export async function POST(request: NextRequest) {
   }
 
   const { event } = body;
-  if (!event?.sender?.type || !event?.payload?.messageType) {
+  if (!event?.sender?.type || !event?.messageType || !event?.conversationId) {
     return NextResponse.json({ error: "Invalid event" }, { status: 400 });
   }
 
   const shouldExpectResponse =
-    event.payload.messageType === "text" || event.payload.responseRequired === true;
+    event.messageType === "text" || event.responseRequired === true;
   if (shouldExpectResponse) {
     return NextResponse.json(
       { error: "Use POST /api/chats/send-message-streamed for responseRequired=true turns" },
@@ -26,14 +26,14 @@ export async function POST(request: NextRequest) {
 
   const stored = appendEvent({
     ...event,
-    conversationId: event.conversationId ?? "c1",
+    conversationId: event.conversationId,
   });
-  createRequest(stored.messageId!, stored.conversationId ?? "c1");
+  createRequest(stored.messageId!, stored.conversationId);
   completeRequest(stored.messageId!);
-  stored.requestState = "COMPLETED";
+  stored.messageState = "COMPLETED";
 
   return NextResponse.json({
     messageId: stored.messageId,
-    requestState: getRequestStateByUserMessageId(stored.messageId!) ?? "COMPLETED",
+    messageState: getMessageStateByUserMessageId(stored.messageId!) ?? "COMPLETED",
   });
 }

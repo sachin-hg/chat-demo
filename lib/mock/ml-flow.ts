@@ -1,4 +1,4 @@
-import type { ChatEvent, ChatPayloadContent } from "@/lib/contract-types";
+import type { ChatEvent, ChatPayloadContent, ChatEventToML, ChatEventFromML } from "@/lib/contract-types";
 import {
   MOCK_PROPERTIES,
   MOCK_PROPERTY_CAROUSEL_CARDS,
@@ -14,7 +14,7 @@ import {
 } from "./data";
 
 const CONV = "conv_1";
-const BOT = { type: "bot" as const, id: "re_bot" };
+const BOT = { type: "bot" as const };
 const ML_RESPONSE_CONTEXT = {
   service: "buy",
   category: "residential",
@@ -54,29 +54,25 @@ function botMessage(
   messageType: "text" | "markdown" | "template",
   content: ChatPayloadContent,
   options: {
-    sourceMessageId?: string;
+    sourceMessageId: string;
     sequenceNumber?: number;
     isFinal?: boolean;
     visibility?: "shown" | "hidden";
-  } = {}
-): Omit<ChatEvent, "messageId" | "createdAt"> {
+  }
+): ChatEventFromML & { messageId?: string } {
   const { sourceMessageId, sequenceNumber = 0, isFinal = true, visibility } = options;
   return {
+    messageId,
     conversationId: CONV,
     sender: BOT,
-    payload: {
-      messageId,
-      sourceMessageId,
-      sequenceNumber,
-      isFinal,
-      messageType,
-      visibility,
-      content: {
-        ...content,
-        // Provisional strategy: include context in every ML response.
-        context: ML_RESPONSE_CONTEXT,
-      },
-    },
+    sourceMessageId,
+    sequenceNumber,
+    isFinal,
+    messageState: isFinal ? "COMPLETED" : "IN_PROGRESS",
+    summarisedChatContext: ML_RESPONSE_CONTEXT,
+    messageType,
+    visibility,
+    content,
   };
 }
 
@@ -152,18 +148,17 @@ function buildPropertyCarouselData(properties: typeof MOCK_PROPERTY_CAROUSEL_CAR
 }
 
 export function getNextBotEvents(
-  userEvent: ChatEvent,
+  userEvent: ChatEventToML,
   recentEvents: ChatEvent[]
-): Omit<ChatEvent, "messageId" | "createdAt">[] {
-  const { payload } = userEvent;
-  const messageType = payload.messageType;
-  const content = payload.content;
+): (ChatEventFromML & { messageId?: string })[] {
+  const messageType = userEvent.messageType;
+  const content = userEvent.content;
   const data = content?.data as Record<string, unknown> | undefined;
-  const sourceMessageId = payload.messageId;
+  const sourceMessageId = userEvent.messageId;
   const action = getAction(data);
   const textMsg = content.text;
 
-  if (!(messageType === 'text' || payload.responseRequired)) {
+  if (!(messageType === "text" || userEvent.responseRequired)) {
     return [
      
     ];

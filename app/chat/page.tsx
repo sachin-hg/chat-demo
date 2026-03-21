@@ -62,21 +62,19 @@ function buildContextEvent(conversationId: string): ChatEvent {
   return {
     conversationId,
     sender: { type: "system" },
-    payload: {
-      messageType: "context",
-      content: {
-        data: {
-          page: "SRP",
-          service: "buy",
-          category: "residential",
-          city: "526acdc6c33455e9e4e9",
-          filters: {
-            apartment_type_id: [1, 2],
-            max_price: 4800000,
-            min_price: 100,
-            property_type_id: [1, 2],
-            type: "project",
-          },
+    messageType: "context",
+    content: {
+      data: {
+        page: "SRP",
+        service: "buy",
+        category: "residential",
+        city: "526acdc6c33455e9e4e9",
+        filters: {
+          apartment_type_id: [1, 2],
+          max_price: 4800000,
+          min_price: 100,
+          property_type_id: [1, 2],
+          type: "project",
         },
       },
     },
@@ -300,9 +298,9 @@ function getLastBotMessageId(messages: StoredMessage[], templateId: string): str
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
     if (m.sender?.type !== "bot") continue;
-    const c = m.payload?.content as { templateId?: string } | undefined;
+    const c = m.content as { templateId?: string } | undefined;
     if (c?.templateId === templateId) {
-      const id = (m.payload as { messageId?: string })?.messageId;
+      const id = m.messageId;
       return id ?? null;
     }
   }
@@ -423,7 +421,7 @@ function ChatPageContent() {
 
     if (ackedMessageId) {
       setMessages((prev) =>
-        prev.map((m) => (m.messageId === ackedMessageId ? { ...m, requestState: "CANCELLED_BY_USER" } : m))
+        prev.map((m) => (m.messageId === ackedMessageId ? { ...m, messageState: "CANCELLED_BY_USER" } : m))
       );
       try {
         await cancelRequest(ackedMessageId);
@@ -432,7 +430,7 @@ function ChatPageContent() {
     } else if (pendingLocalId) {
       cancelledPendingLocalIdsRef.current.add(pendingLocalId);
       setMessages((prev) =>
-        prev.map((m) => (m.messageId === pendingLocalId ? { ...m, requestState: "CANCELLED_BY_USER" } : m))
+        prev.map((m) => (m.messageId === pendingLocalId ? { ...m, messageState: "CANCELLED_BY_USER" } : m))
       );
       currentPendingLocalMessageIdRef.current = null;
     }
@@ -608,11 +606,9 @@ function ChatPageContent() {
       const event: ChatEvent = {
         conversationId,
         sender: { type: "user" },
-        payload: {
-          messageType: "text",
-          responseRequired: true,
-          content: { text: trimmed },
-        },
+        messageType: "text",
+        responseRequired: true,
+        content: { text: trimmed },
       };
       lastSentEventRef.current = event;
       const pendingId = `pending-${Date.now()}`;
@@ -644,7 +640,7 @@ function ChatPageContent() {
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.messageId === pendingId
-                      ? { ...m, messageId: ack.messageId, requestState: "CANCELLED_BY_USER" }
+                      ? { ...m, messageId: ack.messageId, messageState: "CANCELLED_BY_USER" }
                       : m
                   )
                 );
@@ -662,7 +658,7 @@ function ChatPageContent() {
               if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
               knownMessageIdsRef.current.add(botEvent.messageId);
               setMessages((prev) => [...prev, botEvent]);
-              if (botEvent.sender?.type === "bot" && botEvent.payload.isFinal === true) {
+              if (botEvent.sender?.type === "bot" && botEvent.isFinal === true) {
                 clearReplyWaiting();
               }
             },
@@ -705,7 +701,7 @@ function ChatPageContent() {
         return;
       }
 
-      const data = (event.payload.content?.data ?? {}) as Record<string, unknown>;
+      const data = (event.content?.data ?? {}) as Record<string, unknown>;
       const rawAction = (data.action as string | undefined) ?? (data.actionId as string | undefined);
       if (isDemo) demoLog("user_action: sending", rawAction ?? "(unknown)", data);
 
@@ -725,7 +721,7 @@ function ChatPageContent() {
       const abortController = new AbortController();
       activeSendStreamAbortRef.current = abortController;
       let ackReceived = false;
-      const expectsResponse = fullEvent.payload.responseRequired === true;
+      const expectsResponse = fullEvent.responseRequired === true;
 
       try {
         if (!expectsResponse) {
@@ -738,7 +734,7 @@ function ChatPageContent() {
             setMessages((prev) =>
               prev.map((m) =>
                 m.messageId === pendingId
-                  ? { ...m, messageId: ack.messageId, requestState: "CANCELLED_BY_USER" }
+                  ? { ...m, messageId: ack.messageId, messageState: "CANCELLED_BY_USER" }
                   : m
               )
             );
@@ -764,7 +760,7 @@ function ChatPageContent() {
                   setMessages((prev) =>
                     prev.map((m) =>
                       m.messageId === pendingId
-                        ? { ...m, messageId: ack.messageId, requestState: "CANCELLED_BY_USER" }
+                        ? { ...m, messageId: ack.messageId, messageState: "CANCELLED_BY_USER" }
                         : m
                     )
                   );
@@ -783,7 +779,7 @@ function ChatPageContent() {
                 if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
                 knownMessageIdsRef.current.add(botEvent.messageId);
                 setMessages((prev) => [...prev, botEvent]);
-                if (botEvent.sender?.type === "bot" && botEvent.payload.isFinal === true) {
+                if (botEvent.sender?.type === "bot" && botEvent.isFinal === true) {
                   clearReplyWaiting();
                 }
               },
@@ -934,7 +930,7 @@ function ChatPageContent() {
     activeSendStreamAbortRef.current = abortController;
 
     const expectsResponse =
-      fullEvent.payload.messageType === "text" || fullEvent.payload.responseRequired === true;
+      fullEvent.messageType === "text" || fullEvent.responseRequired === true;
     try {
       await sendMessageStream(
         fullEvent,
@@ -949,7 +945,7 @@ function ChatPageContent() {
             if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
             knownMessageIdsRef.current.add(botEvent.messageId);
             setMessages((prev) => [...prev, botEvent]);
-            if (botEvent.sender?.type === "bot" && botEvent.payload.isFinal === true) clearReplyWaiting();
+            if (botEvent.sender?.type === "bot" && botEvent.isFinal === true) clearReplyWaiting();
           },
         },
         { signal: abortController.signal }
@@ -977,14 +973,14 @@ function ChatPageContent() {
 
   // Visible messages (filter context/analytics for display count)
   const visibleMessages = messages.filter(
-    (m) => m.payload.messageType !== "context" && m.payload.messageType !== "analytics"
+    (m) => m.messageType !== "context" && m.messageType !== "analytics"
   );
   const hasMessages = visibleMessages.length > 0;
   const lastVisible = visibleMessages[visibleMessages.length - 1];
   const hasStickyNestedQna =
     lastVisible?.sender?.type === "bot" &&
-    lastVisible?.payload?.messageType === "template" &&
-    (lastVisible?.payload?.content as { templateId?: string } | undefined)?.templateId === "nested_qna";
+    lastVisible?.messageType === "template" &&
+    (lastVisible?.content as { templateId?: string } | undefined)?.templateId === "nested_qna";
 
   const inputPlaceholder = hasMessages ? "Reply to Houzy" : "Ask Houzy";
 
@@ -1110,7 +1106,6 @@ function ChatPageContent() {
               <ChatMessage
                 key={
                   msg.messageId ??
-                  (msg as unknown as { payload?: { messageId?: string } }).payload?.messageId ??
                   Math.random()
                 }
                 event={msg}

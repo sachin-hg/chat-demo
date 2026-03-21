@@ -222,7 +222,7 @@ Content-Type: application/json
 SSE response (unchanged v1 pattern):
 ```txt
 event: connection_ack
-data: {"eventId":"evt_u_11","requestState":"PENDING"}
+data: {"eventId":"evt_u_11","messageState":"PENDING"}
 
 id: evt_b_21
 event: chat_event
@@ -245,7 +245,7 @@ x-chat-api-version: 1.1
 SSE response:
 ```txt
 event: connection_ack
-data: {"eventId":"evt_u_12","requestState":"PENDING"}
+data: {"eventId":"evt_u_12","messageState":"PENDING"}
 
 event: message_start
 data: {"messageId":"msg_b_31","sourceMessageId":"msg_u_12","sequenceNumber":0,"messageType":"markdown","context":{"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]}}}

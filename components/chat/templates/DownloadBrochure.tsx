@@ -72,14 +72,12 @@ export function DownloadBrochure({ data, messageId, onUserAction, disabled = fal
             if (!ok) {
               onUserAction({
                 sender: { type: "system" },
-                payload: {
-                  messageType: "user_action",
-                  responseRequired: false,
-                  visibility: "shown",
-                  content: {
-                    data: { action: "location_denied" },
-                    derivedLabel: "Login Failed. Can't proceed without logging in!",
-                  },
+                messageType: "user_action",
+                responseRequired: false,
+                visibility: "shown",
+                content: {
+                  data: { action: "location_denied" },
+                  derivedLabel: "Login Failed. Can't proceed without logging in!",
                 },
               } as ChatEvent);
               return;
@@ -89,12 +87,10 @@ export function DownloadBrochure({ data, messageId, onUserAction, disabled = fal
             // Send hidden system user_action per contract (brochure_downloaded)
             onUserAction({
               sender: { type: "system" },
-              payload: {
-                messageType: "user_action",
-                responseRequired: false,
-                content: {
-                  data: { action: "brochure_downloaded", messageId, property: propertyMeta },
-                },
+              messageType: "user_action",
+              responseRequired: false,
+              content: {
+                data: { action: "brochure_downloaded", replyToMessageId: messageId, property: propertyMeta },
               },
             } as ChatEvent);
           }}

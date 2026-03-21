@@ -8,14 +8,12 @@ import { useEffect, useRef } from "react";
 function emitLoginFailed(onUserAction: (event: ChatEvent) => void) {
   onUserAction({
     sender: { type: "system" },
-    payload: {
-      messageType: "user_action",
-      responseRequired: false,
-      visibility: "shown",
-      content: {
-        data: { action: "location_denied" },
-        derivedLabel: "Login Failed. Can't proceed without logging in!",
-      },
+    messageType: "user_action",
+    responseRequired: false,
+    visibility: "shown",
+    content: {
+      data: { action: "location_denied" },
+      derivedLabel: "Login Failed. Can't proceed without logging in!",
     },
   } as ChatEvent);
 }
@@ -73,18 +71,16 @@ export function ShortlistProperty({ data, messageId, onUserAction, disabled = fa
 
       onUserAction({
         sender: { type: "system" },
-        payload: {
-          messageType: "user_action",
-          visibility: "shown",
-          responseRequired: false,
-          content: {
-            data: {
-              action: "shortlist",
-              messageId,
-              property: { id: propertyId, type } as PropertyMeta,
-            },
-            derivedLabel: "You've shortlisted this property. check it out in User Profile -> Saved properties",
+        messageType: "user_action",
+        visibility: "shown",
+        responseRequired: false,
+        content: {
+          data: {
+            action: "shortlist",
+            replyToMessageId: messageId,
+            property: { id: propertyId, type } as PropertyMeta,
           },
+          derivedLabel: "You've shortlisted this property. check it out in User Profile -> Saved properties",
         },
       } as ChatEvent);
     })();

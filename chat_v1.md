@@ -28,14 +28,16 @@ REQUEST_CREATED
       v
    PENDING
       |
+      v
+ IN_PROGRESS
+      |
       |-------------------------------|
       |               |               |
       v               v               v
  COMPLETED     ERRORED_AT_ML   TIMED_OUT_BY_BE
-                                       |
-                                       v
-                             (cancel signal to ML)
-
+                                      |
+                                      v
+                            (cancel signal to ML)
       |
       v
 CANCELLED_BY_USER
@@ -48,7 +50,8 @@ CANCELLED_BY_USER
 
 | State | Meaning |
 |------|--------|
-| PENDING | Awaiting ML response |
+| PENDING | Accepted by BE and queued for ML |
+| IN_PROGRESS | ML has started processing |
 | COMPLETED | ML response processed successfully |
 | ERRORED_AT_ML | ML returned explicit error |
 | TIMED_OUT_BY_BE | No ML response within BE timeout (120s) |
@@ -58,8 +61,8 @@ CANCELLED_BY_USER
 
 ## 3. Hard Invariants (Request Handling)
 
-- Only **PENDING** requests may accept ML responses
-- All other ML responses are **discarded and alerted**
+- Only **PENDING** or **IN_PROGRESS** source messages may accept ML responses
+- BE ignores ML responses for source messages in all other states
 - Cancellation is **advisory** to ML
 - Requests never transition out of terminal states
 - User request event is soft-deleted only for `CANCELLED_BY_USER`
@@ -70,7 +73,11 @@ CANCELLED_BY_USER
 
 ### 4.1 `GET /chats/get-conversation-id`
 
-Returns the active conversation ID (single chat in Phase 1).
+Returns the active conversation ID for the caller.
+In Phase 1, this is a stable 1:1 mapping:
+- one `conversationId` per authenticated `userId`, or
+- one `conversationId` per anonymous `_ga`.
+So repeated calls for the same user/`_ga` return the same `conversationId`.
 
 **Response**
 ```json
@@ -89,13 +96,21 @@ Returns the active conversation ID (single chat in Phase 1).
 Returns all chats for the user.
 Ordering: **latest chat first** (descending by `lastActivityAt`).
 
+> Phase 1 note: this endpoint is not required for core flow because BE maintains exactly one conversation per user (`userId`/`_ga`), so clients can rely on `GET /chats/get-conversation-id`.
+
+**Response**
 ```json
 {
   "chats": [
     {
+      "conversationId": "conv_2",
+      "createdAt": "2025-01-12T11:00:00.000Z",
+      "lastActivityAt": "2025-01-12T11:15:20.000Z"
+    },
+    {
       "conversationId": "conv_1",
-      "createdAt": "2026-02-06T09:00:00Z",
-      "lastActivityAt": "2026-02-06T10:05:00Z"
+      "createdAt": "2025-01-12T10:00:00.000Z",
+      "lastActivityAt": "2025-01-12T10:45:05.000Z"
     }
   ]
 }
@@ -105,57 +120,25 @@ Ordering: **latest chat first** (descending by `lastActivityAt`).
 
 ### 4.3 `GET /chats/get-history`
 
-**Query params**
+Query params:
 - `conversationId` (required)
 - `page_size` (optional, default `6`)
-- `messages_before` (optional cursor, exclusive)
-- `messages_after` (optional cursor, exclusive)
-- `messages_before` and `messages_after` cannot be used together.
+- `messages_before` (optional, exclusive cursor)
+- `messages_after` (optional, exclusive cursor)
 
-**Sort order**
-- Always ascending by `created_at` (oldest → newest) in returned `messages`.
-
-**Soft-delete filtering (canonical behavior)**
+Rules:
+- `messages_before` and `messages_after` are mutually exclusive.
+- Returned `messages` are in ascending creation order.
 - User request events whose request state is `CANCELLED_BY_USER` are excluded by BE in `get-history` response.
-- No other event types are filtered.
 
-**Implicit window (no cursor)**
-```
-/chats/get-history?conversationId=conv_1
-```
-Returns latest 6 messages by default (or latest `page_size` when provided).
+Example (`messages_before`):
+`GET /chats/get-history?conversationId=conv_1&page_size=6&messages_before=msg_420`
 
-**Equivalent explicit default page size**
-```
-/chats/get-history?conversationId=conv_1&page_size=6
-```
+Returns latest 6 messages before `msg_420`.
 
-**Response**
-```json
-{
-  "conversationId": "conv_1",
-  "messages": [
-    {
-      "messageId": "msg_201",
-      "sender": { "type": "bot", "id": "re_bot" },
-      "payload": { ... },
-      "createdAt": "2026-02-06T10:00:01Z"
-    }
-  ],
-  "hasMore": true
-}
-```
+Example (`messages_after`):
+`GET /chats/get-history?conversationId=conv_1&page_size=6&messages_after=msg_401`
 
-**Before cursor (load older)**
-```
-/chats/get-history?conversationId=conv_1&messages_before=msg_12
-```
-Returns latest 6 messages strictly before `msg_12` (e.g. `msg_6..msg_11`).
-
-**After cursor (recover missed messages)**
-```
-/chats/get-history?conversationId=conv_1&messages_after=msg_401
-```
 Returns latest 6 messages strictly after `msg_401` (e.g. `msg_402..msg_407`).
 
 **Response**
@@ -163,12 +146,12 @@ Returns latest 6 messages strictly after `msg_401` (e.g. `msg_402..msg_407`).
 {
   "conversationId": "conv_1",
   "messages": [
-    { "messageId": "msg_402", "payload": {} },
-    { "messageId": "msg_403", "payload": {} },
-    { "messageId": "msg_404", "payload": {} },
-    { "messageId": "msg_405", "payload": {} },
-    { "messageId": "msg_406", "payload": {} },
-    { "messageId": "msg_407", "payload": {} }
+    { "messageId": "msg_402", "messageType": "...", "content": {} },
+    { "messageId": "msg_403", "messageType": "...", "content": {} },
+    { "messageId": "msg_404", "messageType": "...", "content": {} },
+    { "messageId": "msg_405", "messageType": "...", "content": {} },
+    { "messageId": "msg_406", "messageType": "...", "content": {} },
+    { "messageId": "msg_407", "messageType": "...", "content": {} }
   ],
   "hasMore": true
 }
@@ -181,11 +164,10 @@ Returns latest 6 messages strictly after `msg_401` (e.g. `msg_402..msg_407`).
 ```json
 {
   "event": {
+    "conversationId": "conv_1",
     "sender": { "type": "user" },
-    "payload": {
-      "messageType": "text",
-      "content": { "text": "show me properties" }
-    }
+    "messageType": "text",
+    "content": { "text": "show me properties" }
   }
 }
 ```
@@ -193,22 +175,24 @@ Returns latest 6 messages strictly after `msg_401` (e.g. `msg_402..msg_407`).
 **Response**
 JSON only:
 ```json
-{ "messageId": "msg_301", "requestState": "COMPLETED" }
+{ "messageId": "msg_301", "messageState": "COMPLETED" }
 ```
 
 **Usage**
 - Canonical for fire-and-forget turns (`responseRequired === false`).
 - If `responseRequired === true` (or user text), FE must use `POST /chats/send-message-streamed`.
+- `conversationId` is mandatory in `event` payload for send-message APIs (not passed as query param).
 
 **Message event enrichment**
-- Each persisted message may include top-level `requestState` with one of:
+- Each persisted message may include top-level `messageState` with one of:
   - `PENDING`
+  - `IN_PROGRESS`
   - `COMPLETED`
   - `ERRORED_AT_ML`
   - `TIMED_OUT_BY_BE`
   - `CANCELLED_BY_USER`
-- FE rendering by `requestState`:
-  - `PENDING`, `COMPLETED`: render as usual
+- FE rendering by `messageState`:
+  - `PENDING`, `IN_PROGRESS`, `COMPLETED`: render as usual
   - `ERRORED_AT_ML`, `TIMED_OUT_BY_BE`: render generic error text
   - `CANCELLED_BY_USER`: do not render message
 
@@ -229,10 +213,13 @@ JSON only:
 
 Request body is identical to `send-message`. This endpoint requires `Accept: text/event-stream`.
 
+Before dispatching to ML, BE authenticates with `login_auth_token` when present and forwards derived identity under `sender.userId` / `sender.gaId`.
+`sender.userId` is BE-derived from auth/identity request headers.
+
 **SSE (example)**
 ```txt
 event: connection_ack
-data: {"messageId":"msg_301","requestState":"PENDING"}
+data: {"messageId":"msg_301","messageState":"PENDING"}
 
 id: msg_401
 event: chat_event
@@ -249,8 +236,8 @@ data: {"reason":"response_complete"}
 ### 4.7 FE Request UI Semantics (canonical)
 
 - **Awaiting indicator**: FE shows inline awaiting status only when:
-  - outbound event has `payload.responseRequired === true`, and
-  - final bot response (`payload.isFinal === true`) has not yet been received.
+  - outbound event has `responseRequired === true`, and
+  - final bot response (`isFinal === true`) has not yet been received.
 - **Timeout**: FE maintains a local reply timeout safeguard (current app value: `25s`); after timeout UI is shown, FE relies on polling (`get-history` with `messages_after`) until it receives the response for that message.
 - **Input/CTA behavior**:
   - while `sending`: composer submit disabled
@@ -282,8 +269,13 @@ data: {"reason":"response_complete"}
 ```json
 {
   "conversationId": "conv_1",
-  "sourceMessageId": "msg_u_456",
-  "event": { "...": "ChatEvent" }
+  "messageId": "msg_u_456",
+  "messageType": "text",
+  "messageState": "PENDING",
+  "createdAt": "2026-03-16T10:00:00.000Z",
+  "sender": { "type": "user", "userId": "usr_123", "gaId": "GA1.2.12345.67890" },
+  "content": { "text": "show me properties" },
+  "responseRequired": true
 }
 ```
 
@@ -294,6 +286,7 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sourceMessageId": "msg_u_456",
+  "messageState": "COMPLETED",
   "status": "success",
   "event": { "...": "Bot ChatEvent" },
   "context": {
@@ -328,7 +321,11 @@ data: {"reason":"response_complete"}
 }
 ```
 
-`context` is optional in contract shape, but current provisional strategy is to include it on all ML success responses. In current Phase 1 mock wiring, this is surfaced on each bot event under `payload.content.context` for FE consumption.
+BE persistence semantics for ML outputs:
+- BE persists each ML output as a new bot message (`sender.type = "bot"`) with a newly generated `messageId` and `messageState = "COMPLETED"`.
+- BE applies ML output `messageState` (`IN_PROGRESS`/`COMPLETED`/`ERRORED_AT_ML`) to the source user message referenced by `sourceMessageId`.
+
+`summarisedChatContext` is optional in contract shape, but current provisional strategy is to include it on all ML success responses.
 
 ---
 
@@ -352,7 +349,7 @@ data: {"reason":"response_complete"}
 ```json
 {
   "type": "cancel_request",
-  "sourceMessageId": "msg_u_456",
+  "messageId": "msg_u_456",
   "reason": "TIMED_OUT_BY_BE"
 }
 ```
@@ -381,7 +378,7 @@ The stream uses the following **event** values and comment lines:
 **Chat events (`event: chat_event`)**  
 - Only events that should be shown in the chat (e.g. bot messages, visible info) are sent with `event: chat_event`.
 - Each line: `id: <messageId>\nevent: chat_event\ndata: <JSON ChatEvent>\n\n`.
-- `data` is a single JSON object: the full `ChatEvent` (including `messageId`, `sender`, `payload`, `createdAt`, etc.).
+- `data` is a single JSON object: the full `ChatEvent` (including `messageId`, `sender`, `messageType`, `content`, `createdAt`, etc.).
 
 **Other event values**  
 - **`connection_close`**: Sent by the BE once, immediately before closing the stream when:
@@ -481,7 +478,7 @@ sequenceDiagram
 
     FE->>BE: POST /chats/send-message-streamed (Accept: text/event-stream)
     BE->>BE: persist user event (PENDING)
-    BE-->>FE: SSE connection_ack {messageId, requestState:PENDING}
+    BE-->>FE: SSE connection_ack {messageId, messageState:PENDING}
     BE->>ML: invoke ML (method call)
 
     ML->>BE: success response
@@ -499,7 +496,7 @@ sequenceDiagram
     participant ML
 
     FE->>BE: POST /chats/send-message-streamed (Accept: text/event-stream)
-    BE-->>FE: SSE connection_ack {messageId, requestState:PENDING}
+    BE-->>FE: SSE connection_ack {messageId, messageState:PENDING}
     BE->>ML: enqueue request
 
     Note over BE: 120s timeout reached
@@ -507,7 +504,7 @@ sequenceDiagram
     BE->>ML: cancel_request (advisory)
     BE-->>FE: SSE connection_close (timeout path close)
     FE->>BE: GET /chats/get-history?messages_after=<last_seen_messageId>
-    BE-->>FE: user event surfaced with requestState=TIMED_OUT_BY_BE
+    BE-->>FE: user event surfaced with messageState=TIMED_OUT_BY_BE
 
 ```
 ---
@@ -520,7 +517,7 @@ sequenceDiagram
     participant ML
 
     FE->>BE: POST /chats/send-message-streamed (Accept: text/event-stream)
-    BE-->>FE: SSE connection_ack {messageId, requestState:PENDING}
+    BE-->>FE: SSE connection_ack {messageId, messageState:PENDING}
     BE->>ML: enqueue request
 
     FE->>BE: POST /chats/cancel {messageId}
@@ -603,9 +600,9 @@ This section records how the **chat-demo** implementation diverges from or exten
 
 - Canonical cancel behavior is documented in §4.5 and §4.7.
 
-### A.7 UI behavior for requestState
+### A.7 UI behavior for messageState
 
-- Canonical requestState placement and rendering rules are documented in §4.4.
+- Canonical messageState placement and rendering rules are documented in §4.4.
 
 ### A.5 Template and action handling
 
@@ -631,7 +628,9 @@ This section records how the **chat-demo** implementation diverges from or exten
 - **Message IDs**: `messageId` is generated by **BE** (not FE/ML) for all persisted messages. Every message delivered to FE must include `messageId`.
 - **Every bot message MUST have `messageId`, `sourceMessageId`, `sequenceNumber`, and `isFinal`**
 - **`sourceMessageId`** ties all bot response messages back to the user message that triggered them
+- In FE-facing events, `sourceMessageId` is optional and generally not required for rendering logic.
 - **`user_action` visibility**: hidden by default — only rendered when `visibility === "shown"` and `derivedLabel` is set
+- **For `user_action` replies to prior bot/template messages, use `content.data.replyToMessageId`** (instead of `messageId` inside `data`)
 - **`responseRequired`** on `user_action` and user `text`: tells ML whether to generate a response — always `true` for user text, conditional for user_action
 - **Templates are FE-owned** (custom rendering is allowed and expected)
 - **Templates MUST provide a `fallbackText`** *(Phase 2 — not rendered in Phase 1)*
@@ -647,8 +646,63 @@ This section records how the **chat-demo** implementation diverges from or exten
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "ChatEvent",
   "type": "object",
-  "required": ["sender", "payload"],
+  "required": ["sender", "messageType", "content"],
   "properties": {
+    "messageId": {
+      "type": "string",
+      "description": "Unique ID for this message. Always generated by BE. FE and ML must not generate messageId."
+    },
+    "sourceMessageId": {
+      "type": "string",
+      "description": "BE sends user messageId to ML; ML echoes it back on all response messages for turn correlation. Required when sender.type = bot."
+    },
+    "sequenceNumber": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "0-based position within the response sequence for a single user turn. Required when sender.type = bot."
+    },
+    "isFinal": {
+      "type": "boolean",
+      "description": "true if this is the last message in the response sequence for the current user turn."
+    },
+    "responseRequired": {
+      "type": "boolean",
+      "description": "FE-controlled. true = FE expects ML response; false/absent = fire-and-forget."
+    },
+    "messageType": {
+      "type": "string",
+      "enum": ["context", "text", "template", "user_action", "markdown"],
+      "description": "analytics is Phase 2 — not in Phase 1 schema."
+    },
+    "visibility": {
+      "type": "string",
+      "enum": ["shown", "hidden"],
+      "description": "Only meaningful for messageType = user_action."
+    },
+    "content": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Plain text or Markdown depending on messageType"
+        },
+        "templateId": { "type": "string" },
+        "data": { "type": "object" },
+        "context": {
+          "type": "object",
+          "description": "Optional ML response context snapshot. Provisional strategy: include in every ML response."
+        },
+        "fallbackText": {
+          "type": "string",
+          "description": "[Phase 2] Renderable rich text used when template is unsupported (plain text | Markdown preferred)"
+        },
+        "derivedLabel": {
+          "type": "string",
+          "description": "FE-authored display text for user_action. Persisted by BE so history can render the same shown action text."
+        }
+      },
+      "additionalProperties": false
+    },
     "conversationId": { "type": "string" },
 
     "sender": {
@@ -660,105 +714,7 @@ This section records how the **chat-demo** implementation diverges from or exten
       }
     },
 
-    "payload": {
-      "type": "object",
-      "required": ["messageType", "content"],
-      "properties": {
-        "messageId": {
-          "type": "string",
-          "description": "Unique ID for this message. Always generated by BE. FE and ML must not generate messageId."
-        },
-
-        "sourceMessageId": {
-          "type": "string",
-          "description": "BE-generated ID assigned to each inbound user message, then relayed to ML. ML echoes it back on every response message so FE/BE can correlate responses to the originating user turn. Required when sender.type = bot."
-        },
-
-        "sequenceNumber": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "0-based position of this message within the response sequence for a single user turn. A single user message may produce multiple bot messages (e.g., a text preamble followed by a property carousel). Required when sender.type = bot."
-        },
-
-        "isFinal": {
-          "type": "boolean",
-          "description": "true if this is the last message in the response sequence for the current user turn. FE/BE close the per-request stream when this is received; FE also stops loader/awaiting UI when this is received. Required when sender.type = bot."
-        },
-        "responseRequired": {
-          "type": "boolean",
-          "description": "FE-controlled. Applicable to user text and user_action events. true = FE expects ML response and starts loader/awaiting UI. false/absent = fire-and-forget, no ML response expected."
-        },
-
-        "messageType": {
-          "type": "string",
-          "enum": [
-            "context",
-            "text",
-            "template",
-            "user_action",
-            "markdown"
-          ],
-          "description": "analytics is Phase 2 — not in Phase 1 schema."
-        },
-
-        "visibility": {
-          "type": "string",
-          "enum": ["shown", "hidden"],
-          "description": "Only meaningful for messageType = user_action. Hidden by default. If set to shown, derivedLabel is rendered according to sender type (sender=user => user bubble, sender=system => bot-side message)."
-        },
-
-        "content": {
-          "type": "object",
-          "properties": {
-            "text": {
-              "type": "string",
-              "description": "Plain text or Markdown depending on messageType"
-            },
-            "templateId": { "type": "string" },
-            "data": { "type": "object" },
-            "context": {
-              "type": "object",
-              "description": "Optional ML response context snapshot. Provisional strategy: include in every ML response."
-            },
-
-            // [Phase 2] fallbackText — not implemented in Phase 1
-            "fallbackText": {
-              "type": "string",
-              "description": "[Phase 2] Renderable rich text used when template is unsupported (plain text | Markdown preferred)"
-            },
-
-            "derivedLabel": {
-              "type": "string",
-              "description": "FE-authored display text for user_action. Persisted by BE so history can render the same shown action text."
-            }
-          },
-          "additionalProperties": false
-        },
-
-        "actions": {
-          "description": "[Phase 2] Deferred. Ignore in Phase 1.",
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["id", "label", "replyType", "scope"],
-            "properties": {
-              "id": { "type": "string" },
-              "label": { "type": "string" },
-              "replyType": {
-                "type": "string",
-                "enum": ["visible", "hidden"]
-              },
-              "scope": {
-                "type": "string",
-                "enum": ["message", "template_item"]
-              }
-            }
-          }
-        }
-      }
-    },
-
-    "requestState": {
+    "messageState": {
       "type": "string",
       "enum": [
         "PENDING",
@@ -768,9 +724,7 @@ This section records how the **chat-demo** implementation diverges from or exten
         "CANCELLED_BY_USER"
       ],
       "description": "BE-resolved request lifecycle state for this message/turn."
-    },
-
-    "metadata": { "type": "object" }
+    }
   },
 
   "allOf": [
@@ -782,27 +736,21 @@ This section records how the **chat-demo** implementation diverges from or exten
       },
       "then": {
         "properties": {
-          "payload": { "required": ["messageId"] }
+          "messageId": { "type": "string" }
         }
       }
     },
     {
       "if": {
         "properties": {
-          "payload": {
-            "properties": { "messageType": { "const": "user_action" } }
-          }
+          "messageType": { "const": "user_action" }
         }
       },
       "then": {
         "properties": {
-          "payload": {
-            "properties": {
-              "content": {
-                // content.data is required; derivedLabel is required only when visibility = shown
-                "required": ["data"]
-              }
-            }
+          "content": {
+            // content.data is required; derivedLabel is required only when visibility = shown
+            "required": ["data"]
           }
         }
       }
@@ -831,8 +779,8 @@ This section records how the **chat-demo** implementation diverges from or exten
 | Condition | FE Behavior |
 |---------|-------------|
 | messageType = context | Do not render |
-| requestState = CANCELLED_BY_USER | Do not render |
-| requestState = ERRORED_AT_ML or TIMED_OUT_BY_BE | Render generic error text (“Something went wrong. Please try again.”) |
+| messageState = CANCELLED_BY_USER | Do not render |
+| messageState = ERRORED_AT_ML or TIMED_OUT_BY_BE | Render generic error text (“Something went wrong. Please try again.”) |
 | messageType = user_action AND visibility != shown | Do not render (hidden by default) |
 | messageType = user_action AND visibility = shown | Render derivedLabel |
 | template supported | Render template |
@@ -859,44 +807,42 @@ Property payload shape reference APIs (for template `data.property` / `data.prop
 ```json
 {
   "sender": { "type": "system" },
-  "payload": {
-    "messageType": "context",
-    "content": {
-      "data": {
-        "page_type": "SRP",
-        "service": "buy",
-        "category": "residential",
-        "city": "526acdc6c33455e9e4e9",
-        "filters": {
+  "messageType": "context",
+  "content": {
+    "data": {
+      "page_type": "SRP",
+      "service": "buy",
+      "category": "residential",
+      "city": "526acdc6c33455e9e4e9",
+      "filters": {
           
-          "poly": ["dce9290ec3fe8834a293"], // list of polygon uuids for polygon SRP
-          "est": 194298, // landmark SRP page - this is landmark/establishment id
-          // below 2 fields are used when chat is initiated either from project SRP or from project dedicated page. 
-          "region_entity_id": 31817,
-          "region_entity_type": "project",
-          "uuid": [], // builder uuid when searching for properties posted by a builder - builder SRP page
-          "qv_resale_id": 1234, // property id when chat is initiated from resale details page 
-          "qv_rent_id": 12345 // property id when chat is initiated from rent details page 
+        "poly": ["dce9290ec3fe8834a293"], // list of polygon uuids for polygon SRP
+        "est": 194298, // landmark SRP page - this is landmark/establishment id
+        // below 2 fields are used when chat is initiated either from project SRP or from project dedicated page. 
+        "region_entity_id": 31817,
+        "region_entity_type": "project",
+        "uuid": [], // builder uuid when searching for properties posted by a builder - builder SRP page
+        "qv_resale_id": 1234, // property id when chat is initiated from resale details page 
+        "qv_rent_id": 12345 // property id when chat is initiated from rent details page 
 
-        // below are all filters
-          "apartment_type_id": [1, 2],
-          "contact_person_id": [1, 2],
-          "facing": ["east", "west"],
-          "has_lift": true,
-          "is_gated_community": true,
-          "is_verified": true,
-          "max_area": 4000,
-          "max_poss": 0,
-          "max_price": 4800000,
-          "radius": 3000,
-          "routing_range": 10,
-          "routing_range_type": "time",
-          "min_price": 100,
-          "property_type_id": [1, 2],
-          "type": "project", // project/resale
-        }
+      // below are all filters
+        "apartment_type_id": [1, 2],
+        "contact_person_id": [1, 2],
+        "facing": ["east", "west"],
+        "has_lift": true,
+        "is_gated_community": true,
+        "is_verified": true,
+        "max_area": 4000,
+        "max_poss": 0,
+        "max_price": 4800000,
+        "radius": 3000,
+        "routing_range": 10,
+        "routing_range_type": "time",
+        "min_price": 100,
+        "property_type_id": [1, 2],
+        "type": "project", // project/resale
       }
-    }
+    },
   }
 }
 ```
@@ -908,21 +854,21 @@ Property payload shape reference APIs (for template `data.property` / `data.prop
 
 ```txt
 event: connection_ack
-data: {"messageId":"msg_user_001","requestState":"PENDING"}
+data: {"messageId":"msg_user_001","messageState":"PENDING"}
 
 id: msg_bot_010
 event: chat_event
-data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b1","sourceMessageId":"msg_u1","sequenceNumber":0,"isFinal":false,"messageType":"text","content":{"text":"Here are 2bhk properties in sector 32 gurgaon"}}}
+data: {"sender":{"type":"bot"},"messageId":"msg_b1","sourceMessageId":"msg_u1","sequenceNumber":0,"isFinal":false,"messageType":"text","content":{"text":"Here are 2bhk properties in sector 32 gurgaon"}}
 
 id: msg_bot_011
 event: chat_event
-data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b2","sourceMessageId":"msg_u1","sequenceNumber":1,"isFinal":true,"messageType":"template","content":{"templateId":"property_carousel","data":{"properties":[{"id":"p1","type":"project","title":"2, 3 BHK Apartments","name":"Godrej Air","short_address":[{"display_name":"Sector 85"},{"display_name":"Gurgaon"}],"is_rera_verified":true,"inventory_canonical_url":"https://example.com/property/p1","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":["Ready to move"],"formatted_min_price":"3 Cr","formatted_max_price":"3.5 Cr","unit_of_area":"sq.ft.","display_area_type":"Built up area","min_selected_area_in_unit":2500,"max_selected_area_in_unit":4750,"inventory_configs":[]},{"id":"p2","type":"rent","title":"3 BHK flat","short_address":[{"display_name":"Sector 33"},{"display_name":"Sohna"},{"display_name":"Gurgaon"}],"region_entities":[{"name":"M3M Solitude Ralph Estate"}],"is_rera_verified":false,"is_verified":true,"inventory_canonical_url":"https://example.com/property/p2","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":[],"formatted_price":"30,000","unit_of_area":"sq.ft.","display_area_type":"Built up area","inventory_configs":[{"furnish_type_id":2,"area_value_in_unit":4750}]},{"id":"p4","type":"rent","title":"2 BHK independent floor","short_address":[{"display_name":"Sector 23"},{"display_name":"Sohna"},{"display_name":"Gurgaon"}],"is_rera_verified":true,"is_verified":false,"inventory_canonical_url":"https://example.com/property/p4","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":[],"formatted_price":"12,000","unit_of_area":"sq.ft.","display_area_type":"Built up area","inventory_configs":[{"furnish_type_id":3,"area_value_in_unit":750}]}]}}}}
+data: {"sender":{"type":"bot"},"messageId":"msg_b2","sourceMessageId":"msg_u1","sequenceNumber":1,"isFinal":true,"messageType":"template","content":{"templateId":"property_carousel","data":{"properties":[{"id":"p1","type":"project","title":"2, 3 BHK Apartments","name":"Godrej Air","short_address":[{"display_name":"Sector 85"},{"display_name":"Gurgaon"}],"is_rera_verified":true,"inventory_canonical_url":"https://example.com/property/p1","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":["Ready to move"],"formatted_min_price":"3 Cr","formatted_max_price":"3.5 Cr","unit_of_area":"sq.ft.","display_area_type":"Built up area","min_selected_area_in_unit":2500,"max_selected_area_in_unit":4750,"inventory_configs":[]},{"id":"p2","type":"rent","title":"3 BHK flat","short_address":[{"display_name":"Sector 33"},{"display_name":"Sohna"},{"display_name":"Gurgaon"}],"region_entities":[{"name":"M3M Solitude Ralph Estate"}],"is_rera_verified":false,"is_verified":true,"inventory_canonical_url":"https://example.com/property/p2","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":[],"formatted_price":"30,000","unit_of_area":"sq.ft.","display_area_type":"Built up area","inventory_configs":[{"furnish_type_id":2,"area_value_in_unit":4750}]},{"id":"p4","type":"rent","title":"2 BHK independent floor","short_address":[{"display_name":"Sector 23"},{"display_name":"Sohna"},{"display_name":"Gurgaon"}],"is_rera_verified":true,"is_verified":false,"inventory_canonical_url":"https://example.com/property/p4","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":[],"formatted_price":"12,000","unit_of_area":"sq.ft.","display_area_type":"Built up area","inventory_configs":[{"furnish_type_id":3,"area_value_in_unit":750}]}]}}}
 
 event: connection_close
 data: {"reason":"response_complete"}
 ```
 
-> **Important:** For non-streaming turns (`responseRequired: false`), FE uses `POST /chats/send-message` and receives JSON `{ messageId, requestState: "COMPLETED" }`.
+> **Important:** For non-streaming turns (`responseRequired: false`), FE uses `POST /chats/send-message` and receives JSON `{ messageId, messageState: "COMPLETED" }`.
 
 ---
 
@@ -932,11 +878,9 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "text",
-    "responseRequired": true,
-    "content": { "text": "hi. tell me about modiji" }
-  }
+  "messageType": "text",
+  "responseRequired": true,
+  "content": { "text": "hi. tell me about modiji" }
 }
 ```
 
@@ -944,14 +888,12 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageId": "msg_b_001",
-    "sourceMessageId": "msg_u_001",
-    "sequenceNumber": 0,
-    "isFinal": true,
-    "messageType": "text",
-    "content": { "text": "Hey! I'm still learning. Wont be able to help you with this. Anything else?" }
-  }
+  "messageId": "msg_b_001",
+  "sourceMessageId": "msg_u_001",
+  "sequenceNumber": 0,
+  "isFinal": true,
+  "messageType": "text",
+  "content": { "text": "Hey! I'm still learning. Wont be able to help you with this. Anything else?" }
 }
 ```
 
@@ -959,11 +901,9 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "text",
-    "responseRequired": true,
-    "content": { "text": "show me properties according to my preference" }
-  }
+  "messageType": "text",
+  "responseRequired": true,
+  "content": { "text": "show me properties according to my preference" }
 }
 ```
 
@@ -971,26 +911,23 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageId": "msg_b_010",
-    "sourceMessageId": "msg_u_010",
-    "sequenceNumber": 0,
-    "isFinal": false,
-    "messageType": "text",
-    "content": { "text": "Here are 2bhk properties in sector 32 gurgaon" }
-  }
+  "messageId": "msg_b_010",
+  "sourceMessageId": "msg_u_010",
+  "sequenceNumber": 0,
+  "isFinal": false,
+  "messageType": "text",
+  "content": { "text": "Here are 2bhk properties in sector 32 gurgaon" }
 }
 ```
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageId": "msg_b_011",
-    "sourceMessageId": "msg_u_010",
-    "sequenceNumber": 1,
-    "isFinal": true,
-    "messageType": "template",
-    "content": {
+  "messageId": "msg_b_011",
+  "sourceMessageId": "msg_u_010",
+  "sequenceNumber": 1,
+  "isFinal": true,
+  "messageType": "template",
+  "content": {
       "templateId": "property_carousel",
       "data": {
         // this is still under discussion, required to power "view all" button. discuss if this should be replaced with "hasViewMore"
@@ -1085,16 +1022,14 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "system" },
-  "payload": {
-    "messageType": "user_action",
-    "responseRequired": false,
-    "visibility": "hidden",
-    "content": {
-      "data": {
-        "action": "shortlist",
-        "messageId": "msg_b_011",
-        "property": { "id": "p2", "type": "rent" }
-      }
+  "messageType": "user_action",
+  "responseRequired": false,
+  "visibility": "hidden",
+  "content": {
+    "data": {
+      "action": "shortlist",
+      "replyToMessageId": "msg_b_011",
+      "property": { "id": "p2", "type": "rent" }
     }
   }
 }
@@ -1104,18 +1039,16 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "system" },
-  "payload": {
-    "messageType": "user_action",
-    "responseRequired": false,
-    "visibility": "shown",
-    "content": {
-      "data": {
-        "action": "crf_submitted",
-        "messageId": "msg_b_011",
-        "property": { "id": "p2", "type": "rent" }
-      },
-      "derivedLabel": "The seller has been contacted, someone will reach out to you soon!"
-    }
+  "messageType": "user_action",
+  "responseRequired": false,
+  "visibility": "shown",
+  "content": {
+    "data": {
+      "action": "crf_submitted",
+      "replyToMessageId": "msg_b_011",
+      "property": { "id": "p2", "type": "rent" }
+    },
+    "derivedLabel": "The seller has been contacted, someone will reach out to you soon!"
   }
 }
 ```
@@ -1124,32 +1057,28 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "user_action",
-    "responseRequired": true,
-    "visibility": "shown",
-    "content": {
-      "data": {
-        "action": "learn_more_about_property",
-        "messageId": "msg_b_011",
-        "property": { "id": "p1", "type": "project" }
-      },
-      "derivedLabel": "Tell me more about Godrej Air"
-    }
+  "messageType": "user_action",
+  "responseRequired": true,
+  "visibility": "shown",
+  "content": {
+    "data": {
+      "action": "learn_more_about_property",
+      "replyToMessageId": "msg_b_011",
+      "property": { "id": "p1", "type": "project" }
+    },
+    "derivedLabel": "Tell me more about Godrej Air"
   }
 }
 ```
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageId": "msg_b_019",
-    "sourceMessageId": "msg_u_018",
-    "sequenceNumber": 1,
-    "isFinal": true,
-    "messageType": "markdown",
-    "content": { "text": "# 3 BHK Apartment\nBy Godrej Properties Ltd.\n📍 Godrej Nature Plus, Sector 85, Gurgaon\n\n---\n\n**Property Overview**\nHere is an excellent 3 BHK Apartment available for buy in Gurgaon. Surrounded by natural greens and equipped with numerous amenities, this spacious home offers a comfortable lifestyle with good connectivity to major landmarks.\n\n---\n\n**Configuration**\nType: 3 BHK Apartment\nBuilt-up Area: 1,820 sq.ft.\nBedrooms: 3 | Bathrooms: 3 | Balconies: 3\nFloor: 17\nFurnishing: Semi-Furnished\nPrice: ₹2.8 Cr\nParking: 2 parking space(s)\n\n---\n\n**Amenities**\nParking, Regular Water Supply, Gym, Swimming Pool, Kids Area, Sports Facility, Lift, Power Backup, Intercom, CCTV\n\n---\n\n**Property Manager**\nGodrej Properties Ltd is the real estate segment of the 120-year Godrej Group, known for excellent craftsmanship in contemporary housing projects." }
-  }
+  "messageId": "msg_b_019",
+  "sourceMessageId": "msg_u_018",
+  "sequenceNumber": 1,
+  "isFinal": true,
+  "messageType": "markdown",
+  "content": { "text": "# 3 BHK Apartment\nBy Godrej Properties Ltd.\n📍 Godrej Nature Plus, Sector 85, Gurgaon\n\n---\n\n**Property Overview**\nHere is an excellent 3 BHK Apartment available for buy in Gurgaon. Surrounded by natural greens and equipped with numerous amenities, this spacious home offers a comfortable lifestyle with good connectivity to major landmarks.\n\n---\n\n**Configuration**\nType: 3 BHK Apartment\nBuilt-up Area: 1,820 sq.ft.\nBedrooms: 3 | Bathrooms: 3 | Balconies: 3\nFloor: 17\nFurnishing: Semi-Furnished\nPrice: ₹2.8 Cr\nParking: 2 parking space(s)\n\n---\n\n**Amenities**\nParking, Regular Water Supply, Gym, Swimming Pool, Kids Area, Sports Facility, Lift, Power Backup, Intercom, CCTV\n\n---\n\n**Property Manager**\nGodrej Properties Ltd is the real estate segment of the 120-year Godrej Group, known for excellent craftsmanship in contemporary housing projects." }
 }
 ```
 
@@ -1157,23 +1086,20 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "text",
-    "responseRequired": true,
-    "content": { "text": "shortlist this property" }
-  }
+  "messageType": "text",
+  "responseRequired": true,
+  "content": { "text": "shortlist this property" }
 }
 ```
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageId": "msg_b_020",
-    "sourceMessageId": "msg_u_020",
-    "sequenceNumber": 0,
-    "isFinal": true,
-    "messageType": "template",
-    "content": {
+  "messageId": "msg_b_020",
+  "sourceMessageId": "msg_u_020",
+  "sequenceNumber": 0,
+  "isFinal": true,
+  "messageType": "template",
+  "content": {
       "templateId": "shortlist_property",
       "data": {
         // structure should be similar to corresponding venus/casa APIs. this is just sample
@@ -1201,13 +1127,12 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageId": "msg_b_021",
-    "sourceMessageId": "msg_u_021",
-    "sequenceNumber": 0,
-    "isFinal": true,
-    "messageType": "template",
-    "content": {
+  "messageId": "msg_b_021",
+  "sourceMessageId": "msg_u_021",
+  "sequenceNumber": 0,
+  "isFinal": true,
+  "messageType": "template",
+  "content": {
       "templateId": "contact_seller",
       "data": {
         // structure should be similar to corresponding venus/casa APIs. this is just sample
@@ -1236,11 +1161,9 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "text",
-    "responseRequired": true,
-    "content": { "text": "show trending localties" }
-  }
+  "messageType": "text",
+  "responseRequired": true,
+  "content": { "text": "show trending localties" }
 }
 ```
 
@@ -1248,13 +1171,12 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageId": "msg_b_025",
-    "sourceMessageId": "msg_u_025",
-    "sequenceNumber": 0,
-    "isFinal": true,
-    "messageType": "template",
-    "content": {
+  "messageId": "msg_b_025",
+  "sourceMessageId": "msg_u_025",
+  "sequenceNumber": 0,
+  "isFinal": true,
+  "messageType": "template",
+  "content": {
       "templateId": "locality_carousel",
       "data": {
         "localities": [
@@ -1287,23 +1209,20 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "text",
-    "responseRequired": true,
-    "content": { "text": "locality comparison of sector 32, sector 21" }
-  }
+  "messageType": "text",
+  "responseRequired": true,
+  "content": { "text": "locality comparison of sector 32, sector 21" }
 }
 ```
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageId": "msg_b_030",
-    "sourceMessageId": "msg_u_030",
-    "sequenceNumber": 1,
-    "isFinal": true,
-    "messageType": "template",
-    "content": {
+  "messageId": "msg_b_030",
+  "sourceMessageId": "msg_u_030",
+  "sequenceNumber": 1,
+  "isFinal": true,
+  "messageType": "template",
+  "content": {
       "templateId": "nested_qna",
       "data": {
         "selections": [
@@ -1337,48 +1256,42 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "user_action",
-    "responseRequired": true,
-    "visibility": "shown",
-    "content": {
-      "data": {
-        "action": "nested_qna_selection",
-        "messageId": "msg_b_030",
-        "selections": [
-          { "questionId": "sub_intent_1", "text": "sector 32 gurgaon" },
-          { "questionId": "sub_intent_2", "skipped": true }
-        ]
-      },
-      "derivedLabel": "Q. Which sector 32 are you referring to?\nA. sector 32 gurgaon\n\nQ. Which sector 21 are you referring to?\nA. Skipped"
-    }
+  "messageType": "user_action",
+  "responseRequired": true,
+  "visibility": "shown",
+  "content": {
+    "data": {
+      "action": "nested_qna_selection",
+      "replyToMessageId": "msg_b_030",
+      "selections": [
+        { "questionId": "sub_intent_1", "text": "sector 32 gurgaon" },
+        { "questionId": "sub_intent_2", "skipped": true }
+      ]
+    },
+    "derivedLabel": "Q. Which sector 32 are you referring to?\nA. sector 32 gurgaon\n\nQ. Which sector 21 are you referring to?\nA. Skipped"
   }
 }
 ```
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageId": "msg_b_031",
-    "sourceMessageId": "msg_u_030",
-    "sequenceNumber": 0,
-    "isFinal": false,
-    "messageType": "markdown",
-    "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" }
-  }
+  "messageId": "msg_b_031",
+  "sourceMessageId": "msg_u_030",
+  "sequenceNumber": 0,
+  "isFinal": false,
+  "messageType": "markdown",
+  "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" }
 }
 ```
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageId": "msg_b_032",
-    "sourceMessageId": "msg_u_030",
-    "sequenceNumber": 1,
-    "isFinal": true,
-    "messageType": "markdown",
-    "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" }
-  }
+  "messageId": "msg_b_032",
+  "sourceMessageId": "msg_u_030",
+  "sequenceNumber": 1,
+  "isFinal": true,
+  "messageType": "markdown",
+  "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" }
 }
 ```
 
@@ -1386,23 +1299,20 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "text",
-    "responseRequired": true,
-    "content": { "text": "show trending localities similar to these" }
-  }
+  "messageType": "text",
+  "responseRequired": true,
+  "content": { "text": "show trending localities similar to these" }
 }
 ```
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageId": "msg_b_033",
-    "sourceMessageId": "msg_u_033",
-    "sequenceNumber": 0,
-    "isFinal": true,
-    "messageType": "template",
-    "content": {
+  "messageId": "msg_b_033",
+  "sourceMessageId": "msg_u_033",
+  "sequenceNumber": 0,
+  "isFinal": true,
+  "messageType": "template",
+  "content": {
       "templateId": "locality_carousel",
       "data": {
         "localities": [
@@ -1417,101 +1327,85 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "user_action",
-    "responseRequired": true,
-    "visibility": "shown",
-    "content": {
-      "data": {
-        "action": "learn_more_about_locality",
-        "messageId": "msg_b_033",
-        "locality": { "localityUuid": "l1" }
-      },
-      "derivedLabel": "Learn more about Sector 32"
-    }
+  "messageType": "user_action",
+  "responseRequired": true,
+  "visibility": "shown",
+  "content": {
+    "data": {
+      "action": "learn_more_about_locality",
+      "replyToMessageId": "msg_b_033",
+      "locality": { "localityUuid": "l1" }
+    },
+    "derivedLabel": "Learn more about Sector 32"
   }
 }
 ```
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageId": "msg_b_034",
-    "sourceMessageId": "msg_u_034",
-    "sequenceNumber": 0,
-    "isFinal": true,
-    "messageType": "markdown",
-    "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" }
-  }
+  "messageId": "msg_b_034",
+  "sourceMessageId": "msg_u_034",
+  "sequenceNumber": 0,
+  "isFinal": true,
+  "messageType": "markdown",
+  "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" }
 }
 ```
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "text",
-    "responseRequired": true,
-    "content": { "text": "show price trends of this locality" }
-  }
+  "messageType": "text",
+  "responseRequired": true,
+  "content": { "text": "show price trends of this locality" }
 }
 ```
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageId": "msg_b_035",
-    "sourceMessageId": "msg_u_035",
-    "sequenceNumber": 0,
-    "isFinal": true,
-    "messageType": "markdown",
-    "content": { "text": "# Price Trends for Sector 86\n\n---\n\n## Average Price\n\n₹12,220 / sq ft\n\n## 1-Year Growth\n\n11.43%\n\n## Available Properties\n\n188\n\n---\n\n## Price Range\n\n- Minimum – ₹5,666 / sq ft\n- Maximum – ₹29,841 / sq ft\n\n---\n\n## 2025 Quarterly Trends\n\n- Q1 – ₹10,691 / sq ft\n- Q2 – ₹11,442 / sq ft\n- Q3 – ₹11,242 / sq ft\n- Q4 – ₹12,220 / sq ft\n\n---\n\n## Latest Update\n\nQ1 2026 – ₹11,850 / sq ft\n\n---\n\nThis data helps you make informed property decisions." }
-  }
+  "messageId": "msg_b_035",
+  "sourceMessageId": "msg_u_035",
+  "sequenceNumber": 0,
+  "isFinal": true,
+  "messageType": "markdown",
+  "content": { "text": "# Price Trends for Sector 86\n\n---\n\n## Average Price\n\n₹12,220 / sq ft\n\n## 1-Year Growth\n\n11.43%\n\n## Available Properties\n\n188\n\n---\n\n## Price Range\n\n- Minimum – ₹5,666 / sq ft\n- Maximum – ₹29,841 / sq ft\n\n---\n\n## 2025 Quarterly Trends\n\n- Q1 – ₹10,691 / sq ft\n- Q2 – ₹11,442 / sq ft\n- Q3 – ₹11,242 / sq ft\n- Q4 – ₹12,220 / sq ft\n\n---\n\n## Latest Update\n\nQ1 2026 – ₹11,850 / sq ft\n\n---\n\nThis data helps you make informed property decisions." }
 }
 ```
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "text",
-    "responseRequired": true,
-    "content": { "text": "show rating reviews of this locality" }
-  }
+  "messageType": "text",
+  "responseRequired": true,
+  "content": { "text": "show rating reviews of this locality" }
 }
 ```
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageId": "msg_b_036",
-    "sourceMessageId": "msg_u_036",
-    "sequenceNumber": 0,
-    "isFinal": true,
-    "messageType": "markdown",
-    "content": { "text": "# Locality Ratings & Reviews — Sector 46, Gurgaon\n\n---\n\n## Overall Rating\n⭐ **4.09 / 5.0**\nBased on 11 reviews\n\n---\n\n## Rating Distribution\n- 4-star – 9 reviews (82%)\n- 3-star – 2 reviews (18%)\n\n---\n\n## Category Breakdown\n\nSchools & Hospitals – 4.30 / 5.0\nMarkets & Malls – 4.10 / 5.0\nSafety & Security – 4.00 / 5.0\nPublic Transport – 3.80 / 5.0\nTraffic & Roads – 3.70 / 5.0\nCleanliness – 4.20 / 5.0\n\n---\n\n## Key Insights\n\n### Top strengths\n- Good schools and healthcare nearby\n- Strong neighborhood safety perception\n- Everyday shopping options are convenient\n\n### Areas to consider\n\n- Peak-hour traffic congestion on internal roads\n- Public transport access can improve in some pockets\n\n---\n\nRatings are based on user feedback and may change as new reviews are added." }
-  }
+  "messageId": "msg_b_036",
+  "sourceMessageId": "msg_u_036",
+  "sequenceNumber": 0,
+  "isFinal": true,
+  "messageType": "markdown",
+  "content": { "text": "# Locality Ratings & Reviews — Sector 46, Gurgaon\n\n---\n\n## Overall Rating\n⭐ **4.09 / 5.0**\nBased on 11 reviews\n\n---\n\n## Rating Distribution\n- 4-star – 9 reviews (82%)\n- 3-star – 2 reviews (18%)\n\n---\n\n## Category Breakdown\n\nSchools & Hospitals – 4.30 / 5.0\nMarkets & Malls – 4.10 / 5.0\nSafety & Security – 4.00 / 5.0\nPublic Transport – 3.80 / 5.0\nTraffic & Roads – 3.70 / 5.0\nCleanliness – 4.20 / 5.0\n\n---\n\n## Key Insights\n\n### Top strengths\n- Good schools and healthcare nearby\n- Strong neighborhood safety perception\n- Everyday shopping options are convenient\n\n### Areas to consider\n\n- Peak-hour traffic congestion on internal roads\n- Public transport access can improve in some pockets\n\n---\n\nRatings are based on user feedback and may change as new reviews are added." }
 }
 ```
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "text",
-    "responseRequired": true,
-    "content": { "text": "show transaction data of this locality" }
-  }
+  "messageType": "text",
+  "responseRequired": true,
+  "content": { "text": "show transaction data of this locality" }
 }
 ```
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageId": "msg_b_037",
-    "sourceMessageId": "msg_u_037",
-    "sequenceNumber": 0,
-    "isFinal": true,
-    "messageType": "markdown",
-    "content": { "text": "# Transaction Data Analysis\n\n---\n\n## Project Details\n\nName: Godrej Gold County\nLocation: Tumkur Road, Bengaluru\nTotal Transactions: 395\n\n---\n\n## Transaction Breakdown\n\nSales: 272 | Mortgages: 123\n\n---\n\n## Area Statistics\n\nAverage Area: 2,550.0 sq ft\nSize Range: 1,200.0 – 3,800.0 sq ft\n\n---\n\n## Recent Activity (Last 6 Months)\n\nActive Transactions: 28 | Recent Mortgages: 11\n\n---\n\n## Latest Transactions\n\n- Unit A-1203 – 3 BHK | 2,420 sq ft | ₹2.35 Cr | 2026-01-12\n- Unit B-904 – 4 BHK | 3,180 sq ft | ₹3.12 Cr | 2025-12-28\n- Unit C-701 – 3 BHK | 2,150 sq ft | ₹2.08 Cr | 2025-12-14\n\n---\n\n## Market Insights\n\nLeased Properties: 54 (13.67%)\nMarket Activity: Stable with moderate upward demand\n\n---\nData based on registered transactions and may have slight reporting delay.\nWould you like a unit-type wise transaction split for this project?" }
-  }
+  "messageId": "msg_b_037",
+  "sourceMessageId": "msg_u_037",
+  "sequenceNumber": 0,
+  "isFinal": true,
+  "messageType": "markdown",
+  "content": { "text": "# Transaction Data Analysis\n\n---\n\n## Project Details\n\nName: Godrej Gold County\nLocation: Tumkur Road, Bengaluru\nTotal Transactions: 395\n\n---\n\n## Transaction Breakdown\n\nSales: 272 | Mortgages: 123\n\n---\n\n## Area Statistics\n\nAverage Area: 2,550.0 sq ft\nSize Range: 1,200.0 – 3,800.0 sq ft\n\n---\n\n## Recent Activity (Last 6 Months)\n\nActive Transactions: 28 | Recent Mortgages: 11\n\n---\n\n## Latest Transactions\n\n- Unit A-1203 – 3 BHK | 2,420 sq ft | ₹2.35 Cr | 2026-01-12\n- Unit B-904 – 4 BHK | 3,180 sq ft | ₹3.12 Cr | 2025-12-28\n- Unit C-701 – 3 BHK | 2,150 sq ft | ₹2.08 Cr | 2025-12-14\n\n---\n\n## Market Insights\n\nLeased Properties: 54 (13.67%)\nMarket Activity: Stable with moderate upward demand\n\n---\nData based on registered transactions and may have slight reporting delay.\nWould you like a unit-type wise transaction split for this project?" }
 }
 ```
 
@@ -1519,20 +1413,17 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "text",
-    "responseRequired": true,
-    "content": { "text": "tell more about sector 21" }
-  }
+  "messageType": "text",
+  "responseRequired": true,
+  "content": { "text": "tell more about sector 21" }
 }
 ```
 #### 4.3.10.19 Bot template: nested_qna for sector 21
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageType": "template",
-    "content": {
+  "messageType": "template",
+  "content": {
       "templateId": "nested_qna",
       "data": {
         "selections": [
@@ -1555,17 +1446,15 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "user_action",
-    "responseRequired": true,
-    "visibility": "shown",
-    "content": {
-      "data": {
-        "action": "nested_qna_selection",
-        "selections": [{ "questionId": "sub_intent_2", "selection": "uuid3" }]
-      },
-      "derivedLabel": "Q. Which sector 21 are you referring to?\nA. Sector 21, Gurgaon"
-    }
+  "messageType": "user_action",
+  "responseRequired": true,
+  "visibility": "shown",
+  "content": {
+    "data": {
+      "action": "nested_qna_selection",
+      "selections": [{ "questionId": "sub_intent_2", "selection": "uuid3" }]
+    },
+    "derivedLabel": "Q. Which sector 21 are you referring to?\nA. Sector 21, Gurgaon"
   }
 }
 ```
@@ -1573,11 +1462,9 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageType": "markdown",
-    "content": {
-      "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?"
-    }
+  "messageType": "markdown",
+  "content": {
+    "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?"
   }
 }
 ```
@@ -1585,20 +1472,17 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "text",
-    "responseRequired": true,
-    "content": { "text": "to learn more about sector 32" }
-  }
+  "messageType": "text",
+  "responseRequired": true,
+  "content": { "text": "to learn more about sector 32" }
 }
 ```
 #### 4.3.10.23 Bot template: nested_qna for sector 32
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageType": "template",
-    "content": {
+  "messageType": "template",
+  "content": {
       "templateId": "nested_qna",
       "data": {
         "selections": [
@@ -1621,17 +1505,15 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "user_action",
-    "responseRequired": true,
-    "visibility": "shown",
-    "content": {
-      "data": {
-        "action": "nested_qna_selection",
-        "selections": [{ "questionId": "sub_intent_1", "text": "sector 32 faridabad" }]
-      },
-      "derivedLabel": "Q. Which sector 32 are you referring to?\nA. sector 32 faridabad"
-    }
+  "messageType": "user_action",
+  "responseRequired": true,
+  "visibility": "shown",
+  "content": {
+    "data": {
+      "action": "nested_qna_selection",
+      "selections": [{ "questionId": "sub_intent_1", "text": "sector 32 faridabad" }]
+    },
+    "derivedLabel": "Q. Which sector 32 are you referring to?\nA. sector 32 faridabad"
   }
 }
 ```
@@ -1639,11 +1521,9 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageType": "markdown",
-    "content": {
-      "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?"
-    }
+  "messageType": "markdown",
+  "content": {
+    "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?"
   }
 }
 ```
@@ -1651,20 +1531,17 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "text",
-    "responseRequired": true,
-    "content": { "text": "locality comparison of sector 32, sector 21" }
-  }
+  "messageType": "text",
+  "responseRequired": true,
+  "content": { "text": "locality comparison of sector 32, sector 21" }
 }
 ```
 #### 4.3.10.27 Bot template: nested_qna for sector 32 + sector 21
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageType": "template",
-    "content": {
+  "messageType": "template",
+  "content": {
       "templateId": "nested_qna",
       "data": {
         "selections": [
@@ -1680,20 +1557,18 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "user_action",
-    "responseRequired": true,
-    "visibility": "shown",
-    "content": {
-      "data": {
-        "action": "nested_qna_selection",
-        "selections": [
-          { "questionId": "sub_intent_1", "text": "sector 32 gurgaon" },
-          { "questionId": "sub_intent_2", "skipped": true }
-        ]
-      },
-      "derivedLabel": "Q. Which sector 32 are you referring to?\nA. sector 32 gurgaon\n\nQ. Which sector 21 are you referring to?\nA. Skipped"
-    }
+  "messageType": "user_action",
+  "responseRequired": true,
+  "visibility": "shown",
+  "content": {
+    "data": {
+      "action": "nested_qna_selection",
+      "selections": [
+        { "questionId": "sub_intent_1", "text": "sector 32 gurgaon" },
+        { "questionId": "sub_intent_2", "skipped": true }
+      ]
+    },
+    "derivedLabel": "Q. Which sector 32 are you referring to?\nA. sector 32 gurgaon\n\nQ. Which sector 21 are you referring to?\nA. Skipped"
   }
 }
 ```
@@ -1701,11 +1576,9 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageType": "markdown",
-    "content": {
-      "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?"
-    }
+  "messageType": "markdown",
+  "content": {
+    "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?"
   }
 }
 ```
@@ -1713,73 +1586,60 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "text",
-    "responseRequired": true,
-    "content": { "text": "show properties near me" }
-  }
+  "messageType": "text",
+  "responseRequired": true,
+  "content": { "text": "show properties near me" }
 }
 ```
 #### 4.3.10.31 Bot template: share_location
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageType": "template",
-    "content": { "templateId": "share_location", "data": {} }
-  }
+  "messageType": "template",
+  "content": { "templateId": "share_location", "data": {} }
 }
 ```
 #### 4.3.10.32 FE action: location_denied
 ```json
 {
   "sender": { "type": "system" },
-  "payload": {
-    "messageType": "user_action",
-    "responseRequired": true,
-    "content": { "data": { "action": "location_denied" } }
-  }
+  "messageType": "user_action",
+  "responseRequired": true,
+  "content": { "data": { "action": "location_denied" } }
 }
 ```
 #### 4.3.10.33 User text: properties near me (retry)
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "text",
-    "responseRequired": true,
-    "content": { "text": "properties near me" }
-  }
+  "messageType": "text",
+  "responseRequired": true,
+  "content": { "text": "properties near me" }
 }
 ```
 #### 4.3.10.34 Bot template: share_location again
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageType": "template",
-    "content": { "templateId": "share_location", "data": {} }
-  }
+  "messageType": "template",
+  "content": { "templateId": "share_location", "data": {} }
 }
 ```
 #### 4.3.10.35 FE action: location_shared
 ```json
 {
   "sender": { "type": "system" },
-  "payload": {
-    "messageType": "user_action",
-    "responseRequired": true,
-    "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } }
-  }
+  "messageType": "user_action",
+  "responseRequired": true,
+  "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } }
 }
 ```
 #### 4.3.10.36 Bot template: property_carousel
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageType": "template",
-    "content": {
+  "messageType": "template",
+  "content": {
       "templateId": "property_carousel",
       "data": {
         // this is still under discussion, required to power "view all" button. discuss if this should be replaced with "hasViewMore"
@@ -1873,11 +1733,9 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "text",
-    "responseRequired": true,
-    "content": { "text": "3bhk properties near me" }
-  }
+  "messageType": "text",
+  "responseRequired": true,
+  "content": { "text": "3bhk properties near me" }
 }
 ```
 #### 4.3.10.38 FE auto-action: location_shared without rendering share_location
@@ -1885,20 +1743,17 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "system" },
-  "payload": {
-    "messageType": "user_action",
-    "responseRequired": true,
-    "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } }
-  }
+  "messageType": "user_action",
+  "responseRequired": true,
+  "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } }
 }
 ```
 #### 4.3.10.39 Bot template: property_carousel
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageType": "template",
-    "content": {
+  "messageType": "template",
+  "content": {
       "templateId": "property_carousel",
       "data": {
         // this is still under discussion, required to power "view all" button. discuss if this should be replaced with "hasViewMore"
@@ -1992,11 +1847,9 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "text",
-    "responseRequired": true,
-    "content": { "text": "show me more properties in sector 32, sector 21" }
-  }
+  "messageType": "text",
+  "responseRequired": true,
+  "content": { "text": "show me more properties in sector 32, sector 21" }
 }
 ```
 
@@ -2004,21 +1857,17 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "system" },
-  "payload": {
-    "messageType": "user_action",
-    "responseRequired": true,
-    "content": { "data": { "action": "location_denied" } }
-  }
+  "messageType": "user_action",
+  "responseRequired": true,
+  "content": { "data": { "action": "location_denied" } }
 }
 ```
 ```json
 {
   "sender": { "type": "system" },
-  "payload": {
-    "messageType": "user_action",
-    "responseRequired": true,
-    "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } }
-  }
+  "messageType": "user_action",
+  "responseRequired": true,
+  "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } }
 }
 ```
 
@@ -2026,23 +1875,20 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "user" },
-  "payload": {
-    "messageType": "text",
-    "responseRequired": true,
-    "content": { "text": "show me brochure" }
-  }
+  "messageType": "text",
+  "responseRequired": true,
+  "content": { "text": "show me brochure" }
 }
 ```
 ```json
 {
   "sender": { "type": "bot" },
-  "payload": {
-    "messageId": "msg_b_050",
-    "sourceMessageId": "msg_u_050",
-    "sequenceNumber": 0,
-    "isFinal": true,
-    "messageType": "template",
-    "content": {
+  "messageId": "msg_b_050",
+  "sourceMessageId": "msg_u_050",
+  "sequenceNumber": 0,
+  "isFinal": true,
+  "messageType": "template",
+  "content": {
       "templateId": "download_brochure",
       "data": {
         // structure should be similar to corresponding venus/casa APIs. this is just sample
@@ -2070,16 +1916,14 @@ data: {"reason":"response_complete"}
 ```json
 {
   "sender": { "type": "system" },
-  "payload": {
-    "messageType": "user_action",
-    "responseRequired": false,
-    "visibility": "hidden",
-    "content": {
-      "data": {
-        "action": "brochure_downloaded",
-        "messageId": "msg_b_050",
-        "property": { "id": "p2", "type": "rent" }
-      }
+  "messageType": "user_action",
+  "responseRequired": false,
+  "visibility": "hidden",
+  "content": {
+    "data": {
+      "action": "brochure_downloaded",
+      "replyToMessageId": "msg_b_050",
+      "property": { "id": "p2", "type": "rent" }
     }
   }
 }
@@ -2128,7 +1972,7 @@ When a guest chat (`_ga`) becomes authenticated mid-session:
   - both map to `CANCELLED_BY_USER` for the active request
   - message in `CANCELLED_BY_USER` is not rendered
   - if dismiss happens before ack, FE marks the pending local user event cancelled; if ack arrives later, FE immediately cancels using ack `messageId`.
-- RequestState rendering semantics:
+- messageState rendering semantics:
   - `PENDING`, `COMPLETED`: render as usual
   - `ERRORED_AT_ML`, `TIMED_OUT_BY_BE`: render generic error text
   - `CANCELLED_BY_USER`: do not render
@@ -2165,7 +2009,7 @@ When a guest chat (`_ga`) becomes authenticated mid-session:
   - `messages_before=evt_x`: latest `page_size` messages before `evt_x`
   - `messages_after=evt_x`: all messages after `evt_x`
 - `hasMore` remains required for FE pagination controls.
-- BE applies soft-delete filtering in this API: user request events with `requestState = CANCELLED_BY_USER` are excluded; no other event types are filtered.
+- BE applies soft-delete filtering in this API: user request events with `messageState = CANCELLED_BY_USER` are excluded; no other event types are filtered.
 
 ---
 ## 5. FE Renderer Pseudocode
@@ -2176,44 +2020,42 @@ function renderRichText(value: string) {
 }
 
 function renderEvent(event) {
-  const { payload } = event;
+  const { messageType, content, visibility } = event;
 
-  if (payload.messageType === "context") return;
+  if (messageType === "context") return;
   // [Phase 2] analytics: never render
 
-  switch (payload.messageType) {
+  switch (messageType) {
     case "text":
-      renderText(payload.content.text);
+      renderText(content.text);
       break;
 
     case "markdown":
-      renderMarkdown(payload.content.text);
+      renderMarkdown(content.text);
       break;
 
     case "template":
-      if (isTemplateSupported(payload.content.templateId)) {
+      if (isTemplateSupported(content.templateId)) {
         renderTemplate(
-          payload.content.templateId,
-          payload.content.data,
+          content.templateId,
+          content.data,
           // [Phase 2] template_item-scoped actions not yet passed through
         );
       } else {
         // [Phase 2] fallbackText rendering not yet implemented
-        renderRichText(payload.content.fallbackText || "");
+        renderRichText(content.fallbackText || "");
       }
       break;
 
     case "user_action":
       // hidden by default — only render when visibility is explicitly "shown"
-      if (payload.visibility === "shown") {
-        renderUserBubble(payload.content.derivedLabel);
+      if (visibility === "shown") {
+        renderUserBubble(content.derivedLabel);
       }
       break;
   }
 
-  // [Phase 2] message-scoped footer actions not yet implemented
-  const footerActions = payload.actions?.filter(a => a.scope === "message") || [];
-  if (footerActions.length) renderActions(footerActions);
+  // [Phase 2] message-scoped footer actions are not part of current flat event contract.
 }
 ```
 
@@ -2286,7 +2128,7 @@ This section documents current behavior in this repository where it differs from
 
 - Eligible base condition:
   - `sender.type` is `bot` or `system`, and
-  - `payload.isFinal === true`, and
+  - `isFinal === true`, and
   - message is the latest visible message (`isLastMessage`).
 - Text/markdown:
   - rendered for final bot/system `text` and `markdown` messages.
@@ -2302,7 +2144,7 @@ This section documents current behavior in this repository where it differs from
 
 `copyText` source by message/template type:
 
-- `text` / `markdown`: `payload.content.text`.
+- `text` / `markdown`: `content.text`.
 - `template: property_carousel`: computed by `getClipboardTextForPropertyCarousel(data)`.
   - one line per property.
   - project example format: `<projectName> in <address>. <area-range> <title> <price>. link: <url>`.
@@ -2340,9 +2182,9 @@ This section documents current behavior in this repository where it differs from
 
 ## 1) Scope (Phase 1)
 
-Only these payload fields are used for rich text rendering:
+Only these event fields are used for rich text rendering:
 
-- `payload.content.text` for `messageType: "text"` and `messageType: "markdown"`
+- `content.text` for `messageType: "text"` and `messageType: "markdown"`
 
 The following are **not used in Phase 1** and should be ignored in renderers:
 
@@ -2404,31 +2246,31 @@ For final bot/system messages, FE may render a `FeedbackRow` (thumbs up/down + o
 
 ```ts
 function renderEvent(event: ChatEvent) {
-  const { sender, payload } = event;
+  const { sender, messageType, content, visibility } = event;
 
-  if (payload.messageType === "context" || payload.messageType === "analytics") return null;
+  if (messageType === "context" || messageType === "analytics") return null;
 
-  if (payload.messageType === "user_action") {
-    if (payload.visibility !== "shown" || !payload.content.derivedLabel) return null;
+  if (messageType === "user_action") {
+    if (visibility !== "shown" || !content.derivedLabel) return null;
     return sender.type === "user"
-      ? renderUserBubble(payload.content.derivedLabel)
-      : renderBotText(payload.content.derivedLabel);
+      ? renderUserBubble(content.derivedLabel)
+      : renderBotText(content.derivedLabel);
   }
 
-  if (sender.type === "user" && payload.messageType === "text") {
-    return renderUserBubble(payload.content.text ?? "");
+  if (sender.type === "user" && messageType === "text") {
+    return renderUserBubble(content.text ?? "");
   }
 
-  if (payload.messageType === "text") {
-    return renderBotText(payload.content.text ?? "");
+  if (messageType === "text") {
+    return renderBotText(content.text ?? "");
   }
 
-  if (payload.messageType === "markdown") {
-    return renderMarkdown(payload.content.text ?? "");
+  if (messageType === "markdown") {
+    return renderMarkdown(content.text ?? "");
   }
 
-  if (payload.messageType === "template") {
-    return renderTemplate(payload.content.templateId, payload.content.data);
+  if (messageType === "template") {
+    return renderTemplate(content.templateId, content.data);
   }
 
   return null;

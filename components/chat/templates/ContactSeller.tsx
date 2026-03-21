@@ -7,14 +7,12 @@ import { useEffect, useRef } from "react";
 function emitLoginFailed(onUserAction: (event: ChatEvent) => void) {
   onUserAction({
     sender: { type: "system" },
-    payload: {
-      messageType: "user_action",
-      responseRequired: false,
-      visibility: "shown",
-      content: {
-        data: { action: "location_denied" },
-        derivedLabel: "Login Failed. Can't proceed without logging in!",
-      },
+    messageType: "user_action",
+    responseRequired: false,
+    visibility: "shown",
+    content: {
+      data: { action: "location_denied" },
+      derivedLabel: "Login Failed. Can't proceed without logging in!",
     },
   } as ChatEvent);
 }
@@ -74,18 +72,16 @@ export function ContactSeller({
 
       onUserAction({
         sender: { type: "system" },
-        payload: {
-          messageType: "user_action",
-          responseRequired: false,
-          visibility: "shown",
-          content: {
-            data: {
-              action: "crf_submitted",
-              messageId,
-              property: { id: propertyId, type } as PropertyMeta,
-            },
-            derivedLabel: "The seller has been contacted, someone will reach out to you soon!",
+        messageType: "user_action",
+        responseRequired: false,
+        visibility: "shown",
+        content: {
+          data: {
+            action: "crf_submitted",
+            replyToMessageId: messageId,
+            property: { id: propertyId, type } as PropertyMeta,
           },
+          derivedLabel: "The seller has been contacted, someone will reach out to you soon!",
         },
       } as ChatEvent);
     })();

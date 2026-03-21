@@ -6,10 +6,11 @@ import {
   getAllEvents,
   isPending,
   cancelRequestByUserMessageId,
-  getRequestStateByUserMessageId,
+  getMessageStateByUserMessageId,
+  updateMessageStateByUserMessageId,
 } from "@/lib/store";
 import { getNextBotEvents } from "@/lib/mock/ml-flow";
-import type { ChatEvent } from "@/lib/contract-types";
+import type { ChatEventFromUser, ChatEventToML } from "@/lib/contract-types";
 
 const DELAYS_MS = [61000];
 function getMockDelayMs(): number {
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let body: { event: ChatEvent };
+  let body: { event: ChatEventFromUser };
   try {
     body = await request.json();
   } catch {
@@ -35,12 +36,12 @@ export async function POST(request: NextRequest) {
   }
 
   const { event } = body;
-  if (!event?.sender?.type || !event?.payload?.messageType) {
+  if (!event?.sender?.type || !event?.messageType || !event?.conversationId) {
     return NextResponse.json({ error: "Invalid event" }, { status: 400 });
   }
 
   const shouldExpectResponse =
-    event.payload.messageType === "text" || event.payload.responseRequired === true;
+    event.messageType === "text" || event.responseRequired === true;
   if (!shouldExpectResponse) {
     return NextResponse.json(
       { error: "Use POST /api/chats/send-message for responseRequired=false turns" },
@@ -50,10 +51,10 @@ export async function POST(request: NextRequest) {
 
   const stored = appendEvent({
     ...event,
-    conversationId: event.conversationId ?? "c1",
+    conversationId: event.conversationId,
   });
-  createRequest(stored.messageId!, stored.conversationId ?? "c1");
-  stored.requestState = "PENDING";
+  createRequest(stored.messageId!, stored.conversationId);
+  stored.messageState = "PENDING";
 
   const mockDelay = getMockDelayMs();
   const delayMs = mockDelay > 0 ? mockDelay : 100;
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
         event: "connection_ack",
         data: {
           messageId: stored.messageId,
-          requestState: getRequestStateByUserMessageId(stored.messageId!) ?? "PENDING",
+          messageState: getMessageStateByUserMessageId(stored.messageId!) ?? "PENDING",
         },
       });
 
@@ -112,21 +113,45 @@ export async function POST(request: NextRequest) {
           return;
         }
 
+        const loginAuthToken = request.headers.get("login_auth_token") ?? undefined;
+        const gaId = request.headers.get("_ga") ?? undefined;
+        const userId = loginAuthToken ? "authenticated_user" : undefined;
+
+        const eventToML: ChatEventToML = {
+          conversationId: stored.conversationId,
+          messageId: stored.messageId!,
+          messageType: stored.messageType,
+          messageState: "PENDING",
+          createdAt: stored.createdAt!,
+          sender: {
+            type: stored.sender.type,
+            userId,
+            gaId,
+          },
+          content: stored.content,
+          responseRequired: stored.responseRequired ?? false,
+        };
+
         const recentEvents = getAllEvents();
-        const botEvents = getNextBotEvents(stored, recentEvents);
+        const botEvents = getNextBotEvents(eventToML, recentEvents);
 
         for (const ev of botEvents) {
-          if (!isPending(stored.messageId!)) break;
-          const state = ev.payload.isFinal === true ? "COMPLETED" : "PENDING";
+          const sourceState = getMessageStateByUserMessageId(ev.sourceMessageId);
+          if (sourceState !== "PENDING" && sourceState !== "IN_PROGRESS") {
+            continue;
+          }
+          updateMessageStateByUserMessageId(ev.sourceMessageId, ev.messageState);
           const storedBot = appendEvent({
             ...ev,
-            conversationId: stored.conversationId ?? "c1",
-            requestState: state,
+            sender: { type: "bot" },
+            conversationId: stored.conversationId,
+            // ML messages are persisted as completed user-visible messages.
+            messageState: "COMPLETED",
           });
 
           writeSse({ event: "chat_event", id: storedBot.messageId, data: storedBot });
 
-          if (storedBot.payload.isFinal === true) {
+          if (storedBot.isFinal === true) {
             completeRequest(stored.messageId!);
             writeSse({ event: "connection_close", data: { reason: "response_complete" } });
             close();

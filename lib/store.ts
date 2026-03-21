@@ -6,8 +6,9 @@ let activeAnonConversationId = DEFAULT_CONV_ID;
 let activeLoggedInConversationId: string | null = null;
 let loggedInSeeded = false;
 
-export type RequestState =
+export type MessageState =
   | "PENDING"
+  | "IN_PROGRESS"
   | "COMPLETED"
   | "ERRORED_AT_ML"
   | "TIMED_OUT_BY_BE"
@@ -16,7 +17,7 @@ export type RequestState =
 export interface ChatRequest {
   conversationId: string;
   userMessageId: string;
-  state: RequestState;
+  state: MessageState;
   createdAt: string;
   updatedAt: string;
 }
@@ -104,7 +105,7 @@ export function getHistory(
     const beforeList = list.slice(0, idx);
     const hasMore = beforeList.length > pageSize;
     const messages = beforeList.slice(-pageSize);
-    const messagesWithState = messages.map((e) => withRequestState(e));
+    const messagesWithState = messages.map((e) => withMessageState(e));
     return {
       conversationId,
       messages: messagesWithState as StoredEvent[],
@@ -116,7 +117,7 @@ export function getHistory(
   if (options?.messagesAfter && !options?.messagesBefore) {
     const idx = list.findIndex((e) => e.messageId === options.messagesAfter);
     list = idx >= 0 ? list.slice(idx + 1) : [];
-    const messagesWithState = list.map((e) => withRequestState(e));
+    const messagesWithState = list.map((e) => withMessageState(e));
     return {
       conversationId,
       messages: messagesWithState as StoredEvent[],
@@ -128,7 +129,7 @@ export function getHistory(
   const hasMore = list.length > pageSize;
   const messages = list.slice(-pageSize);
 
-  const messagesWithState = messages.map((e) => withRequestState(e));
+  const messagesWithState = messages.map((e) => withMessageState(e));
   return {
     conversationId,
     messages: messagesWithState as StoredEvent[],
@@ -139,15 +140,13 @@ export function getHistory(
 export function appendEvent(
   event: Omit<StoredEvent, "messageId" | "createdAt"> & { messageId?: string; createdAt?: string }
 ): StoredEvent {
-  const generatedMessageId = event.messageId ?? event.payload?.messageId ?? nextMessageId();
+  const generatedMessageId = event.messageId ?? nextMessageId();
   const stored: StoredEvent = {
     ...event,
     messageId: generatedMessageId,
-    payload: {
-      ...event.payload,
-      // BE guarantees a messageId on all persisted events.
-      messageId: event.payload?.messageId ?? generatedMessageId,
-    },
+    // BE guarantees a messageId on all persisted events.
+    messageType: event.messageType,
+    content: event.content,
     createdAt: event.createdAt ?? now(),
   };
   events.push(stored);
@@ -172,7 +171,7 @@ export function createRequest(userMessageId: string, conversationId: string = DE
 
 export function completeRequest(userMessageId: string) {
   const r = requests.find((x) => x.userMessageId === userMessageId);
-  if (r && r.state === "PENDING") {
+  if (r && (r.state === "PENDING" || r.state === "IN_PROGRESS")) {
     r.state = "COMPLETED";
     r.updatedAt = now();
   }
@@ -188,7 +187,7 @@ export function cancelRequest(userMessageId: string) {
 
 export function cancelRequestByUserMessageId(userMessageId: string) {
   const r = requests.find((x) => x.userMessageId === userMessageId);
-  if (r && r.state === "PENDING") {
+  if (r && (r.state === "PENDING" || r.state === "IN_PROGRESS")) {
     r.state = "CANCELLED_BY_USER";
     r.updatedAt = now();
   }
@@ -196,27 +195,40 @@ export function cancelRequestByUserMessageId(userMessageId: string) {
 
 export function isPending(userMessageId: string): boolean {
   const r = requests.find((x) => x.userMessageId === userMessageId);
-  return r ? r.state === "PENDING" : false;
+  return r ? r.state === "PENDING" || r.state === "IN_PROGRESS" : false;
 }
 
-export function getRequestState(userMessageId: string): RequestState | undefined {
+export function getMessageState(userMessageId: string): MessageState | undefined {
   return requests.find((x) => x.userMessageId === userMessageId)?.state;
 }
 
-export function getRequestStateByUserMessageId(userMessageId: string): RequestState | undefined {
+export function getMessageStateByUserMessageId(userMessageId: string): MessageState | undefined {
   return requests.find((x) => x.userMessageId === userMessageId)?.state;
+}
+
+export function updateMessageStateByUserMessageId(
+  userMessageId: string,
+  nextState: MessageState
+): void {
+  const r = requests.find((x) => x.userMessageId === userMessageId);
+  if (!r) return;
+  if (r.state === "CANCELLED_BY_USER") return;
+  r.state = nextState;
+  r.updatedAt = now();
 }
 
 export function hasPendingRequest(conversationId: string): boolean {
   return requests.some(
-    (r) => (r.conversationId === conversationId || !r.conversationId) && r.state === "PENDING"
+    (r) =>
+      (r.conversationId === conversationId || !r.conversationId) &&
+      (r.state === "PENDING" || r.state === "IN_PROGRESS")
   );
 }
 
 function broadcast(conversationId: string, event: StoredEvent) {
   
   const clients = sseClients.get(conversationId);
-  console.log("broadcast", "convId: ", conversationId, "messageId: ", event.messageId, "sender: ", event.sender.type, "messageType: ", event.payload.messageType, "clients: ", clients?.size);
+  console.log("broadcast", "convId: ", conversationId, "messageId: ", event.messageId, "sender: ", event.sender.type, "messageType: ", event.messageType, "clients: ", clients?.size);
   if (!clients?.size) return;
   const payload = JSON.stringify(event);
   const line = `id: ${event.messageId}\nevent: chat_event\ndata: ${payload}\n\n`;
@@ -256,42 +268,41 @@ function getRequestByUserMessageId(userMessageId: string): ChatRequest | undefin
 function getRequestBySourceMessageId(sourceMessageId?: string): ChatRequest | undefined {
   if (!sourceMessageId) return undefined;
   const userEvent = events.find(
-    (e) => e.sender.type === "user" && e.payload?.messageId === sourceMessageId
+    (e) => e.sender.type === "user" && e.messageId === sourceMessageId
   );
   if (!userEvent?.messageId) return undefined;
   return getRequestByUserMessageId(userEvent.messageId);
 }
 
-function resolveRequestState(event: StoredEvent): RequestState | undefined {
+function resolveMessageState(event: StoredEvent): MessageState | undefined {
   // user-originated request event
   const direct = getRequestByUserMessageId(event.messageId);
   if (direct) return direct.state;
 
   // bot responses tied through sourceMessageId
-  const fromSource = getRequestBySourceMessageId(event.payload?.sourceMessageId);
+  const fromSource = getRequestBySourceMessageId(event.sourceMessageId);
   if (fromSource) return fromSource.state;
 
   return undefined;
 }
 
-function withRequestState(event: StoredEvent): StoredEvent {
-  const resolved = resolveRequestState(event);
+function withMessageState(event: StoredEvent): StoredEvent {
+  if (event.messageState) return event;
+  const resolved = resolveMessageState(event);
   if (!resolved) return event;
   return {
     ...event,
-    requestState: resolved,
+    messageState: resolved,
   };
 }
 
 function pushEventWithoutBroadcast(event: Omit<StoredEvent, "messageId" | "createdAt"> & { messageId?: string; createdAt?: string }) {
-  const generatedMessageId = event.messageId ?? event.payload?.messageId ?? nextMessageId();
+  const generatedMessageId = event.messageId ?? nextMessageId();
   const stored: StoredEvent = {
     ...event,
     messageId: generatedMessageId,
-    payload: {
-      ...event.payload,
-      messageId: event.payload?.messageId ?? generatedMessageId,
-    },
+    messageType: event.messageType,
+    content: event.content,
     createdAt: event.createdAt ?? now(),
   };
   events.push(stored);
@@ -303,22 +314,18 @@ function seedLoggedInConversationIfNeeded(conversationId: string) {
   pushEventWithoutBroadcast({
     conversationId,
     sender: { type: "user" },
-    payload: {
-      messageType: "text",
-      content: { text: "Show me 3 BHK in Gurgaon" },
-    },
+    messageType: "text",
+    content: { text: "Show me 3 BHK in Gurgaon" },
     createdAt: "2026-01-06T10:00:00.000Z",
   });
   pushEventWithoutBroadcast({
     conversationId,
-    sender: { type: "bot", id: "re_bot" },
-    payload: {
-      messageType: "text",
-      sourceMessageId: "msg_old_1",
-      sequenceNumber: 0,
-      isFinal: true,
-      content: { text: "Here are some older recommendations from your previous logged-in chat." },
-    },
+    sender: { type: "bot" },
+    messageType: "text",
+    sourceMessageId: "msg_old_1",
+    sequenceNumber: 0,
+    isFinal: true,
+    content: { text: "Here are some older recommendations from your previous logged-in chat." },
     createdAt: "2026-01-06T10:00:02.000Z",
   });
 }

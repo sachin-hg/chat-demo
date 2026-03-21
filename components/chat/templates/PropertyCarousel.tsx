@@ -155,13 +155,11 @@ export function PropertyCarousel({
                   // Notify ML, but don't expect a response. (FE already handled UI + API.)
                   onUserAction({
                     sender: { type: "system" },
-                    payload: {
-                      messageType: "user_action",
-                      responseRequired: false,
-                      visibility: "hidden",
-                      content: {
-                        data: { action: "shortlist", messageId, property: propertyForMl },
-                      },
+                    messageType: "user_action",
+                    responseRequired: false,
+                    visibility: "hidden",
+                    content: {
+                      data: { action: "shortlist", replyToMessageId: messageId, property: propertyForMl },
                     },
                   } as ChatEvent);
 
@@ -259,18 +257,16 @@ export function PropertyCarousel({
                     !disabled &&
                     onUserAction({
                       sender: { type: "user" },
-                      payload: {
-                        messageType: "user_action",
-                        responseRequired: true,
-                        visibility: "shown",
-                        content: {
-                          data: {
-                            action: "learn_more_about_property",
-                            messageId,
-                            property: propertyForMl,
-                          },
-                          derivedLabel: `Tell me more about ${p.name ?? p.title ?? "this property"}`,
+                      messageType: "user_action",
+                      responseRequired: true,
+                      visibility: "shown",
+                      content: {
+                        data: {
+                          action: "learn_more_about_property",
+                          replyToMessageId: messageId,
+                          property: propertyForMl,
                         },
+                        derivedLabel: `Tell me more about ${p.name ?? p.title ?? "this property"}`,
                       },
                     } as ChatEvent)
                   }
@@ -294,18 +290,16 @@ export function PropertyCarousel({
                     }
                     onUserAction({
                       sender: { type: "system" },
-                      payload: {
-                        messageType: "user_action",
-                        responseRequired: false,
-                        visibility: "shown",
-                        content: {
-                          data: {
-                            action: "crf_submitted",
-                            messageId,
-                            property: propertyForMl,
-                          },
-                          derivedLabel: "The seller has been contacted, someone will reach out to you soon!",
+                      messageType: "user_action",
+                      responseRequired: false,
+                      visibility: "shown",
+                      content: {
+                        data: {
+                          action: "crf_submitted",
+                          replyToMessageId: messageId,
+                          property: propertyForMl,
                         },
+                        derivedLabel: "The seller has been contacted, someone will reach out to you soon!",
                       },
                     } as ChatEvent);
                   }}

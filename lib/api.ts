@@ -1,5 +1,6 @@
 import type {
-  ChatEvent,
+  ChatEventFromUser,
+  ChatEventToUser,
   SendMessageResponse,
   GetHistoryResponse,
   GetConversationIdResponse,
@@ -58,7 +59,7 @@ export async function getHistory(
   return get(`/api/chats/get-history?${sp}`);
 }
 
-export async function sendMessage(event: ChatEvent): Promise<SendMessageResponse> {
+export async function sendMessage(event: ChatEventFromUser): Promise<SendMessageResponse> {
   return post<SendMessageResponse>("/api/chats/send-message", { event });
 }
 
@@ -80,10 +81,10 @@ function parseSseEventBlock(block: string): { event?: string; data?: string } {
 }
 
 export async function sendMessageStream(
-  event: ChatEvent,
+  event: ChatEventFromUser,
   handlers: {
     onAck: (ack: SendMessageResponse) => void;
-    onChatEvent: (ev: ChatEvent & { messageId: string; createdAt?: string }) => void;
+    onChatEvent: (ev: ChatEventToUser & { messageId: string; createdAt?: string }) => void;
   },
   options?: { signal?: AbortSignal }
 ): Promise<void> {
@@ -130,7 +131,7 @@ export async function sendMessageStream(
       }
 
       if (eventName === "chat_event") {
-        const ev = JSON.parse(data) as ChatEvent & { messageId: string; createdAt?: string };
+        const ev = JSON.parse(data) as ChatEventToUser & { messageId: string; createdAt?: string };
         handlers.onChatEvent(ev);
         continue;
       }

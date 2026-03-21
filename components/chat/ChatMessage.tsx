@@ -60,9 +60,8 @@ export function ChatMessage({
   actionsDisabled = false,
   isLastMessage = true,
 }: ChatMessageProps) {
-  const { sender, payload } = event;
-  const { messageType, content } = payload;
-  const requestState = event.requestState;
+  const { sender, messageType, content } = event;
+  const messageState = event.messageState;
   const isBot = sender.type === "bot";
   const isSystemOrBot = sender.type === "bot" || sender.type === "system";
   const isUser = sender.type === "user";
@@ -70,8 +69,8 @@ export function ChatMessage({
   // Never render analytics or context
   if (messageType === "analytics") return null;
   if (messageType === "context") return null;
-  if (requestState === "CANCELLED_BY_USER") return null;
-  if (requestState === "ERRORED_AT_ML" || requestState === "TIMED_OUT_BY_BE") {
+  if (messageState === "CANCELLED_BY_USER") return null;
+  if (messageState === "ERRORED_AT_ML" || messageState === "TIMED_OUT_BY_BE") {
     return (
       <div className="mb-2">
         <p className="text-sm text-[#0a0a0a] leading-[1.35]">Something went wrong. Please try again.</p>
@@ -81,7 +80,7 @@ export function ChatMessage({
 
   // user_action: only render if visibility === "shown" and derivedLabel set
   if (messageType === "user_action") {
-    if (payload.visibility === "shown" && content.derivedLabel) {
+    if (event.visibility === "shown" && content.derivedLabel) {
       // System/bot "user_action" should be rendered like bot text (not as a user bubble).
       if (sender.type === "system" || sender.type === "bot") {
         return (
@@ -118,7 +117,7 @@ export function ChatMessage({
   }
 
   // FeedbackRow is only eligible for bot/system messages.
-  const showFeedbackBase = isSystemOrBot && payload.isFinal === true;
+  const showFeedbackBase = isSystemOrBot && event.isFinal === true;
 
   // Bot text
   if (messageType === "text" && content.text) {
@@ -164,7 +163,7 @@ export function ChatMessage({
           body = (
             <PropertyCarousel
               properties={(Array.isArray((data as any).properties) ? ((data as any).properties as any) : []) ?? []}
-              messageId={payload.messageId ?? ""}
+              messageId={event.messageId ?? ""}
               onUserAction={onUserAction}
               propertyCount={typeof (data as any).property_count === "number" ? (data as any).property_count : undefined}
               service={typeof (data as any).service === "string" ? (data as any).service : undefined}
@@ -184,18 +183,16 @@ export function ChatMessage({
               onComplete={(payloadData, derivedLabel) =>
                 onUserAction({
                   sender: { type: "user" },
-                  payload: {
-                    messageType: "user_action",
-                    responseRequired: true,
-                    visibility: "shown",
-                    content: {
-                      data: {
-                        action: payloadData.action,
-                        selections: payloadData.selections,
-                        messageId: payload.messageId,
-                      },
-                      derivedLabel,
+                  messageType: "user_action",
+                  responseRequired: true,
+                  visibility: "shown",
+                  content: {
+                    data: {
+                      action: payloadData.action,
+                      selections: payloadData.selections,
+                      replyToMessageId: event.messageId,
                     },
+                    derivedLabel,
                   },
                 } as ChatEvent)
               }
@@ -212,14 +209,12 @@ export function ChatMessage({
               onAction={({ action, responseRequired, visibility, derivedLabel, locality }) =>
                 onUserAction({
                   sender: { type: "user" },
-                  payload: {
-                    messageType: "user_action",
-                    responseRequired,
-                    visibility,
-                    content: {
-                      data: { action, messageId: payload.messageId ?? "", locality },
-                      derivedLabel,
-                    },
+                  messageType: "user_action",
+                  responseRequired,
+                  visibility,
+                  content: {
+                    data: { action, replyToMessageId: event.messageId ?? "", locality },
+                    derivedLabel,
                   },
                 } as ChatEvent)
               }
@@ -230,7 +225,7 @@ export function ChatMessage({
         
         case "download_brochure":
           templateClipboardText = getClipboardTextForDownloadBrochure(data) ?? undefined;
-          body = <DownloadBrochure data={data} messageId={payload.messageId ?? ""} onUserAction={onUserAction} disabled={actionsDisabled} />;
+          body = <DownloadBrochure data={data} messageId={event.messageId ?? ""} onUserAction={onUserAction} disabled={actionsDisabled} />;
           break;
         case "share_location":
           body = (
@@ -245,7 +240,7 @@ export function ChatMessage({
           body = (
             <ShortlistProperty
               data={data}
-              messageId={payload.messageId ?? ""}
+              messageId={event.messageId ?? ""}
               onUserAction={onUserAction}
               disabled={actionsDisabled}
             />
@@ -255,7 +250,7 @@ export function ChatMessage({
           body = (
             <ContactSeller
               data={data}
-              messageId={payload.messageId ?? ""}
+              messageId={event.messageId ?? ""}
               onUserAction={onUserAction}
               disabled={actionsDisabled}
             />

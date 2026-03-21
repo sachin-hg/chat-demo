@@ -62,17 +62,27 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
 
 ## API (aligned with spec)
 
+- `ChatEvent` is a **flat object** (no nested `payload` wrapper): top-level fields include `messageType`, `content`, `responseRequired`, `visibility`, `sourceMessageId`, `sequenceNumber`, and `isFinal`.
+- In FE-facing events, `sourceMessageId` is optional and typically not required for rendering.
 - `GET /api/chats/get-conversation-id` → `{ conversationId, isNew }` (`isNew` is demo-app convenience; not required for production clients)
+- Phase 1 identity mapping: BE keeps a stable 1:1 `conversationId` per `userId` (or per `_ga` for anonymous users), so the same user consistently gets the same conversation.
 - `GET /api/chats/get-history?conversationId=...` with optional `page_size` (default 6), and optional cursor `messages_before` or `messages_after`.
-- `POST /api/chats/send-message` body `{ event: ChatEvent }` (JSON-only)
+- `POST /api/chats/send-message` body `{ event: ChatEventFromUser }` (JSON-only)
+  - `event.conversationId` is required in payload (not query param).
   - Used for `responseRequired=false` turns.
-  - Returns JSON `{ messageId, requestState }` (current app returns `requestState: "COMPLETED"`).
-- `POST /api/chats/send-message-streamed` body `{ event: ChatEvent }` with `Accept: text/event-stream`
+  - Returns JSON `{ messageId, messageState }` (current app returns `messageState: "COMPLETED"`).
+- `POST /api/chats/send-message-streamed` body `{ event: ChatEventFromUser }` with `Accept: text/event-stream`
+  - `event.conversationId` is required in payload (not query param).
   - Used for `responseRequired=true` turns.
+  - If `login_auth_token` is present, BE authenticates first and forwards derived identifiers (`userId`, `gaId`) in `ChatEventToML.sender`.
+  - `ChatEventToML.sender.userId` is derived by BE from auth/identity request headers.
   - SSE events:
-    - **`event: connection_ack`** — immediate ack: `data: { "messageId": "...", "requestState": "PENDING" }`
+    - **`event: connection_ack`** — immediate ack: `data: { "messageId": "...", "messageState": "PENDING" }`
     - **`event: chat_event`** — bot events streamed as they’re produced: `id: <messageId>`, `data: <JSON ChatEvent>`
     - **`event: connection_close`** — emitted when response is complete (`isFinal: true`) or stream inactivity reaches 15s.
+- ML response handling:
+  - each ML output is stored by BE as a new bot message with `messageState: "COMPLETED"`.
+  - ML `messageState` is applied to the source user message identified by `sourceMessageId`.
 - `POST /api/migrate-chat?currentConversationId=c1` with `login_auth_token` header
   - When migration strategy is enabled, BE returns `{ newConversationId: "c2" }` and merges/moves c1-tagged history to c2 in mock DB.
   - FE switches to `c2`, reloads history, and continues the conversation on `c2`.

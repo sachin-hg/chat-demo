@@ -43,11 +43,9 @@ export function ShareLocation({ data, onUserAction, disabled = false }: Props) {
           // Send request to ML directly.
           onUserAction({
             sender: { type: "system" },
-            payload: {
-              messageType: "user_action",
-              responseRequired: true,
-              content: { data: { action: "location_shared", coordinates: result.coords } },
-            },
+            messageType: "user_action",
+            responseRequired: true,
+            content: { data: { action: "location_shared", coordinates: result.coords } },
           } as ChatEvent);
         }
       } catch {
@@ -86,11 +84,9 @@ export function ShareLocation({ data, onUserAction, disabled = false }: Props) {
             if (typeof window === "undefined" || !("geolocation" in navigator)) {
               onUserAction({
                 sender: { type: "system" },
-                payload: {
-                  messageType: "user_action",
-                  responseRequired: true,
-                  content: { data: { action: "location_denied" } },
-                },
+                messageType: "user_action",
+                responseRequired: true,
+                content: { data: { action: "location_denied" } },
               } as ChatEvent);
               return;
             }
@@ -106,22 +102,18 @@ export function ShareLocation({ data, onUserAction, disabled = false }: Props) {
             if (!result.ok) {
               onUserAction({
                 sender: { type: "system" },
-                payload: {
-                  messageType: "user_action",
-                  responseRequired: true,
-                  content: { data: { action: "location_denied" } },
-                },
+                messageType: "user_action",
+                responseRequired: true,
+                content: { data: { action: "location_denied" } },
               } as ChatEvent);
               return;
             }
 
             onUserAction({
               sender: { type: "system" },
-              payload: {
-                messageType: "user_action",
-                responseRequired: true,
-                content: { data: { action: "location_shared", coordinates: result.coords } },
-              },
+              messageType: "user_action",
+              responseRequired: true,
+              content: { data: { action: "location_shared", coordinates: result.coords } },
             } as ChatEvent);
           }}
           className="mt-4 w-full h-10 rounded-lg bg-[#5E23DC] text-white text-sm font-semibold hover:bg-[#4a1bb5] transition-colors disabled:opacity-50"
