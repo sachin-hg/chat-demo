@@ -983,10 +983,13 @@ function ChatPageContent() {
     await cancelAndHideCurrentRequest();
   }, [cancelAndHideCurrentRequest]);
 
-  // Visible messages (filter context/analytics for display count)
-  const visibleMessages = messages.filter(
-    (m) => m.messageType !== "context" && m.messageType !== "analytics"
-  );
+  // Visible messages (filter context/analytics, cancelled user rows, hidden user_action)
+  const visibleMessages = messages.filter((m) => {
+    if (m.messageType === "context" || m.messageType === "analytics") return false;
+    if (m.messageState === "CANCELLED_BY_USER") return false;
+    if (m.messageType === "user_action" && m.isVisible === false) return false;
+    return true;
+  });
   const hasMessages = visibleMessages.length > 0;
   const lastVisible = visibleMessages[visibleMessages.length - 1];
   const hasStickyNestedQna =
@@ -1114,7 +1117,7 @@ function ChatPageContent() {
               </div>
             )}
 
-            {messages.map((msg, index) => (
+            {visibleMessages.map((msg, index) => (
               <ChatMessage
                 key={
                   msg.messageId ??
@@ -1124,7 +1127,7 @@ function ChatPageContent() {
                 onUserAction={handleUserAction}
                 // onCallNow={handleCallNow}
                 actionsDisabled={replyStatus === "awaiting" || isOffline}
-                isLastMessage={index === messages.length - 1}
+                isLastMessage={index === visibleMessages.length - 1}
               />
             ))}
           </div>
