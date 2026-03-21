@@ -137,7 +137,6 @@ Returns latest 6 messages by default (or latest `page_size` when provided).
   "messages": [
     {
       "messageId": "msg_201",
-      "eventType": "message",
       "sender": { "type": "bot", "id": "re_bot" },
       "payload": { ... },
       "createdAt": "2026-02-06T10:00:01Z"
@@ -182,7 +181,6 @@ Returns latest 6 messages strictly after `msg_401` (e.g. `msg_402..msg_407`).
 ```json
 {
   "event": {
-    "eventType": "message",
     "sender": { "type": "user" },
     "payload": {
       "messageType": "text",
@@ -285,8 +283,7 @@ data: {"reason":"response_complete"}
 {
   "conversationId": "conv_1",
   "sourceMessageId": "msg_u_456",
-  "event": { "...": "ChatEvent" },
-  "ttlMs": 120000
+  "event": { "...": "ChatEvent" }
 }
 ```
 
@@ -384,7 +381,7 @@ The stream uses the following **event** values and comment lines:
 **Chat events (`event: chat_event`)**  
 - Only events that should be shown in the chat (e.g. bot messages, visible info) are sent with `event: chat_event`.
 - Each line: `id: <messageId>\nevent: chat_event\ndata: <JSON ChatEvent>\n\n`.
-- `data` is a single JSON object: the full `ChatEvent` (including `messageId`, `eventType`, `sender`, `payload`, `createdAt`, etc.).
+- `data` is a single JSON object: the full `ChatEvent` (including `messageId`, `sender`, `payload`, `createdAt`, etc.).
 
 **Other event values**  
 - **`connection_close`**: Sent by the BE once, immediately before closing the stream when:
