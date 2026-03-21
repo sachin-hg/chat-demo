@@ -14,16 +14,15 @@ export type RequestState =
   | "CANCELLED_BY_USER";
 
 export interface ChatRequest {
-  requestId: string;
   conversationId: string;
-  userEventId: string;
+  userMessageId: string;
   state: RequestState;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface StoredEvent extends ChatEvent {
-  eventId: string;
+  messageId: string;
   createdAt: string;
 }
 
@@ -33,13 +32,10 @@ const events: StoredEvent[] = [];
 const requests: ChatRequest[] = [];
 const sseClients: Map<string, Set<SSEClient>> = new Map();
 
-function nextEventId() {
-  // Use randomness to prevent eventId collisions if the mock store module
+function nextMessageId() {
+  // Use randomness to prevent messageId collisions if the mock store module
   // gets reloaded / instantiated more than once in dev.
-  return `evt_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-}
-function nextRequestId() {
-  return `req_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  return `msg_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
 function now() {
@@ -86,18 +82,18 @@ export function getHistory(
   hasMore: boolean;
 } {
   // Per architecture: user request event is soft-deleted only for CANCELLED_BY_USER — exclude from history
-  const cancelledUserEventIds = new Set(
-    requests.filter((r) => r.state === "CANCELLED_BY_USER").map((r) => r.userEventId)
+  const cancelledUserMessageIds = new Set(
+    requests.filter((r) => r.state === "CANCELLED_BY_USER").map((r) => r.userMessageId)
   );
   let list = events.filter(
     (e) =>
-      (e.conversationId === conversationId || !e.conversationId) && !cancelledUserEventIds.has(e.eventId)
+      (e.conversationId === conversationId || !e.conversationId) && !cancelledUserMessageIds.has(e.messageId)
   );
   const pageSize = Math.max(1, options?.pageSize ?? 6);
 
   // Explicit window: latest `pageSize` messages before `messages_before` (exclusive).
   if (options?.messagesBefore && !options?.messagesAfter) {
-    const idx = list.findIndex((e) => e.eventId === options.messagesBefore);
+    const idx = list.findIndex((e) => e.messageId === options.messagesBefore);
     if (idx <= 0) {
       return {
         conversationId,
@@ -118,7 +114,7 @@ export function getHistory(
 
   // Explicit window: all messages strictly after `messages_after`.
   if (options?.messagesAfter && !options?.messagesBefore) {
-    const idx = list.findIndex((e) => e.eventId === options.messagesAfter);
+    const idx = list.findIndex((e) => e.messageId === options.messagesAfter);
     list = idx >= 0 ? list.slice(idx + 1) : [];
     const messagesWithState = list.map((e) => withRequestState(e));
     return {
@@ -141,16 +137,16 @@ export function getHistory(
 }
 
 export function appendEvent(
-  event: Omit<StoredEvent, "eventId" | "createdAt"> & { eventId?: string; createdAt?: string }
+  event: Omit<StoredEvent, "messageId" | "createdAt"> & { messageId?: string; createdAt?: string }
 ): StoredEvent {
-  const generatedEventId = event.eventId ?? nextEventId();
+  const generatedMessageId = event.messageId ?? event.payload?.messageId ?? nextMessageId();
   const stored: StoredEvent = {
     ...event,
-    eventId: generatedEventId,
+    messageId: generatedMessageId,
     payload: {
       ...event.payload,
       // BE guarantees a messageId on all persisted events.
-      messageId: event.payload?.messageId ?? generatedEventId,
+      messageId: event.payload?.messageId ?? generatedMessageId,
     },
     createdAt: event.createdAt ?? now(),
   };
@@ -162,11 +158,10 @@ export function appendEvent(
   return stored;
 }
 
-export function createRequest(userEventId: string, conversationId: string = DEFAULT_CONV_ID): ChatRequest {
+export function createRequest(userMessageId: string, conversationId: string = DEFAULT_CONV_ID): ChatRequest {
   const req: ChatRequest = {
-    requestId: nextRequestId(),
     conversationId,
-    userEventId,
+    userMessageId,
     state: "PENDING",
     createdAt: now(),
     updatedAt: now(),
@@ -175,41 +170,41 @@ export function createRequest(userEventId: string, conversationId: string = DEFA
   return req;
 }
 
-export function completeRequest(requestId: string) {
-  const r = requests.find((x) => x.requestId === requestId);
+export function completeRequest(userMessageId: string) {
+  const r = requests.find((x) => x.userMessageId === userMessageId);
   if (r && r.state === "PENDING") {
     r.state = "COMPLETED";
     r.updatedAt = now();
   }
 }
 
-export function cancelRequest(requestId: string) {
-  const r = requests.find((x) => x.requestId === requestId);
+export function cancelRequest(userMessageId: string) {
+  const r = requests.find((x) => x.userMessageId === userMessageId);
   if (r && r.state === "PENDING") {
     r.state = "CANCELLED_BY_USER";
     r.updatedAt = now();
   }
 }
 
-export function cancelRequestByUserEventId(userEventId: string) {
-  const r = requests.find((x) => x.userEventId === userEventId);
+export function cancelRequestByUserMessageId(userMessageId: string) {
+  const r = requests.find((x) => x.userMessageId === userMessageId);
   if (r && r.state === "PENDING") {
     r.state = "CANCELLED_BY_USER";
     r.updatedAt = now();
   }
 }
 
-export function isPending(requestId: string): boolean {
-  const r = requests.find((x) => x.requestId === requestId);
+export function isPending(userMessageId: string): boolean {
+  const r = requests.find((x) => x.userMessageId === userMessageId);
   return r ? r.state === "PENDING" : false;
 }
 
-export function getRequestState(requestId: string): RequestState | undefined {
-  return requests.find((x) => x.requestId === requestId)?.state;
+export function getRequestState(userMessageId: string): RequestState | undefined {
+  return requests.find((x) => x.userMessageId === userMessageId)?.state;
 }
 
-export function getRequestStateByUserEventId(userEventId: string): RequestState | undefined {
-  return requests.find((x) => x.userEventId === userEventId)?.state;
+export function getRequestStateByUserMessageId(userMessageId: string): RequestState | undefined {
+  return requests.find((x) => x.userMessageId === userMessageId)?.state;
 }
 
 export function hasPendingRequest(conversationId: string): boolean {
@@ -221,10 +216,10 @@ export function hasPendingRequest(conversationId: string): boolean {
 function broadcast(conversationId: string, event: StoredEvent) {
   
   const clients = sseClients.get(conversationId);
-  console.log("broadcast", "convId: ", conversationId, "eventId: ", event.eventId, "sender: ", event.sender.type, "messageType: ", event.payload.messageType, "clients: ", clients?.size);
+  console.log("broadcast", "convId: ", conversationId, "messageId: ", event.messageId, "sender: ", event.sender.type, "messageType: ", event.payload.messageType, "clients: ", clients?.size);
   if (!clients?.size) return;
   const payload = JSON.stringify(event);
-  const line = `id: ${event.eventId}\nevent: chat_event\ndata: ${payload}\n\n`;
+  const line = `id: ${event.messageId}\nevent: chat_event\ndata: ${payload}\n\n`;
   clients.forEach((write) => {
     try {
       write(line);
@@ -254,8 +249,8 @@ export function resetStore() {
   loggedInSeeded = false;
 }
 
-function getRequestByUserEventId(userEventId: string): ChatRequest | undefined {
-  return requests.find((r) => r.userEventId === userEventId);
+function getRequestByUserMessageId(userMessageId: string): ChatRequest | undefined {
+  return requests.find((r) => r.userMessageId === userMessageId);
 }
 
 function getRequestBySourceMessageId(sourceMessageId?: string): ChatRequest | undefined {
@@ -263,13 +258,13 @@ function getRequestBySourceMessageId(sourceMessageId?: string): ChatRequest | un
   const userEvent = events.find(
     (e) => e.sender.type === "user" && e.payload?.messageId === sourceMessageId
   );
-  if (!userEvent?.eventId) return undefined;
-  return getRequestByUserEventId(userEvent.eventId);
+  if (!userEvent?.messageId) return undefined;
+  return getRequestByUserMessageId(userEvent.messageId);
 }
 
 function resolveRequestState(event: StoredEvent): RequestState | undefined {
   // user-originated request event
-  const direct = getRequestByUserEventId(event.eventId);
+  const direct = getRequestByUserMessageId(event.messageId);
   if (direct) return direct.state;
 
   // bot responses tied through sourceMessageId
@@ -288,14 +283,14 @@ function withRequestState(event: StoredEvent): StoredEvent {
   };
 }
 
-function pushEventWithoutBroadcast(event: Omit<StoredEvent, "eventId" | "createdAt"> & { eventId?: string; createdAt?: string }) {
-  const generatedEventId = event.eventId ?? nextEventId();
+function pushEventWithoutBroadcast(event: Omit<StoredEvent, "messageId" | "createdAt"> & { messageId?: string; createdAt?: string }) {
+  const generatedMessageId = event.messageId ?? event.payload?.messageId ?? nextMessageId();
   const stored: StoredEvent = {
     ...event,
-    eventId: generatedEventId,
+    messageId: generatedMessageId,
     payload: {
       ...event.payload,
-      messageId: event.payload?.messageId ?? generatedEventId,
+      messageId: event.payload?.messageId ?? generatedMessageId,
     },
     createdAt: event.createdAt ?? now(),
   };

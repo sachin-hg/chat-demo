@@ -16,7 +16,7 @@ import { ContactSeller } from "./templates/ContactSeller";
 import { FeedbackRow } from "./FeedbackRow";
 
 interface ChatMessageProps {
-  event: ChatEvent & { eventId?: string };
+  event: ChatEvent & { messageId?: string };
   onUserAction: (event: ChatEvent) => void;
   onCallNow?: () => void;
   actionsDisabled?: boolean;

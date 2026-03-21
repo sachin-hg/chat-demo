@@ -16,7 +16,7 @@ import { ChatMessage } from "@/components/chat/ChatMessage";
 import { useToast } from "@/components/ui/ToastProvider";
 
 interface StoredMessage extends ChatEvent {
-  eventId: string;
+  messageId: string;
   createdAt?: string;
 }
 
@@ -374,17 +374,17 @@ function ChatPageContent() {
   );
   const [networkError, setNetworkError] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const knownEventIdsRef = useRef<Set<string>>(new Set());
+  const knownMessageIdsRef = useRef<Set<string>>(new Set());
   const replyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const awaitingElapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSentEventRef = useRef<ChatEvent | null>(null);
-  const lastRequestEventIdRef = useRef<string | null>(null);
-  const currentPendingLocalEventIdRef = useRef<string | null>(null);
+  const lastRequestMessageIdRef = useRef<string | null>(null);
+  const currentPendingLocalMessageIdRef = useRef<string | null>(null);
   const cancelledPendingLocalIdsRef = useRef<Set<string>>(new Set());
   const activeSendStreamAbortRef = useRef<AbortController | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement | null>(null);
   const scrollRestoreAfterPrependRef = useRef<{ scrollTop: number; scrollHeight: number } | null>(null);
-  const lastMessageEventIdRef = useRef<string | undefined>(undefined);
+  const lastRenderedMessageIdRef = useRef<string | undefined>(undefined);
   const lastMessagesRef = useRef<StoredMessage[]>([]);
   const demoStepIndexRef = useRef(0);
   const demoWaitingForUserRef = useRef(false);
@@ -418,23 +418,23 @@ function ChatPageContent() {
     activeSendStreamAbortRef.current?.abort();
     activeSendStreamAbortRef.current = null;
 
-    const ackedEventId = lastRequestEventIdRef.current;
-    const pendingLocalId = currentPendingLocalEventIdRef.current;
+    const ackedMessageId = lastRequestMessageIdRef.current;
+    const pendingLocalId = currentPendingLocalMessageIdRef.current;
 
-    if (ackedEventId) {
+    if (ackedMessageId) {
       setMessages((prev) =>
-        prev.map((m) => (m.eventId === ackedEventId ? { ...m, requestState: "CANCELLED_BY_USER" } : m))
+        prev.map((m) => (m.messageId === ackedMessageId ? { ...m, requestState: "CANCELLED_BY_USER" } : m))
       );
       try {
-        await cancelRequest(ackedEventId);
+        await cancelRequest(ackedMessageId);
       } catch (_) {}
-      lastRequestEventIdRef.current = null;
+      lastRequestMessageIdRef.current = null;
     } else if (pendingLocalId) {
       cancelledPendingLocalIdsRef.current.add(pendingLocalId);
       setMessages((prev) =>
-        prev.map((m) => (m.eventId === pendingLocalId ? { ...m, requestState: "CANCELLED_BY_USER" } : m))
+        prev.map((m) => (m.messageId === pendingLocalId ? { ...m, requestState: "CANCELLED_BY_USER" } : m))
       );
-      currentPendingLocalEventIdRef.current = null;
+      currentPendingLocalMessageIdRef.current = null;
     }
 
     clearReplyWaiting();
@@ -457,7 +457,7 @@ function ChatPageContent() {
         const list = hist.messages as StoredMessage[];
         setMessages(list);
         setHasMoreOlder(hist.hasMore);
-        list.forEach((m) => m.eventId && knownEventIdsRef.current.add(m.eventId));
+        list.forEach((m) => m.messageId && knownMessageIdsRef.current.add(m.messageId));
       } catch (e) {
         console.error(e);
       } finally {
@@ -481,7 +481,7 @@ function ChatPageContent() {
         setConversationId(newConversationId);
         const hist = await getHistory(newConversationId, { page_size: INITIAL_PAGE_SIZE });
         const list = hist.messages as StoredMessage[];
-        knownEventIdsRef.current = new Set(list.map((m) => m.eventId).filter(Boolean));
+        knownMessageIdsRef.current = new Set(list.map((m) => m.messageId).filter(Boolean));
         setMessages(list);
         setHasMoreOlder(hist.hasMore);
       } catch (e) {
@@ -494,9 +494,9 @@ function ChatPageContent() {
   // responseRequired=true uses send-message-streamed; responseRequired=false uses send-message JSON.
 
   useEffect(() => {
-    const lastId = messages[messages.length - 1]?.eventId;
-    if (lastId !== lastMessageEventIdRef.current) {
-      lastMessageEventIdRef.current = lastId;
+    const lastId = messages[messages.length - 1]?.messageId;
+    if (lastId !== lastRenderedMessageIdRef.current) {
+      lastRenderedMessageIdRef.current = lastId;
       scrollToBottom();
     }
   }, [messages, scrollToBottom]);
@@ -542,19 +542,19 @@ function ChatPageContent() {
 
   const loadMoreOlder = useCallback(async () => {
     if (!conversationId || loadingMoreOlder || messages.length === 0) return;
-    const firstEventId = messages[0].eventId;
-    if (!firstEventId) return;
+    const firstMessageId = messages[0].messageId;
+    if (!firstMessageId) return;
     setLoadingMoreOlder(true);
     try {
       const hist = await getHistory(conversationId, {
-        messages_before: firstEventId,
+        messages_before: firstMessageId,
         page_size: LOAD_MORE_PAGE_SIZE,
       });
       const list = hist.messages as StoredMessage[];
       const toPrepend = list.filter(
-        (m) => m.eventId && !knownEventIdsRef.current.has(m.eventId)
+        (m) => m.messageId && !knownMessageIdsRef.current.has(m.messageId)
       );
-      toPrepend.forEach((m) => m.eventId && knownEventIdsRef.current.add(m.eventId));
+      toPrepend.forEach((m) => m.messageId && knownMessageIdsRef.current.add(m.messageId));
       setHasMoreOlder(hist.hasMore);
       if (toPrepend.length > 0) {
         const el = messagesScrollRef.current;
@@ -573,7 +573,7 @@ function ChatPageContent() {
   }, [conversationId, loadingMoreOlder, messages]);
 
   const startAwaitingReply = useCallback(
-    (_userEventId: string) => {
+    (_userMessageId: string) => {
       setAwaitingElapsedSec(0);
       setReplyStatus("awaiting");
 
@@ -618,11 +618,11 @@ function ChatPageContent() {
       const pendingId = `pending-${Date.now()}`;
       const userMessage: StoredMessage = {
         ...event,
-        eventId: pendingId,
+        messageId: pendingId,
         createdAt: new Date().toISOString(),
       };
-      currentPendingLocalEventIdRef.current = pendingId;
-      lastRequestEventIdRef.current = null;
+      currentPendingLocalMessageIdRef.current = pendingId;
+      lastRequestMessageIdRef.current = null;
       setMessages((prev) => [...prev, userMessage]);
       setInput("");
       setSending(true);
@@ -638,29 +638,29 @@ function ChatPageContent() {
             onAck: (ack) => {
               setNetworkError(false);
               ackReceived = true;
-              currentPendingLocalEventIdRef.current = null;
+              currentPendingLocalMessageIdRef.current = null;
               if (cancelledPendingLocalIdsRef.current.has(pendingId)) {
                 cancelledPendingLocalIdsRef.current.delete(pendingId);
                 setMessages((prev) =>
                   prev.map((m) =>
-                    m.eventId === pendingId
-                      ? { ...m, eventId: ack.eventId, requestState: "CANCELLED_BY_USER" }
+                    m.messageId === pendingId
+                      ? { ...m, messageId: ack.messageId, requestState: "CANCELLED_BY_USER" }
                       : m
                   )
                 );
-                cancelRequest(ack.eventId).catch(() => {});
+                cancelRequest(ack.messageId).catch(() => {});
                 return;
               }
-              lastRequestEventIdRef.current = ack.eventId;
-              knownEventIdsRef.current.add(ack.eventId);
+              lastRequestMessageIdRef.current = ack.messageId;
+              knownMessageIdsRef.current.add(ack.messageId);
               setMessages((prev) =>
-                prev.map((m) => (m.eventId === pendingId ? { ...m, eventId: ack.eventId } : m))
+                prev.map((m) => (m.messageId === pendingId ? { ...m, messageId: ack.messageId } : m))
               );
-              startAwaitingReply(ack.eventId);
+              startAwaitingReply(ack.messageId);
             },
             onChatEvent: (botEvent) => {
-              if (!botEvent.eventId || knownEventIdsRef.current.has(botEvent.eventId)) return;
-              knownEventIdsRef.current.add(botEvent.eventId);
+              if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
+              knownMessageIdsRef.current.add(botEvent.messageId);
               setMessages((prev) => [...prev, botEvent]);
               if (botEvent.sender?.type === "bot" && botEvent.payload.isFinal === true) {
                 clearReplyWaiting();
@@ -675,7 +675,7 @@ function ChatPageContent() {
         console.error(e);
         if (isNetworkFailure(e)) setNetworkError(true);
         setReplyStatus("error");
-        if (!ackReceived) setMessages((prev) => prev.filter((m) => m.eventId !== pendingId));
+        if (!ackReceived) setMessages((prev) => prev.filter((m) => m.messageId !== pendingId));
       } finally {
         if (activeSendStreamAbortRef.current === abortController) activeSendStreamAbortRef.current = null;
         setSending(false);
@@ -714,11 +714,11 @@ function ChatPageContent() {
       const pendingId = `pending-${Date.now()}`;
       const stored: StoredMessage = {
         ...fullEvent,
-        eventId: pendingId,
+        messageId: pendingId,
         createdAt: new Date().toISOString(),
       };
-      currentPendingLocalEventIdRef.current = pendingId;
-      lastRequestEventIdRef.current = null;
+      currentPendingLocalMessageIdRef.current = pendingId;
+      lastRequestMessageIdRef.current = null;
       setMessages((prev) => [...prev, stored]);
       setSending(true);
       setReplyStatus("sending");
@@ -732,23 +732,23 @@ function ChatPageContent() {
           const ack = await sendMessage(fullEvent);
           setNetworkError(false);
           ackReceived = true;
-          currentPendingLocalEventIdRef.current = null;
+          currentPendingLocalMessageIdRef.current = null;
           if (cancelledPendingLocalIdsRef.current.has(pendingId)) {
             cancelledPendingLocalIdsRef.current.delete(pendingId);
             setMessages((prev) =>
               prev.map((m) =>
-                m.eventId === pendingId
-                  ? { ...m, eventId: ack.eventId, requestState: "CANCELLED_BY_USER" }
+                m.messageId === pendingId
+                  ? { ...m, messageId: ack.messageId, requestState: "CANCELLED_BY_USER" }
                   : m
               )
             );
-            cancelRequest(ack.eventId).catch(() => {});
+            cancelRequest(ack.messageId).catch(() => {});
             return;
           }
-          lastRequestEventIdRef.current = ack.eventId;
-          knownEventIdsRef.current.add(ack.eventId);
+          lastRequestMessageIdRef.current = ack.messageId;
+          knownMessageIdsRef.current.add(ack.messageId);
           setMessages((prev) =>
-            prev.map((m) => (m.eventId === pendingId ? { ...m, eventId: ack.eventId } : m))
+            prev.map((m) => (m.messageId === pendingId ? { ...m, messageId: ack.messageId } : m))
           );
           setReplyStatus("idle");
         } else {
@@ -758,30 +758,30 @@ function ChatPageContent() {
               onAck: (ack) => {
                 setNetworkError(false);
                 ackReceived = true;
-                currentPendingLocalEventIdRef.current = null;
+                currentPendingLocalMessageIdRef.current = null;
                 if (cancelledPendingLocalIdsRef.current.has(pendingId)) {
                   cancelledPendingLocalIdsRef.current.delete(pendingId);
                   setMessages((prev) =>
                     prev.map((m) =>
-                      m.eventId === pendingId
-                        ? { ...m, eventId: ack.eventId, requestState: "CANCELLED_BY_USER" }
+                      m.messageId === pendingId
+                        ? { ...m, messageId: ack.messageId, requestState: "CANCELLED_BY_USER" }
                         : m
                     )
                   );
-                  cancelRequest(ack.eventId).catch(() => {});
+                  cancelRequest(ack.messageId).catch(() => {});
                   return;
                 }
-                lastRequestEventIdRef.current = ack.eventId;
-                knownEventIdsRef.current.add(ack.eventId);
+                lastRequestMessageIdRef.current = ack.messageId;
+                knownMessageIdsRef.current.add(ack.messageId);
                 setMessages((prev) =>
-                  prev.map((m) => (m.eventId === pendingId ? { ...m, eventId: ack.eventId } : m))
+                  prev.map((m) => (m.messageId === pendingId ? { ...m, messageId: ack.messageId } : m))
                 );
 
-                startAwaitingReply(ack.eventId);
+                startAwaitingReply(ack.messageId);
               },
               onChatEvent: (botEvent) => {
-                if (!botEvent.eventId || knownEventIdsRef.current.has(botEvent.eventId)) return;
-                knownEventIdsRef.current.add(botEvent.eventId);
+                if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
+                knownMessageIdsRef.current.add(botEvent.messageId);
                 setMessages((prev) => [...prev, botEvent]);
                 if (botEvent.sender?.type === "bot" && botEvent.payload.isFinal === true) {
                   clearReplyWaiting();
@@ -797,7 +797,7 @@ function ChatPageContent() {
         console.error(e);
         if (isNetworkFailure(e)) setNetworkError(true);
         setReplyStatus("error");
-        if (!ackReceived) setMessages((prev) => prev.filter((m) => m.eventId !== pendingId));
+        if (!ackReceived) setMessages((prev) => prev.filter((m) => m.messageId !== pendingId));
       } finally {
         if (activeSendStreamAbortRef.current === abortController) activeSendStreamAbortRef.current = null;
         setSending(false);
@@ -940,14 +940,14 @@ function ChatPageContent() {
         fullEvent,
         {
           onAck: (ack) => {
-            lastRequestEventIdRef.current = ack.eventId;
-            knownEventIdsRef.current.add(ack.eventId);
-            if (expectsResponse) startAwaitingReply(ack.eventId);
+            lastRequestMessageIdRef.current = ack.messageId;
+            knownMessageIdsRef.current.add(ack.messageId);
+            if (expectsResponse) startAwaitingReply(ack.messageId);
             else setReplyStatus("idle");
           },
           onChatEvent: (botEvent) => {
-            if (!botEvent.eventId || knownEventIdsRef.current.has(botEvent.eventId)) return;
-            knownEventIdsRef.current.add(botEvent.eventId);
+            if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
+            knownMessageIdsRef.current.add(botEvent.messageId);
             setMessages((prev) => [...prev, botEvent]);
             if (botEvent.sender?.type === "bot" && botEvent.payload.isFinal === true) clearReplyWaiting();
           },
@@ -1109,7 +1109,7 @@ function ChatPageContent() {
             {messages.map((msg, index) => (
               <ChatMessage
                 key={
-                  msg.eventId ??
+                  msg.messageId ??
                   (msg as unknown as { payload?: { messageId?: string } }).payload?.messageId ??
                   Math.random()
                 }

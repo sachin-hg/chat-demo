@@ -83,7 +83,7 @@ export async function sendMessageStream(
   event: ChatEvent,
   handlers: {
     onAck: (ack: SendMessageResponse) => void;
-    onChatEvent: (ev: ChatEvent & { eventId: string; createdAt?: string }) => void;
+    onChatEvent: (ev: ChatEvent & { messageId: string; createdAt?: string }) => void;
   },
   options?: { signal?: AbortSignal }
 ): Promise<void> {
@@ -130,7 +130,7 @@ export async function sendMessageStream(
       }
 
       if (eventName === "chat_event") {
-        const ev = JSON.parse(data) as ChatEvent & { eventId: string; createdAt?: string };
+        const ev = JSON.parse(data) as ChatEvent & { messageId: string; createdAt?: string };
         handlers.onChatEvent(ev);
         continue;
       }
@@ -142,8 +142,8 @@ export async function sendMessageStream(
   }
 }
 
-export async function cancelRequest(eventId: string): Promise<{ ok: boolean }> {
-  return post("/api/chats/cancel", { eventId });
+export async function cancelRequest(messageId: string): Promise<{ ok: boolean }> {
+  return post("/api/chats/cancel", { messageId });
 }
 
 export async function migrateChat(currentConversationId: string): Promise<{ newConversationId?: string }> {

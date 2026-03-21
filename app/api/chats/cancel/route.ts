@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cancelRequestByUserEventId } from "@/lib/store";
+import { cancelRequestByUserMessageId } from "@/lib/store";
 
 export async function POST(request: NextRequest) {
-  let body: { eventId?: string };
+  let body: { messageId?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const { eventId } = body;
-  if (!eventId) {
-    return NextResponse.json({ error: "eventId required" }, { status: 400 });
+  const { messageId } = body;
+  if (!messageId) {
+    return NextResponse.json({ error: "messageId required" }, { status: 400 });
   }
-  cancelRequestByUserEventId(eventId);
+  cancelRequestByUserMessageId(messageId);
   return NextResponse.json({ ok: true });
 }

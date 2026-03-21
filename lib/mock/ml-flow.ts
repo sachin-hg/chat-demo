@@ -59,7 +59,7 @@ function botMessage(
     isFinal?: boolean;
     visibility?: "shown" | "hidden";
   } = {}
-): Omit<ChatEvent, "eventId" | "createdAt"> {
+): Omit<ChatEvent, "messageId" | "createdAt"> {
   const { sourceMessageId, sequenceNumber = 0, isFinal = true, visibility } = options;
   return {
     conversationId: CONV,
@@ -154,7 +154,7 @@ function buildPropertyCarouselData(properties: typeof MOCK_PROPERTY_CAROUSEL_CAR
 export function getNextBotEvents(
   userEvent: ChatEvent,
   recentEvents: ChatEvent[]
-): Omit<ChatEvent, "eventId" | "createdAt">[] {
+): Omit<ChatEvent, "messageId" | "createdAt">[] {
   const { payload } = userEvent;
   const messageType = payload.messageType;
   const content = payload.content;

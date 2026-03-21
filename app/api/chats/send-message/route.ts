@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { appendEvent, createRequest, completeRequest, getRequestStateByUserEventId } from "@/lib/store";
+import { appendEvent, createRequest, completeRequest, getRequestStateByUserMessageId } from "@/lib/store";
 import type { ChatEvent } from "@/lib/contract-types";
 
 export async function POST(request: NextRequest) {
@@ -28,12 +28,12 @@ export async function POST(request: NextRequest) {
     ...event,
     conversationId: event.conversationId ?? "c1",
   });
-  const requestRecord = createRequest(stored.eventId!, stored.conversationId ?? "c1");
-  completeRequest(requestRecord.requestId);
+  createRequest(stored.messageId!, stored.conversationId ?? "c1");
+  completeRequest(stored.messageId!);
   stored.requestState = "COMPLETED";
 
   return NextResponse.json({
-    eventId: stored.eventId,
-    requestState: getRequestStateByUserEventId(stored.eventId!) ?? "COMPLETED",
+    messageId: stored.messageId,
+    requestState: getRequestStateByUserMessageId(stored.messageId!) ?? "COMPLETED",
   });
 }

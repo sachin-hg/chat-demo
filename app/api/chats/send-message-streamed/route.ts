@@ -5,8 +5,8 @@ import {
   completeRequest,
   getAllEvents,
   isPending,
-  cancelRequestByUserEventId,
-  getRequestStateByUserEventId,
+  cancelRequestByUserMessageId,
+  getRequestStateByUserMessageId,
 } from "@/lib/store";
 import { getNextBotEvents } from "@/lib/mock/ml-flow";
 import type { ChatEvent } from "@/lib/contract-types";
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     ...event,
     conversationId: event.conversationId ?? "c1",
   });
-  const requestRecord = createRequest(stored.eventId!, stored.conversationId ?? "c1");
+  createRequest(stored.messageId!, stored.conversationId ?? "c1");
   stored.requestState = "PENDING";
 
   const mockDelay = getMockDelayMs();
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
       };
 
       const abortHandler = () => {
-        cancelRequestByUserEventId(stored.eventId!);
+        cancelRequestByUserMessageId(stored.messageId!);
         close();
       };
       request.signal.addEventListener("abort", abortHandler, { once: true });
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
         if (inactivityTimer) clearTimeout(inactivityTimer);
         inactivityTimer = setTimeout(() => {
           if (!closed) {
-            cancelRequestByUserEventId(stored.eventId!);
+            cancelRequestByUserMessageId(stored.messageId!);
             writeSse({ event: "connection_close", data: { reason: "inactivity_15s" } });
             close();
           }
@@ -100,14 +100,14 @@ export async function POST(request: NextRequest) {
       writeSse({
         event: "connection_ack",
         data: {
-          eventId: stored.eventId,
-          requestState: getRequestStateByUserEventId(stored.eventId!) ?? "PENDING",
+          messageId: stored.messageId,
+          requestState: getRequestStateByUserMessageId(stored.messageId!) ?? "PENDING",
         },
       });
 
       setTimeout(() => {
-        if (!isPending(requestRecord.requestId)) {
-          completeRequest(requestRecord.requestId);
+        if (!isPending(stored.messageId!)) {
+          completeRequest(stored.messageId!);
           close();
           return;
         }
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
         const botEvents = getNextBotEvents(stored, recentEvents);
 
         for (const ev of botEvents) {
-          if (!isPending(requestRecord.requestId)) break;
+          if (!isPending(stored.messageId!)) break;
           const state = ev.payload.isFinal === true ? "COMPLETED" : "PENDING";
           const storedBot = appendEvent({
             ...ev,
@@ -124,17 +124,17 @@ export async function POST(request: NextRequest) {
             requestState: state,
           });
 
-          writeSse({ event: "chat_event", id: storedBot.eventId, data: storedBot });
+          writeSse({ event: "chat_event", id: storedBot.messageId, data: storedBot });
 
           if (storedBot.payload.isFinal === true) {
-            completeRequest(requestRecord.requestId);
+            completeRequest(stored.messageId!);
             writeSse({ event: "connection_close", data: { reason: "response_complete" } });
             close();
             return;
           }
         }
 
-        completeRequest(requestRecord.requestId);
+        completeRequest(stored.messageId!);
         close();
       }, delayMs);
     },

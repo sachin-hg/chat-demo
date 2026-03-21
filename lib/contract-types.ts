@@ -47,7 +47,7 @@ export interface ChatPayload {
 }
 
 export interface ChatEvent {
-  eventId?: string;
+  messageId?: string;
   /** Request lifecycle state for this event/turn as resolved by BE. */
   requestState?: RequestState;
   conversationId?: string;
@@ -59,13 +59,13 @@ export interface ChatEvent {
 }
 
 export interface SendMessageResponse {
-  eventId: string;
+  messageId: string;
   requestState?: RequestState;
 }
 
 export interface GetHistoryResponse {
   conversationId: string;
-  messages: (ChatEvent & { eventId: string; createdAt: string })[];
+  messages: (ChatEvent & { messageId: string; createdAt: string })[];
   hasMore: boolean;
 }
 

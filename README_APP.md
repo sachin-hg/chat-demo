@@ -66,12 +66,12 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
 - `GET /api/chats/get-history?conversationId=...` with optional `page_size` (default 6), and optional cursor `messages_before` or `messages_after`.
 - `POST /api/chats/send-message` body `{ event: ChatEvent }` (JSON-only)
   - Used for `responseRequired=false` turns.
-  - Returns JSON `{ eventId, requestState }` (current app returns `requestState: "COMPLETED"`).
+  - Returns JSON `{ messageId, requestState }` (current app returns `requestState: "COMPLETED"`).
 - `POST /api/chats/send-message-streamed` body `{ event: ChatEvent }` with `Accept: text/event-stream`
   - Used for `responseRequired=true` turns.
   - SSE events:
-    - **`event: connection_ack`** — immediate ack: `data: { "eventId": "...", "requestState": "PENDING" }`
-    - **`event: chat_event`** — bot events streamed as they’re produced: `id: <eventId>`, `data: <JSON ChatEvent>`
+    - **`event: connection_ack`** — immediate ack: `data: { "messageId": "...", "requestState": "PENDING" }`
+    - **`event: chat_event`** — bot events streamed as they’re produced: `id: <messageId>`, `data: <JSON ChatEvent>`
     - **`event: connection_close`** — emitted when response is complete (`isFinal: true`) or stream inactivity reaches 15s.
 - `POST /api/migrate-chat?currentConversationId=c1` with `login_auth_token` header
   - When migration strategy is enabled, BE returns `{ newConversationId: "c2" }` and merges/moves c1-tagged history to c2 in mock DB.

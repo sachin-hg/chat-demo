@@ -136,7 +136,7 @@ Returns latest 6 messages by default (or latest `page_size` when provided).
   "conversationId": "conv_1",
   "messages": [
     {
-      "eventId": "evt_201",
+      "messageId": "msg_201",
       "eventType": "message",
       "sender": { "type": "bot", "id": "re_bot" },
       "payload": { ... },
@@ -149,27 +149,27 @@ Returns latest 6 messages by default (or latest `page_size` when provided).
 
 **Before cursor (load older)**
 ```
-/chats/get-history?conversationId=conv_1&messages_before=evt_12
+/chats/get-history?conversationId=conv_1&messages_before=msg_12
 ```
-Returns latest 6 messages strictly before `evt_12` (e.g. `evt_6..evt_11`).
+Returns latest 6 messages strictly before `msg_12` (e.g. `msg_6..msg_11`).
 
 **After cursor (recover missed messages)**
 ```
-/chats/get-history?conversationId=conv_1&messages_after=evt_401
+/chats/get-history?conversationId=conv_1&messages_after=msg_401
 ```
-Returns latest 6 messages strictly after `evt_401` (e.g. `evt_402..evt_407`).
+Returns latest 6 messages strictly after `msg_401` (e.g. `msg_402..msg_407`).
 
 **Response**
 ```json
 {
   "conversationId": "conv_1",
   "messages": [
-    { "eventId": "evt_402", "payload": {} },
-    { "eventId": "evt_403", "payload": {} },
-    { "eventId": "evt_404", "payload": {} },
-    { "eventId": "evt_405", "payload": {} },
-    { "eventId": "evt_406", "payload": {} },
-    { "eventId": "evt_407", "payload": {} }
+    { "messageId": "msg_402", "payload": {} },
+    { "messageId": "msg_403", "payload": {} },
+    { "messageId": "msg_404", "payload": {} },
+    { "messageId": "msg_405", "payload": {} },
+    { "messageId": "msg_406", "payload": {} },
+    { "messageId": "msg_407", "payload": {} }
   ],
   "hasMore": true
 }
@@ -195,7 +195,7 @@ Returns latest 6 messages strictly after `evt_401` (e.g. `evt_402..evt_407`).
 **Response**
 JSON only:
 ```json
-{ "eventId": "evt_301", "requestState": "COMPLETED" }
+{ "messageId": "msg_301", "requestState": "COMPLETED" }
 ```
 
 **Usage**
@@ -219,10 +219,10 @@ JSON only:
 ### 4.5 `POST /chats/cancel`
 
 ```json
-{ "eventId": "evt_301" }
+{ "messageId": "msg_301" }
 ```
 
-- FE invokes cancel using the active user `eventId`.
+- FE invokes cancel using the active user `messageId`.
 - Cancellation is advisory toward ML, but BE strictly ignores late updates for cancelled/non-pending requests.
 
 ---
@@ -234,9 +234,9 @@ Request body is identical to `send-message`. This endpoint requires `Accept: tex
 **SSE (example)**
 ```txt
 event: connection_ack
-data: {"eventId":"evt_301","requestState":"PENDING"}
+data: {"messageId":"msg_301","requestState":"PENDING"}
 
-id: evt_401
+id: msg_401
 event: chat_event
 data: {JSON_CHAT_EVENT}
 
@@ -261,7 +261,7 @@ data: {"reason":"response_complete"}
 - **Dismiss/Cancel semantics**:
   - FE dismiss/cancel transitions the active request to `CANCELLED_BY_USER`
   - cancelled message is hidden by rendering rules
-  - if dismiss happens before `connection_ack` arrives, FE still marks local pending user event as `CANCELLED_BY_USER`; if ack arrives later, FE immediately cancels by that `eventId`.
+  - if dismiss happens before `connection_ack` arrives, FE still marks local pending user event as `CANCELLED_BY_USER`; if ack arrives later, FE immediately cancels by that `messageId`.
 
 ### 4.8 Template and Action Handling (canonical)
 
@@ -283,9 +283,8 @@ data: {"reason":"response_complete"}
 
 ```json
 {
-  "requestId": "req_123",
   "conversationId": "conv_1",
-  "userEventId": "evt_456",
+  "sourceMessageId": "msg_u_456",
   "event": { "...": "ChatEvent" },
   "ttlMs": 120000
 }
@@ -297,8 +296,7 @@ data: {"reason":"response_complete"}
 
 ```json
 {
-  "requestId": "req_123",
-  "respondingToEventId": "evt_456",
+  "sourceMessageId": "msg_u_456",
   "status": "success",
   "event": { "...": "Bot ChatEvent" },
   "context": {
@@ -341,8 +339,7 @@ data: {"reason":"response_complete"}
 
 ```json
 {
-  "requestId": "req_123",
-  "respondingToEventId": "evt_456",
+  "sourceMessageId": "msg_u_456",
   "status": "error",
   "error": {
     "code": "500",
@@ -358,7 +355,7 @@ data: {"reason":"response_complete"}
 ```json
 {
   "type": "cancel_request",
-  "requestId": "req_123",
+  "sourceMessageId": "msg_u_456",
   "reason": "TIMED_OUT_BY_BE"
 }
 ```
@@ -368,7 +365,7 @@ data: {"reason":"response_complete"}
 ## 6. SSE Rules
 
 - SSE is **BE → FE only**
-- `id` always equals `eventId` for chat events
+- `id` always equals `messageId` for chat events
 - Ordering strictly by creation time
 - Analytics & context events are **never sent**
 - FE uses history APIs for replay
@@ -379,15 +376,15 @@ The stream uses the following **event** values and comment lines:
 
 | Event / line | When | Format | FE handling |
 |--------------|------|--------|-------------|
-| **`event: chat_event`** | Bot (or visible info) event to display | `id: <eventId>\nevent: chat_event\ndata: <JSON ChatEvent>\n\n` | Parse `data` as `ChatEvent`; append to messages; `id` equals `eventId`. |
+| **`event: chat_event`** | Bot (or visible info) event to display | `id: <messageId>\nevent: chat_event\ndata: <JSON ChatEvent>\n\n` | Parse `data` as `ChatEvent`; append to messages; `id` equals `messageId`. |
 | **`event: connection_close`** | BE closing the stream (response complete / no-response / inactivity) | `event: connection_close\ndata: {"reason":"..."}\n\n` | Treat connection as closed for this request stream. |
 | **Comment** (no event) | On open | `: connected\n\n` | Keeps connection alive; client detects stream open. |
 | **Comment** (no event) | Keepalive while pending ML | `: keepalive\n\n` | Not delivered to EventSource listeners; used to refresh activity so BE does not close at 60s. |
 
 **Chat events (`event: chat_event`)**  
 - Only events that should be shown in the chat (e.g. bot messages, visible info) are sent with `event: chat_event`.
-- Each line: `id: <eventId>\nevent: chat_event\ndata: <JSON ChatEvent>\n\n`.
-- `data` is a single JSON object: the full `ChatEvent` (including `eventId`, `eventType`, `sender`, `payload`, `createdAt`, etc.).
+- Each line: `id: <messageId>\nevent: chat_event\ndata: <JSON ChatEvent>\n\n`.
+- `data` is a single JSON object: the full `ChatEvent` (including `messageId`, `eventType`, `sender`, `payload`, `createdAt`, etc.).
 
 **Other event values**  
 - **`connection_close`**: Sent by the BE once, immediately before closing the stream when:
@@ -487,7 +484,7 @@ sequenceDiagram
 
     FE->>BE: POST /chats/send-message-streamed (Accept: text/event-stream)
     BE->>BE: persist user event (PENDING)
-    BE-->>FE: SSE connection_ack {eventId, requestState:PENDING}
+    BE-->>FE: SSE connection_ack {messageId, requestState:PENDING}
     BE->>ML: invoke ML (method call)
 
     ML->>BE: success response
@@ -505,14 +502,14 @@ sequenceDiagram
     participant ML
 
     FE->>BE: POST /chats/send-message-streamed (Accept: text/event-stream)
-    BE-->>FE: SSE connection_ack {eventId, requestState:PENDING}
+    BE-->>FE: SSE connection_ack {messageId, requestState:PENDING}
     BE->>ML: enqueue request
 
     Note over BE: 120s timeout reached
     BE->>BE: mark TIMED_OUT_BY_BE
     BE->>ML: cancel_request (advisory)
     BE-->>FE: SSE connection_close (timeout path close)
-    FE->>BE: GET /chats/get-history?messages_after=<last_seen_eventId>
+    FE->>BE: GET /chats/get-history?messages_after=<last_seen_messageId>
     BE-->>FE: user event surfaced with requestState=TIMED_OUT_BY_BE
 
 ```
@@ -526,10 +523,10 @@ sequenceDiagram
     participant ML
 
     FE->>BE: POST /chats/send-message-streamed (Accept: text/event-stream)
-    BE-->>FE: SSE connection_ack {eventId, requestState:PENDING}
+    BE-->>FE: SSE connection_ack {messageId, requestState:PENDING}
     BE->>ML: enqueue request
 
-    FE->>BE: POST /chats/cancel {eventId}
+    FE->>BE: POST /chats/cancel {messageId}
     BE->>BE: mark CANCELLED_BY_USER
     BE->>ML: cancel_request
 
@@ -914,13 +911,13 @@ Property payload shape reference APIs (for template `data.property` / `data.prop
 
 ```txt
 event: connection_ack
-data: {"eventId":"evt_user_001","requestState":"PENDING"}
+data: {"messageId":"msg_user_001","requestState":"PENDING"}
 
-id: evt_bot_010
+id: msg_bot_010
 event: chat_event
 data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b1","sourceMessageId":"msg_u1","sequenceNumber":0,"isFinal":false,"messageType":"text","content":{"text":"Here are 2bhk properties in sector 32 gurgaon"}}}
 
-id: evt_bot_011
+id: msg_bot_011
 event: chat_event
 data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b2","sourceMessageId":"msg_u1","sequenceNumber":1,"isFinal":true,"messageType":"template","content":{"templateId":"property_carousel","data":{"properties":[{"id":"p1","type":"project","title":"2, 3 BHK Apartments","name":"Godrej Air","short_address":[{"display_name":"Sector 85"},{"display_name":"Gurgaon"}],"is_rera_verified":true,"inventory_canonical_url":"https://example.com/property/p1","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":["Ready to move"],"formatted_min_price":"3 Cr","formatted_max_price":"3.5 Cr","unit_of_area":"sq.ft.","display_area_type":"Built up area","min_selected_area_in_unit":2500,"max_selected_area_in_unit":4750,"inventory_configs":[]},{"id":"p2","type":"rent","title":"3 BHK flat","short_address":[{"display_name":"Sector 33"},{"display_name":"Sohna"},{"display_name":"Gurgaon"}],"region_entities":[{"name":"M3M Solitude Ralph Estate"}],"is_rera_verified":false,"is_verified":true,"inventory_canonical_url":"https://example.com/property/p2","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":[],"formatted_price":"30,000","unit_of_area":"sq.ft.","display_area_type":"Built up area","inventory_configs":[{"furnish_type_id":2,"area_value_in_unit":4750}]},{"id":"p4","type":"rent","title":"2 BHK independent floor","short_address":[{"display_name":"Sector 23"},{"display_name":"Sohna"},{"display_name":"Gurgaon"}],"is_rera_verified":true,"is_verified":false,"inventory_canonical_url":"https://example.com/property/p4","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":[],"formatted_price":"12,000","unit_of_area":"sq.ft.","display_area_type":"Built up area","inventory_configs":[{"furnish_type_id":3,"area_value_in_unit":750}]}]}}}}
 
@@ -928,7 +925,7 @@ event: connection_close
 data: {"reason":"response_complete"}
 ```
 
-> **Important:** For non-streaming turns (`responseRequired: false`), FE uses `POST /chats/send-message` and receives JSON `{ eventId, requestState: "COMPLETED" }`.
+> **Important:** For non-streaming turns (`responseRequired: false`), FE uses `POST /chats/send-message` and receives JSON `{ messageId, requestState: "COMPLETED" }`.
 
 ---
 
@@ -2133,7 +2130,7 @@ When a guest chat (`_ga`) becomes authenticated mid-session:
 - Dismiss and Cancel semantics:
   - both map to `CANCELLED_BY_USER` for the active request
   - message in `CANCELLED_BY_USER` is not rendered
-  - if dismiss happens before ack, FE marks the pending local user event cancelled; if ack arrives later, FE immediately cancels using ack `eventId`.
+  - if dismiss happens before ack, FE marks the pending local user event cancelled; if ack arrives later, FE immediately cancels using ack `messageId`.
 - RequestState rendering semantics:
   - `PENDING`, `COMPLETED`: render as usual
   - `ERRORED_AT_ML`, `TIMED_OUT_BY_BE`: render generic error text
@@ -2153,7 +2150,7 @@ When a guest chat (`_ga`) becomes authenticated mid-session:
   - shortlist/contact/brochure actions are FE-gated behind login
   - successful action posts hidden/shown `user_action` to BE/ML.
 - Cancel API semantics:
-  - FE calls `POST /chats/cancel` with current user `eventId`
+  - FE calls `POST /chats/cancel` with current user `messageId`
   - cancellation is advisory to ML; BE ignores late updates for cancelled/non-pending requests.
 
 ---
