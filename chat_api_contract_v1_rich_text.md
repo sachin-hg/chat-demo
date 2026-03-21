@@ -200,7 +200,6 @@ It is intended to be committed directly into a repository and used as the single
   ]
 }
 ```
-
 ---
 
 ## 2. Allowed `messageType` by Sender
@@ -379,6 +378,7 @@ data: {"reason":"response_complete"}
     "content": {
       "templateId": "property_carousel",
       "data": {
+        // structure should be similar to corresponding venus/casa APIs. this is just sample
         "properties": [
           {
             "id": "p1",
@@ -449,6 +449,7 @@ data: {"reason":"response_complete"}
       "data": {
         "action": "shortlist",
         "messageId": "msg_b_011",
+        // structure should be similar to corresponding venus/casa APIs. this is just sample
         "property": { "id": "p2", "type": "rent" }
       }
     }
@@ -468,6 +469,7 @@ data: {"reason":"response_complete"}
       "data": {
         "action": "crf_submitted",
         "messageId": "msg_b_011",
+        // structure should be similar to corresponding venus/casa APIs. this is just sample
         "property": { "id": "p2", "type": "rent" }
       },
       "derivedLabel": "The seller has been contacted, someone will reach out to you soon!"
@@ -477,7 +479,6 @@ data: {"reason":"response_complete"}
 ```
 
 #### 4.3.7 Text fallback: shortlist/contact template route
-`shortlist_property` / `contact_seller` template payloads intentionally use minimal property metadata (`id`, `type`) in current Phase 1 implementation.
 ```json
 {
   "sender": { "type": "user" },
@@ -499,7 +500,59 @@ data: {"reason":"response_complete"}
     "messageType": "template",
     "content": {
       "templateId": "shortlist_property",
-      "data": { "property": { "id": "p2", "type": "project" } }
+      "data": {
+        // structure should be similar to corresponding venus/casa APIs. this is just sample
+        "property": {
+          "id": "p2",
+          "type": "rent",
+          "title": "3 BHK flat",
+          "short_address": [{ "display_name": "Sector 33" }, { "display_name": "Sohna" }, { "display_name": "Gurgaon" }],
+          "region_entities": [{ "name": "M3M Solitude Ralph Estate" }],
+          "is_rera_verified": false,
+          "is_verified": true,
+          "inventory_canonical_url": "https://example.com/property/p2",
+          "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
+          "property_tags": [],
+          "formatted_price": "30,000",
+          "unit_of_area": "sq.ft.",
+          "display_area_type": "Built up area",
+          "inventory_configs": [{ "furnish_type_id": 2, "area_value_in_unit": 4750 }]
+        }
+      }
+    }
+  }
+}
+```
+```json
+{
+  "sender": { "type": "bot" },
+  "payload": {
+    "messageId": "msg_b_021",
+    "sourceMessageId": "msg_u_021",
+    "sequenceNumber": 0,
+    "isFinal": true,
+    "messageType": "template",
+    "content": {
+      "templateId": "contact_seller",
+      "data": {
+        // structure should be similar to corresponding venus/casa APIs. this is just sample
+        "property": {
+          "id": "p2",
+          "type": "rent",
+          "title": "3 BHK flat",
+          "short_address": [{ "display_name": "Sector 33" }, { "display_name": "Sohna" }, { "display_name": "Gurgaon" }],
+          "region_entities": [{ "name": "M3M Solitude Ralph Estate" }],
+          "is_rera_verified": false,
+          "is_verified": true,
+          "inventory_canonical_url": "https://example.com/property/p2",
+          "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
+          "property_tags": [],
+          "formatted_price": "30,000",
+          "unit_of_area": "sq.ft.",
+          "display_area_type": "Built up area",
+          "inventory_configs": [{ "furnish_type_id": 2, "area_value_in_unit": 4750 }]
+        }
+      }
     }
   }
 }
@@ -649,6 +702,7 @@ data: {"reason":"response_complete"}
     "content": {
       "templateId": "download_brochure",
       "data": {
+        // structure should be similar to corresponding venus/casa APIs. this is just sample
         "property": {
           "id": "p2",
           "type": "rent",
@@ -681,6 +735,7 @@ data: {"reason":"response_complete"}
       "data": {
         "action": "brochure_downloaded",
         "messageId": "msg_b_050",
+        // structure should be similar to corresponding venus/casa APIs. this is just sample
         "property": { "id": "p2", "type": "rent" }
       }
     }

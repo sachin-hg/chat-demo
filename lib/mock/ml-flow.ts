@@ -105,11 +105,12 @@ export function getNextBotEvents(
  
    
   if (messageType === "text" && (textMsg?.includes('contact seller'))) {
+    const property = MOCK_PROPERTIES.find((x) => x.id === "p2") ?? MOCK_PROPERTIES[0];
     return [
       botMessage(generateMessageId(), "template", {
         templateId: "contact_seller",
         data: {
-          "property": { "id": "p2", "type": "project" }
+          property,
         },
       }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
     ];
@@ -299,10 +300,11 @@ export function getNextBotEvents(
 
   // ————— Contract §4.4 / §4.41: shortlist this property as well (text) —————
   if (matchText(text, "shortlist this property", "shortlist as well", "shortlist this", "shortlist")) {
+    const property = MOCK_PROPERTIES.find((x) => x.id === "p2") ?? MOCK_PROPERTIES[0];
     return [
       botMessage(generateMessageId(), "template", {
         templateId: "shortlist_property",
-        data: { property: { id: "p2", type: "project" } },
+        data: { property },
       }, { sourceMessageId, sequenceNumber: 0, isFinal: true }),
     ];
   }
