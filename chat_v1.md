@@ -9,11 +9,6 @@ This file is the canonical consolidated reference for architecture, API contract
 2. Chat migration behavior when a user logs in mid-session.
 3. Context-out strategy is provisionally set to: include `context` in every ML response.
 
-Source documents merged:
-- `chat_system_architecture_v1.md`
-- `chat_api_contract_v1_rich_text.md`
-- `chat_api_rich_text_rendering_guide.md`
-
 ---
 
 ## Part A — System Architecture and API
@@ -688,10 +683,6 @@ This section records how the **chat-demo** implementation diverges from or exten
         },
         "templateId": { "type": "string" },
         "data": { "type": "object" },
-        "context": {
-          "type": "object",
-          "description": "Optional ML response context snapshot. Provisional strategy: include in every ML response."
-        },
         "fallbackText": {
           "type": "string",
           "description": "[Phase 2] Renderable rich text used when template is unsupported (plain text | Markdown preferred)"
@@ -709,8 +700,7 @@ This section records how the **chat-demo** implementation diverges from or exten
       "type": "object",
       "required": ["type"],
       "properties": {
-        "type": { "type": "string", "enum": ["user", "bot", "system"] },
-        "id": { "type": "string" }
+        "type": { "type": "string", "enum": ["user", "bot", "system"] }
       }
     },
 
@@ -718,12 +708,17 @@ This section records how the **chat-demo** implementation diverges from or exten
       "type": "string",
       "enum": [
         "PENDING",
+        "IN_PROGRESS",
         "COMPLETED",
         "ERRORED_AT_ML",
         "TIMED_OUT_BY_BE",
         "CANCELLED_BY_USER"
       ],
       "description": "BE-resolved request lifecycle state for this message/turn."
+    },
+    "summarisedChatContext": {
+      "type": "object",
+      "description": "Optional ML response context snapshot. Provisional strategy: include in every ML response."
     }
   },
 
