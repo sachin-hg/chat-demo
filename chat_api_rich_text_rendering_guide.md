@@ -1,3 +1,7 @@
+> **Deprecated document notice**
+> This file is retained for reference only.
+> Canonical v1 spec: `chat_v1.md`.
+
 # Chat API Contract — Frozen v1.0 (Phase 1)
 ## Rich Text Rendering Guide (Markdown Only)
 

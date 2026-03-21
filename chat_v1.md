@@ -1,8 +1,9 @@
 # Chat Platform Specification — v1
 
-This is the final published **v1** consolidated specification for the chat platform.
-It merges and preserves content from:
+Final published **v1** specification for this repository.
+This file is the canonical consolidated reference for architecture, API contract, and rich-text rendering.
 
+Source documents merged:
 - `chat_system_architecture_v1.md`
 - `chat_api_contract_v1_rich_text.md`
 - `chat_api_rich_text_rendering_guide.md`
@@ -10,21 +11,6 @@ It merges and preserves content from:
 ---
 
 ## Part A — System Architecture and API
-
-# Chat System Architecture & API Specification  
-## **Frozen v1.0**
-
-This document is the **canonical, frozen v1.0 specification** for the Chat system, covering:
-- API contracts
-- Request lifecycle & state machine
-- ML ↔ BE envelopes
-- SSE framing & connection rules
-- Backend database schemas
-- System invariants
-
-This file is intended to be **downloaded, versioned, and committed** as a single source of truth.
-
----
 
 ## 1. Formal Request State Machine
 
@@ -572,13 +558,6 @@ This section records how the **chat-demo** implementation diverges from or exten
 ---
 
 ## Part B — Chat API Contract and Rich Text Examples
-
-# Chat API Contract — **Frozen v1.0 (Updated: Rich Text Support)**
-
-This document defines the **final, frozen v1.0** contract for an LLM-powered real-estate chatbot.
-It is intended to be committed directly into a repository and used as the single source of truth for **FE, BE, LLM, and Analytics**.
-
----
 
 ## 0. Core Principles (v1.0)
 
@@ -1537,11 +1516,6 @@ This section documents current behavior in this repository where it differs from
 ---
 
 ## Part C — Rich Text Rendering Guide (Markdown Only)
-
-# Chat API Contract — Frozen v1.0 (Phase 1)
-## Rich Text Rendering Guide (Markdown Only)
-
-This guide documents **Phase 1 rendering** for chat rich text in this repository.
 
 ## 1) Scope (Phase 1)
 

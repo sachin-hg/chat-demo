@@ -1,3 +1,7 @@
+> **Deprecated document notice**
+> This file is retained for reference only.
+> Canonical v1 spec: `chat_v1.md`.
+
 # Chat API Contract — **Frozen v1.0 (Updated: Rich Text Support)**
 
 This document defines the **final, frozen v1.0** contract for an LLM-powered real-estate chatbot.
