@@ -10,7 +10,7 @@ import {
   updateMessageStateByUserMessageId,
 } from "@/lib/store";
 import { getNextBotEvents } from "@/lib/mock/ml-flow";
-import type { ChatEventFromUser, ChatEventToML, CancelEventToML } from "@/lib/contract-types";
+import type { ChatEvent, ChatEventFromUser, ChatEventToML, CancelEventToML } from "@/lib/contract-types";
 
 const DELAYS_MS = [61000];
 function getMockDelayMs(): number {
@@ -48,11 +48,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const stored = appendEvent({
-    ...event,
-    conversationId: event.conversationId,
-  });
-  createRequest(stored.messageId!, stored.conversationId);
+  const stored = appendEvent({ ...event });
+  createRequest(stored.messageId!, event.conversationId);
   stored.messageState = "PENDING";
 
   const mockDelay = getMockDelayMs();
@@ -78,7 +75,7 @@ export async function POST(request: NextRequest) {
       const abortHandler = () => {
         const cancelEventToML: CancelEventToML = {
           sender: { type: "system" },
-          conversationId: stored.conversationId,
+          conversationId: event.conversationId,
           messageIdToCancel: stored.messageId,
           cancelReason: "CANCELLED_BY_USER",
         };
@@ -99,7 +96,7 @@ export async function POST(request: NextRequest) {
           if (!closed) {
             const cancelEventToML: CancelEventToML = {
               sender: { type: "system" },
-              conversationId: stored.conversationId,
+              conversationId: event.conversationId,
               messageIdToCancel: stored.messageId,
               cancelReason: "TIMED_OUT_BY_BE",
             };
@@ -131,22 +128,22 @@ export async function POST(request: NextRequest) {
         const userId = loginAuthToken ? "authenticated_user" : undefined;
 
         const eventToML: ChatEventToML = {
-          conversationId: stored.conversationId,
+          conversationId: event.conversationId,
           messageId: stored.messageId!,
-          messageType: stored.messageType,
+          messageType: event.messageType,
           messageState: "PENDING",
           createdAt: stored.createdAt!,
           sender: {
-            type: stored.sender.type,
+            type: event.sender.type,
             userId,
             gaId,
           },
-          content: stored.content,
-          responseRequired: stored.responseRequired ?? false,
+          content: event.content,
+          responseRequired: event.responseRequired ?? false,
         };
 
         const recentEvents = getAllEvents();
-        const botEvents = getNextBotEvents(eventToML, recentEvents);
+        const botEvents = getNextBotEvents(eventToML, recentEvents as ChatEvent[]);
 
         for (const ev of botEvents) {
           const sourceState = getMessageStateByUserMessageId(ev.sourceMessageId);
@@ -157,7 +154,7 @@ export async function POST(request: NextRequest) {
           const storedBot = appendEvent({
             ...ev,
             sender: { type: "bot" },
-            conversationId: stored.conversationId,
+            conversationId: event.conversationId,
             // ML messages are persisted as completed user-visible messages.
             messageState: "COMPLETED",
           });

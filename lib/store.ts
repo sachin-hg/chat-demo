@@ -1,4 +1,4 @@
-import type { ChatEvent, SenderType } from "./contract-types";
+import type { ChatEvent, ChatEventFromUser, SenderType } from "./contract-types";
 
 const DEFAULT_CONV_ID = "c1";
 const MIGRATED_CONV_ID = "c2";
@@ -22,10 +22,12 @@ export interface ChatRequest {
   updatedAt: string;
 }
 
-export interface StoredEvent extends ChatEvent {
+export type StoredEvent = ChatEvent & {
   messageId: string;
   createdAt: string;
-}
+  /** Present on persisted user rows when tracking request lifecycle (not on `ChatEventFromUser` wire shape). */
+  messageState?: MessageState;
+};
 
 type SSEClient = (data: string) => void;
 
@@ -137,18 +139,20 @@ export function getHistory(
   };
 }
 
+/** Accepts any persisted-row input; `ChatEventFromUser` is listed explicitly because `Omit<StoredEvent, …>` does not overlap TS structurally with the wire shape. */
 export function appendEvent(
-  event: Omit<StoredEvent, "messageId" | "createdAt"> & { messageId?: string; createdAt?: string }
+  event:
+    | ChatEventFromUser
+    | (Omit<StoredEvent, "messageId" | "createdAt"> & { messageId?: string; createdAt?: string })
 ): StoredEvent {
-  const generatedMessageId = event.messageId ?? nextMessageId();
-  const stored: StoredEvent = {
+  const generatedMessageId =
+    (event as { messageId?: string }).messageId ?? nextMessageId();
+  // `ChatEvent` is a union; spreading into `StoredEvent` is validated at call sites.
+  const stored = {
     ...event,
     messageId: generatedMessageId,
-    // BE guarantees a messageId on all persisted events.
-    messageType: event.messageType,
-    content: event.content,
-    createdAt: event.createdAt ?? now(),
-  };
+    createdAt: (event as { createdAt?: string }).createdAt ?? now(),
+  } as StoredEvent;
   events.push(stored);
   // SSE is for bot → FE only; FE already has the user message from send-message response (dedupe)
   if (stored.sender.type === "bot") {
@@ -228,7 +232,20 @@ export function hasPendingRequest(conversationId: string): boolean {
 function broadcast(conversationId: string, event: StoredEvent) {
   
   const clients = sseClients.get(conversationId);
-  console.log("broadcast", "convId: ", conversationId, "messageId: ", event.messageId, "sender: ", event.sender.type, "messageType: ", event.messageType, "clients: ", clients?.size);
+  const mt = "messageType" in event ? (event as { messageType: string }).messageType : "(n/a)";
+  console.log(
+    "broadcast",
+    "convId: ",
+    conversationId,
+    "messageId: ",
+    event.messageId,
+    "sender: ",
+    event.sender.type,
+    "messageType: ",
+    mt,
+    "clients: ",
+    clients?.size
+  );
   if (!clients?.size) return;
   const payload = JSON.stringify(event);
   const line = `id: ${event.messageId}\nevent: chat_event\ndata: ${payload}\n\n`;
@@ -280,7 +297,9 @@ function resolveMessageState(event: StoredEvent): MessageState | undefined {
   if (direct) return direct.state;
 
   // bot responses tied through sourceMessageId
-  const fromSource = getRequestBySourceMessageId(event.sourceMessageId);
+  const fromSource = getRequestBySourceMessageId(
+    "sourceMessageId" in event ? (event as { sourceMessageId?: string }).sourceMessageId : undefined
+  );
   if (fromSource) return fromSource.state;
 
   return undefined;
@@ -296,15 +315,14 @@ function withMessageState(event: StoredEvent): StoredEvent {
   };
 }
 
-function pushEventWithoutBroadcast(event: Omit<StoredEvent, "messageId" | "createdAt"> & { messageId?: string; createdAt?: string }) {
-  const generatedMessageId = event.messageId ?? nextMessageId();
-  const stored: StoredEvent = {
+function pushEventWithoutBroadcast(event: Parameters<typeof appendEvent>[0]) {
+  const generatedMessageId =
+    (event as { messageId?: string }).messageId ?? nextMessageId();
+  const stored = {
     ...event,
     messageId: generatedMessageId,
-    messageType: event.messageType,
-    content: event.content,
-    createdAt: event.createdAt ?? now(),
-  };
+    createdAt: (event as { createdAt?: string }).createdAt ?? now(),
+  } as StoredEvent;
   events.push(stored);
 }
 
@@ -316,6 +334,7 @@ function seedLoggedInConversationIfNeeded(conversationId: string) {
     sender: { type: "user" },
     messageType: "text",
     content: { text: "Show me 3 BHK in Gurgaon" },
+    responseRequired: false,
     createdAt: "2026-01-06T10:00:00.000Z",
   });
   pushEventWithoutBroadcast({
@@ -327,7 +346,8 @@ function seedLoggedInConversationIfNeeded(conversationId: string) {
     messageState: "COMPLETED",
     content: { text: "Here are some older recommendations from your previous logged-in chat." },
     createdAt: "2026-01-06T10:00:02.000Z",
-  });
+    responseRequired: false,
+  } as Parameters<typeof appendEvent>[0]);
 }
 
 export function migrateConversation(currentConversationId: string): { newConversationId: string; migrated: boolean } {

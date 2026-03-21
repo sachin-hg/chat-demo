@@ -23,11 +23,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const stored = appendEvent({
-    ...event,
-    conversationId: event.conversationId,
-  });
-  createRequest(stored.messageId!, stored.conversationId);
+  const stored = appendEvent({ ...event });
+  createRequest(stored.messageId!, event.conversationId);
   completeRequest(stored.messageId!);
   stored.messageState = "COMPLETED";
 
