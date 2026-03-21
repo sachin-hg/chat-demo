@@ -72,21 +72,21 @@ CANCELLED_BY_USER
 
 ## 4. API Contracts
 
-### 4.0 Contract Interfaces (from `lib/contract-types.ts`)
+### 4.0 Contract Interfaces (from [`lib/contract-types.ts`](lib/contract-types.ts))
 
-- `Sender`: base sender shape (`type`).
-- `SenderForML extends Sender`: sender plus optional `userId`/`gaId` derived by BE from headers.
-- `ChatPayloadContent`: content envelope (`text`, `templateId`, `data`, `derivedLabel`).
-- `ChatEventFromUser`: FE -> BE event shape for send-message APIs.
-- `ChatEventToML`: BE -> ML event shape for user turn dispatch.
-- `CancelEventToML`: BE -> ML cancellation signal shape.
-- `ChatEventFromML`: ML -> BE event shape (includes `sourceMessageId`, `messageState`, optional `error`, optional `summarisedChatContext`).
-- `ChatEventToUser`: BE -> FE event shape for history and stream delivery.
-- `SendMessageResponse`: ack shape for send-message/send-message-streamed (`messageId`, `messageState?`).
-- `GetHistoryResponse`: history API shape (`conversationId`, `messages: ChatEventToUser[]`, `hasMore`).
-- `GetConversationIdResponse`: conversation lookup shape (`conversationId`, `isNew`).
-- `GetChatsResponse`: list shape for chat threads.
-- `ChatEvent` (union): `ChatEventFromUser | ChatEventToML | CancelEventToML | ChatEventFromML | ChatEventToUser`.
+- [`Sender`](lib/contract-types.ts#L19): base sender shape (`type`).
+- [`SenderForML`](lib/contract-types.ts#L23) extends [`Sender`](lib/contract-types.ts#L19): sender plus optional `userId`/`gaId` derived by BE from headers.
+- [`ChatPayloadContent`](lib/contract-types.ts#L29): content envelope (`text`, `templateId`, `data`, `derivedLabel`).
+- [`ChatEventFromUser`](lib/contract-types.ts#L38): FE -> BE event shape for send-message APIs.
+- [`ChatEventToML`](lib/contract-types.ts#L51): BE -> ML event shape for user turn dispatch.
+- [`CancelEventToML`](lib/contract-types.ts#L65): BE -> ML cancellation signal shape.
+- [`ChatEventFromML`](lib/contract-types.ts#L76): ML -> BE event shape (includes `sourceMessageId`, `messageState`, optional `error`, optional `summarisedChatContext`).
+- [`ChatEventToUser`](lib/contract-types.ts#L94): BE -> FE event shape for history and stream delivery.
+- [`SendMessageResponse`](lib/contract-types.ts#L123): ack shape for send-message/send-message-streamed (`messageId`, `messageState?`).
+- [`GetHistoryResponse`](lib/contract-types.ts#L128): history API shape (`conversationId`, `messages`: [`ChatEventToUser`](lib/contract-types.ts#L94)`[]`, `hasMore`).
+- [`GetConversationIdResponse`](lib/contract-types.ts#L134): conversation lookup shape (`conversationId`, `isNew`).
+- [`GetChatsResponse`](lib/contract-types.ts#L139): list shape for chat threads.
+- [`ChatEvent`](lib/contract-types.ts#L116) (union): [`ChatEventFromUser`](lib/contract-types.ts#L38) | [`ChatEventToML`](lib/contract-types.ts#L51) | [`CancelEventToML`](lib/contract-types.ts#L65) | [`ChatEventFromML`](lib/contract-types.ts#L76) | [`ChatEventToUser`](lib/contract-types.ts#L94).
 
 ---
 
