@@ -155,6 +155,8 @@ Rules:
 - `messages_before` and `messages_after` are mutually exclusive.
 - Returned `messages` are in ascending creation order.
 - User request events whose request state is `CANCELLED_BY_USER` are excluded by BE in `get-history` response.
+- **Post-login migration (§4.4.1)**: After guest `c1` is migrated to authenticated `c2`, any `get-history` with `conversationId=c2` must return a **single logical thread** for that user: messages that existed on `c2` from **earlier authenticated sessions** (if any), **plus** messages **migrated from `c1`**, **plus** messages created on `c2` **after** migration in the current session. Cursor/pagination rules above apply to this merged ordering.
+
 
 Example (`messages_before`):
 `GET /chats/get-history?conversationId=conv_1&page_size=6&messages_before=msg_420`
@@ -622,7 +624,7 @@ sequenceDiagram
 
 **Interfaces used**
 - Conversation lookup: `GetConversationIdResponse`
-- Post-migration history load: `GetHistoryResponse` (`ChatEventToUser[]`)
+- Optional history refresh: `GetHistoryResponse` (`ChatEventToUser[]`) — FE may call anytime; **not required** immediately after migrate (see §4.3 / §4.4.1).
 
 ```mermaid
 sequenceDiagram
@@ -640,13 +642,42 @@ sequenceDiagram
     alt Migration strategy enabled
       BE->>DB: Move c1-tagged events/requests to c2
       BE-->>FE: { newConversationId: "c2" }
-      FE->>BE: GET /chats/get-history?conversationId=c2
-      BE-->>FE: old c2 history + migrated c1 history
-      Note over FE: FE switches active conversationId to c2
+      Note over FE: FE switches active conversationId to c2<br/>All subsequent FE→BE calls use conversationId=c2<br/>(send-message, get-history, cancel, stream, …)
+      Note over BE: BE must treat c2 as one logical thread:<br/>prior-session c2 history + migrated c1 + current-session c2<br/>(ordering/pagination per §4.3)
     else Migration strategy disabled
       BE-->>FE: {}
       Note over FE: FE continues on c1
     end
+```
+
+---
+
+### 10.6 Context-Out Option 3 (Separate Context Message)
+
+**Interfaces used**
+- FE -> BE: `ChatEventFromUser`
+- BE -> ML: `ChatEventToML`
+- ML -> BE: `ChatEventFromML` (including standalone `messageType: "context"` on context change)
+- BE -> FE (`chat_event`): `ChatEventToUser`
+
+```mermaid
+sequenceDiagram
+    participant FE
+    participant BE
+    participant ML
+
+    FE->>BE: POST /chats/send-message-streamed (ChatEventFromUser)
+    BE-->>FE: SSE connection_ack {messageId, messageState:PENDING}
+    BE->>ML: dispatch ChatEventToML
+
+    ML->>BE: bot content event (messageState=IN_PROGRESS, sourceMessageId=msg_u_1)
+    BE-->>FE: SSE chat_event (bot content)
+
+    Note over ML: Context changed during generation
+    ML->>BE: context event (messageType=context, sourceMessageId=msg_u_1, messageState=COMPLETED)
+    BE->>BE: mark sourceMessageId msg_u_1 as COMPLETED
+    BE-->>FE: SSE chat_event (context message)
+    BE-->>FE: SSE connection_close (response_complete)
 ```
 
 ---
@@ -2021,9 +2052,10 @@ When a guest chat (`_ga`) becomes authenticated mid-session:
 3. BE behavior:
    - if migration strategy is enabled, BE returns `{ "newConversationId": "c2" }` and updates stored rows from `c1` to `c2`.
    - if disabled, BE may return `{}` (no switch).
+   - **Merge responsibility**: for every subsequent API that uses `conversationId=c2` (`get-history`, `send-message*`, `cancel`, stream URLs, etc.), BE must treat the conversation as **one logical thread**: prior-session `c2` history (if any), migrated `c1` content, and new `c2` messages in this session—so FE does **not** need to merge IDs client-side.
 4. FE behavior after successful migration:
-   - switch active conversation to `c2`
-   - fetch history on `c2` (with/without cursors) and continue all next turns on `c2`
+   - switch active conversation to `c2` and use `c2` on **all** later BE calls (same as any other conversation id).
+   - **Optional**: FE may call `get-history` on `c2` (with/without cursors) to refresh the UI; **not required** immediately after migrate (e.g. in-memory transcript can continue until the next natural history load).
    - include `login_auth_token` on subsequent calls.
 
 **Known edge case:** migration should be done when no in-flight turn is pending; otherwise late events can be split across pre/post migration boundaries.

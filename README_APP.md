@@ -85,7 +85,7 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
   - ML `messageState` is applied to the source user message identified by `sourceMessageId`.
 - `POST /api/migrate-chat?currentConversationId=c1` with `login_auth_token` header
   - When migration strategy is enabled, BE returns `{ newConversationId: "c2" }` and merges/moves c1-tagged history to c2 in mock DB.
-  - FE switches to `c2`, reloads history, and continues the conversation on `c2`.
+  - FE switches to `c2` for all subsequent API calls; an immediate `get-history` refresh is **optional** (BE merges prior c2 + migrated c1 + new c2 on any `get-history` call with `conversationId=c2`).
 
 ## UI Notes
 
