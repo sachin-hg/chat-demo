@@ -236,6 +236,11 @@ It is intended to be committed directly into a repository and used as the single
 
 ## 4. Examples
 
+Property payload shape reference APIs (for template `data.property` / `data.properties[]`):
+
+- Venus project details: [PROJECT_DEDICATED_DETAILS](https://venus.housing.com/api/v9/new-projects/288866/android?fixed_images_hash=true&include_derived_floor_plan=true&api_name=PROJECT_DEDICATED_DETAILS&source=android)
+- Casa resale details: [RESALE_DEDICATED_DETAILS](https://casa.housing.com/api/v2/flat/18151449/resale/details?api_name=RESALE_DEDICATED_DETAILS&source=android)
+
 ### 4.1 Context on Chat Open (SRP)
 
 > 📎 **Filter Reference:** See [`filterMap.js`](https://github.com/elarahq/housing.brahmand/blob/a17bf76ad06f0da180b270c840b1fb4ab14eb627/common/modules/filter-encoder/source/filterMap.js) for all possible filter keys.  
@@ -449,7 +454,6 @@ data: {"reason":"response_complete"}
       "data": {
         "action": "shortlist",
         "messageId": "msg_b_011",
-        // structure should be similar to corresponding venus/casa APIs. this is just sample
         "property": { "id": "p2", "type": "rent" }
       }
     }
@@ -469,7 +473,6 @@ data: {"reason":"response_complete"}
       "data": {
         "action": "crf_submitted",
         "messageId": "msg_b_011",
-        // structure should be similar to corresponding venus/casa APIs. this is just sample
         "property": { "id": "p2", "type": "rent" }
       },
       "derivedLabel": "The seller has been contacted, someone will reach out to you soon!"
@@ -587,8 +590,8 @@ data: {"reason":"response_complete"}
             "title": "Which sector 32 are you referring to?",
             "type": "locality_single_select",
             "options": [
-              { "id": "uuid1", "title": "Sector 32, Gurgaon", "city": "Gurgaon", "type": "Locality" },
-              { "id": "uuid2", "title": "Sector 32, Faridabad", "city": "Faridabad", "type": "Locality" }
+              { "id": "uuid1", "title": "Sector 32", "city": "Gurgaon", "type": "Locality" },
+              { "id": "uuid2", "title": "Sector 32", "city": "Faridabad", "type": "Locality" }
             ]
           },
           {
@@ -597,8 +600,8 @@ data: {"reason":"response_complete"}
             "type": "locality_single_select",
             "entity": "sector 21",
             "options": [
-              { "id": "uuid3", "title": "Sector 21, Gurgaon", "city": "Gurgaon", "type": "Locality" },
-              { "id": "uuid4", "title": "Sector 21, Faridabad", "city": "Faridabad", "type": "Locality" }
+              { "id": "uuid3", "title": "Sector 21", "city": "Gurgaon", "type": "Locality" },
+              { "id": "uuid4", "title": "Sector 21", "city": "Faridabad", "type": "Locality" }
             ]
           }
         ],
@@ -735,7 +738,6 @@ data: {"reason":"response_complete"}
       "data": {
         "action": "brochure_downloaded",
         "messageId": "msg_b_050",
-        // structure should be similar to corresponding venus/casa APIs. this is just sample
         "property": { "id": "p2", "type": "rent" }
       }
     }
