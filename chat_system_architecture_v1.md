@@ -152,12 +152,21 @@ Returns latest 6 messages strictly before `evt_12` (e.g. `evt_6..evt_11`).
 ```
 /chats/get-history?conversationId=conv_1&messages_after=evt_401
 ```
+Returns latest 6 messages strictly after `evt_401` (e.g. `evt_402..evt_407`).
 
 **Response**
 ```json
 {
   "conversationId": "conv_1",
-  "messages": [ { "eventId": "evt_401", "payload": {} } ]
+  "messages": [
+    { "eventId": "evt_402", "payload": {} },
+    { "eventId": "evt_403", "payload": {} },
+    { "eventId": "evt_404", "payload": {} },
+    { "eventId": "evt_405", "payload": {} },
+    { "eventId": "evt_406", "payload": {} },
+    { "eventId": "evt_407", "payload": {} }
+  ],
+  "hasMore": true
 }
 ```
 
@@ -194,7 +203,7 @@ event: connection_close
 data: {"reason":"response_complete"}
 ```
 
-If `Accept` is not `text/event-stream`, the BE returns JSON:
+> **Important:** If `Accept` is not `text/event-stream`, the BE returns JSON (non-streaming mode):
 ```json
 { "eventId": "evt_301", "requestState": "PENDING" }
 ```
@@ -234,7 +243,7 @@ In Phase 1, FE opens a new stream **per message** by calling `POST /chats/send-m
 - **Awaiting indicator**: FE shows inline awaiting status only when:
   - outbound event has `payload.responseRequired === true`, and
   - final bot response (`payload.isFinal === true`) has not yet been received.
-- **Timeout**: FE maintains a local reply timeout safeguard (current app value: `25s`), after which timeout UI is shown.
+- **Timeout**: FE maintains a local reply timeout safeguard (current app value: `25s`); after timeout UI is shown, FE relies on polling (`get-history` with `messages_after`) until it receives the response for that message.
 - **Input/CTA behavior**:
   - while `sending`: composer submit disabled
   - while `awaiting`: template actions disabled, composer shows **Cancel**
@@ -429,7 +438,6 @@ updated_at TIMESTAMP
 
 ### 10.1 User Message → ML → FE (Happy Path)
 
-![Sequence Diagram](./sd1.png)
 ```
 sequenceDiagram
     participant FE as Web FE
@@ -438,7 +446,7 @@ sequenceDiagram
 
     FE->>BE: POST /chats/send-message (Accept: text/event-stream)
     BE->>BE: persist user event (PENDING)
-    BE-->>FE: SSE connection_ack (eventId)
+    BE-->>FE: SSE connection_ack {eventId, requestState:PENDING}
     BE->>ML: invoke ML (method call)
 
     ML->>BE: success response
@@ -449,62 +457,64 @@ sequenceDiagram
 ---
 
 ### 10.2 Timeout at BE (No ML Response)
-![Sequence Diagram](./sd2.png)
 ```
 sequenceDiagram
     participant FE
     participant BE
     participant ML
 
-    FE->>BE: send-message
+    FE->>BE: POST /chats/send-message (Accept: text/event-stream)
+    BE-->>FE: SSE connection_ack {eventId, requestState:PENDING}
     BE->>ML: enqueue request
 
     Note over BE: 120s timeout reached
     BE->>BE: mark TIMED_OUT_BY_BE
     BE->>ML: cancel_request (advisory)
-    BE-->>FE: SSE timeout message
+    BE-->>FE: SSE connection_close (timeout path close)
+    FE->>BE: GET /chats/get-history?messages_after=<last_seen_eventId>
+    BE-->>FE: user event surfaced with requestState=TIMED_OUT_BY_BE
 
 ```
 ---
 
 ### 10.3 Cancel by User
-![Sequence Diagram](./sd3.png)
 ```
 sequenceDiagram
     participant FE
     participant BE
     participant ML
 
-    FE->>BE: send-message
+    FE->>BE: POST /chats/send-message (Accept: text/event-stream)
+    BE-->>FE: SSE connection_ack {eventId, requestState:PENDING}
     BE->>ML: enqueue request
 
-    FE->>BE: cancel(eventId)
+    FE->>BE: POST /chats/cancel {eventId}
     BE->>BE: mark CANCELLED_BY_USER
     BE->>ML: cancel_request
 
     ML->>BE: late response
-    BE->>BE: discard + alert
+    BE->>BE: discard (strict non-pending gate)
 
 ```
 
 ---
 
 ### 10.4 SSE Reconnect Flow
-![Sequence Diagram](./sd4.png)
 ```
 sequenceDiagram
     participant FE
     participant BE
 
-    FE->>BE: GET /chats/stream
-    BE-->>FE: SSE events
+    FE->>BE: POST /chats/send-message (Accept: text/event-stream)
+    BE-->>FE: SSE connection_ack + chat_event(s)
+    BE-->>FE: SSE connection_close (request-scoped stream ends)
 
-    Note over FE: connection drops
+    Note over FE: FE missed events for this turn
 
     FE->>BE: GET /chats/get-history?messages_after=evt_401
     BE-->>FE: missed messages
 
-    FE->>BE: GET /chats/stream (resume)
+    FE->>BE: Next turn opens a fresh POST /chats/send-message stream
 
 ```
 

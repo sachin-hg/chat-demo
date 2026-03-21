@@ -58,20 +58,20 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
 ## API (aligned with spec)
 
 - `GET /api/chats/get-conversation-id` → `{ conversationId, isNew }` (`isNew` is demo-app convenience; not required for production clients)
-- `GET /api/chats/get-history?conversationId=...` with `page` + `page_size`, or `messages_after=evt_xxx`, or `messages_before=evt_xxx` + `page_size`, or `last=N`.
+- `GET /api/chats/get-history?conversationId=...` with optional `page_size` (default 6), and optional cursor `messages_before` or `messages_after`.
 - `POST /api/chats/send-message` body `{ event: ChatEvent }`
   - If `Accept: text/event-stream`, the response is an SSE stream:
     - **`event: connection_ack`** — immediate ack: `data: { "eventId": "...", "requestState": "PENDING" }`
     - **`event: chat_event`** — bot events streamed as they’re produced: `id: <eventId>`, `data: <JSON ChatEvent>`
     - **`event: connection_close`** — emitted when response is complete (`isFinal: true`), response is not required, or stream inactivity reaches 15s.
-  - Otherwise returns JSON `{ eventId, requestState }` (legacy / non-streaming clients).
+  - **Important:** if `Accept` is not `text/event-stream`, this endpoint returns JSON `{ eventId, requestState }` (non-streaming mode).
 
 ## UI Notes
 
 - Transient templates (`share_location`, `shortlist_property`, `contact_seller`, `nested_qna`) are rendered only for the latest bot message.
 - `context` and `analytics` messages are never rendered.
 - Input is hidden while sticky `nested_qna` is active.
-- Reply timeout is 25s with Retry/Dismiss.
+- Reply timeout is 25s with Retry/Dismiss; FE then relies on polling (`get-history` with `messages_after`) until response arrives for that message.
 
 ## Implementation divergences
 

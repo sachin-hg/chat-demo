@@ -308,6 +308,8 @@ event: connection_close
 data: {"reason":"response_complete"}
 ```
 
+> **Important:** If `Accept` is not `text/event-stream`, BE responds in non-streaming JSON mode with `{ eventId, requestState }`.
+
 ---
 
 ### 4.3 Demo-flow-aligned examples
@@ -612,7 +614,7 @@ Apps should send identity via cookie headers:
 - FE starts awaiting UI only when `responseRequired: true` and no final bot event has been received.
 - FE stops loader/awaiting and marks response complete on first bot event with `isFinal: true`.
 - FE treats `connection_close` as stream completion for the turn.
-- FE keeps a local timeout safeguard (current app value: 25s). On timeout, FE shows Retry/Dismiss.
+- FE keeps a local timeout safeguard (current app value: 25s). On timeout, FE shows Retry/Dismiss and then relies on polling (`get-history` with `messages_after`) until it receives the response for that message.
 - Input/CTA behavior:
   - while sending: input submit disabled
   - while awaiting: template actions disabled and Cancel shown in composer
@@ -720,7 +722,7 @@ This section documents current behavior in this repository where it differs from
   - `connection_ack` (immediate),
   - `chat_event` (0..N),
   - `connection_close` (`reason` in `response_complete | response_not_required | inactivity_15s`).
-- FE reply timeout is 25s (`replyStatus: timeout`), with Retry and Dismiss.
+- FE reply timeout is 25s (`replyStatus: timeout`), with Retry and Dismiss; FE then relies on polling (`get-history` with `messages_after`) until response arrives for that message.
 - Canonical stream/cancel/runtime semantics are defined in §4.5 and examples in §4.2.
 
 ### A.2 Rendering behavior
