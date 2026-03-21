@@ -3,6 +3,15 @@
 Final published **v1** specification for this repository.
 This file is the canonical consolidated reference for architecture, API contract, and rich-text rendering.
 
+## Open Items (Not Closed Yet)
+
+1. Property carousel metadata: `property_count` vs `hasViewMore`.
+2. Chat migration behavior when a user logs in mid-session.
+3. Passing context out of chat (options under discussion):
+   - Context in every ML response (seems most practical).
+   - Separate context event in stream (might not work properly).
+   - Separate API to pull context from ML (preferred).
+
 Source documents merged:
 - `chat_system_architecture_v1.md`
 - `chat_api_contract_v1_rich_text.md`
@@ -1073,19 +1082,6 @@ data: {"reason":"response_complete"}
       },
       "derivedLabel": "Tell me more about Godrej Air"
     }
-  }
-}
-```
-```json
-{
-  "sender": { "type": "bot" },
-  "payload": {
-    "messageId": "msg_b_018",
-    "sourceMessageId": "msg_u_018",
-    "sequenceNumber": 0,
-    "isFinal": false,
-    "messageType": "markdown",
-    "content": { "text": "# 3 BHK Apartment\nBy Godrej Properties Ltd.\n📍 Godrej Nature Plus, Sector 85, Gurgaon\n\n---\n\n**Property Overview**\nHere is an excellent 3 BHK Apartment available for buy in Gurgaon. Surrounded by natural greens and equipped with numerous amenities, this spacious home offers a comfortable lifestyle with good connectivity to major landmarks.\n\n---\n\n**Configuration**\nType: 3 BHK Apartment\nBuilt-up Area: 1,820 sq.ft.\nBedrooms: 3 | Bathrooms: 3 | Balconies: 3\nFloor: 17\nFurnishing: Semi-Furnished\nPrice: ₹2.8 Cr\nParking: 2 parking space(s)\n\n---\n\n**Amenities**\nParking, Regular Water Supply, Gym, Swimming Pool, Kids Area, Sports Facility, Lift, Power Backup, Intercom, CCTV\n\n---\n\n**Property Manager**\nGodrej Properties Ltd is the real estate segment of the 120-year Godrej Group, known for excellent craftsmanship in contemporary housing projects." }
   }
 }
 ```

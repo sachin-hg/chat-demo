@@ -24,6 +24,13 @@ const REPLY_TIMEOUT_MS = 25000;
 
 type ReplyStatus = "idle" | "sending" | "awaiting" | "timeout" | "error";
 
+function isNetworkFailure(error: unknown): boolean {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return true;
+  if (error instanceof TypeError) return true;
+  const msg = (error as { message?: string })?.message?.toLowerCase?.() ?? "";
+  return msg.includes("network") || msg.includes("fetch") || msg.includes("internet");
+}
+
 async function postAck(path: string, body: unknown): Promise<{ success: true }> {
   const res = await fetch(path, {
     method: "POST",
@@ -360,6 +367,10 @@ function ChatPageContent() {
   const toast = useToast();
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [showBackToBottom, setShowBackToBottom] = useState(false);
+  const [isOffline, setIsOffline] = useState<boolean>(
+    typeof navigator !== "undefined" ? !navigator.onLine : false
+  );
+  const [networkError, setNetworkError] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const knownEventIdsRef = useRef<Set<string>>(new Set());
   const replyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -480,10 +491,28 @@ function ChatPageContent() {
     if (!el) return;
     const handleScroll = () => {
       const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-      setShowBackToBottom(distFromBottom > 120);
+      // Show only when user is significantly above bottom (at least half viewport).
+      setShowBackToBottom(distFromBottom > el.clientHeight * 0.5);
     };
     el.addEventListener("scroll", handleScroll, { passive: true });
     return () => el.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const onOnline = () => {
+      setIsOffline(false);
+      setNetworkError(false);
+    };
+    const onOffline = () => {
+      setIsOffline(true);
+      setNetworkError(true);
+    };
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
   }, []);
 
   const loadMoreOlder = useCallback(async () => {
@@ -545,6 +574,10 @@ function ChatPageContent() {
   const handleSendText = useCallback(
     async (text: string) => {
       if (!conversationId || !text.trim() || sending || replyStatus === "awaiting") return;
+      if (isOffline) {
+        setNetworkError(true);
+        return;
+      }
       const trimmed = text.trim();
       if (isDemo) demoLog("text: sending", trimmed);
       const event: ChatEvent = {
@@ -578,6 +611,7 @@ function ChatPageContent() {
           event,
           {
             onAck: (ack) => {
+              setNetworkError(false);
               ackReceived = true;
               currentPendingLocalEventIdRef.current = null;
               if (cancelledPendingLocalIdsRef.current.has(pendingId)) {
@@ -614,6 +648,7 @@ function ChatPageContent() {
         // Abort can happen on cancel/timeout; don't flip UI into "error".
         if (abortController.signal.aborted) return;
         console.error(e);
+        if (isNetworkFailure(e)) setNetworkError(true);
         setReplyStatus("error");
         if (!ackReceived) setMessages((prev) => prev.filter((m) => m.eventId !== pendingId));
       } finally {
@@ -640,6 +675,10 @@ function ChatPageContent() {
   const handleUserAction = useCallback(
     async (event: ChatEvent) => {
       if (!conversationId || sending || replyStatus === "awaiting") return;
+      if (isOffline) {
+        setNetworkError(true);
+        return;
+      }
 
       const data = (event.payload.content?.data ?? {}) as Record<string, unknown>;
       const rawAction = (data.action as string | undefined) ?? (data.actionId as string | undefined);
@@ -666,6 +705,7 @@ function ChatPageContent() {
       try {
         if (!expectsResponse) {
           const ack = await sendMessage(fullEvent);
+          setNetworkError(false);
           ackReceived = true;
           currentPendingLocalEventIdRef.current = null;
           if (cancelledPendingLocalIdsRef.current.has(pendingId)) {
@@ -691,6 +731,7 @@ function ChatPageContent() {
             fullEvent,
             {
               onAck: (ack) => {
+                setNetworkError(false);
                 ackReceived = true;
                 currentPendingLocalEventIdRef.current = null;
                 if (cancelledPendingLocalIdsRef.current.has(pendingId)) {
@@ -729,6 +770,7 @@ function ChatPageContent() {
         // Abort can happen on cancel/timeout; don't flip UI into "error".
         if (abortController.signal.aborted) return;
         console.error(e);
+        if (isNetworkFailure(e)) setNetworkError(true);
         setReplyStatus("error");
         if (!ackReceived) setMessages((prev) => prev.filter((m) => m.eventId !== pendingId));
       } finally {
@@ -852,6 +894,11 @@ function ChatPageContent() {
   }, []);
 
   const handleRetry = useCallback(async () => {
+    if (isOffline) {
+      setNetworkError(true);
+      return;
+    }
+    setNetworkError(false);
     const event = lastSentEventRef.current;
     if (!event || !conversationId || sending) return;
     await cancelAndHideCurrentRequest();
@@ -885,13 +932,14 @@ function ChatPageContent() {
     } catch (e) {
       if (!abortController.signal.aborted) {
         console.error(e);
+        if (isNetworkFailure(e)) setNetworkError(true);
         setReplyStatus("error");
       }
     } finally {
       if (activeSendStreamAbortRef.current === abortController) activeSendStreamAbortRef.current = null;
       setSending(false);
     }
-  }, [conversationId, sending, startAwaitingReply, cancelAndHideCurrentRequest]);
+  }, [conversationId, sending, startAwaitingReply, cancelAndHideCurrentRequest, isOffline]);
 
   const handleCancel = useCallback(async () => {
     if (replyStatus !== "awaiting") return;
@@ -1043,10 +1091,31 @@ function ChatPageContent() {
                 event={msg}
                 onUserAction={handleUserAction}
                 // onCallNow={handleCallNow}
-                actionsDisabled={replyStatus === "awaiting"}
+                actionsDisabled={replyStatus === "awaiting" || isOffline}
                 isLastMessage={index === messages.length - 1}
               />
             ))}
+          </div>
+        )}
+
+        {(isOffline || networkError) && (
+          <div className="mx-0 mb-3 flex items-center gap-3 px-4 py-3 bg-white rounded-2xl border border-[#e9d7d7]">
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-[#D04848]">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M2 8l10-4 10 4-10 4-10-4z" />
+                <path d="M6 10v4c0 3 3 6 6 6" />
+                <path d="M22 22l-5-5" />
+                <path d="M22 17l-5 5" />
+              </svg>
+            </div>
+            <p className="text-sm text-[#4A4A4A] flex-1">Network connection lost</p>
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="text-sm font-semibold text-[#4A4A4A] underline underline-offset-2"
+            >
+              Retry
+            </button>
           </div>
         )}
 
@@ -1100,14 +1169,16 @@ function ChatPageContent() {
       </div>
 
       {/* Back to bottom button */}
-      {showBackToBottom && (
+      {hasMessages && showBackToBottom && (
         <button
           type="button"
           onClick={scrollToBottom}
-          className="absolute bottom-[80px] right-4 w-9 h-9 rounded-full bg-white border border-[#e1e2e8] shadow-md flex items-center justify-center text-[#767676] hover:text-[#222] transition-colors z-10"
+          className="absolute left-1/2 -translate-x-1/2 bottom-[88px] w-12 h-12 rounded-full bg-white border border-[#f0f0f0] shadow-[0_2px_10px_rgba(0,0,0,0.12)] flex items-center justify-center text-[#111] hover:bg-[#fafafa] transition-colors z-20"
+          aria-label="Back to bottom"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M12 5v14M5 12l7 7 7-7" />
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 5v14" />
+            <path d="M6 13l6 6 6-6" />
           </svg>
         </button>
       )}
@@ -1145,12 +1216,12 @@ function ChatPageContent() {
               ) : (
                 <button
                   type="submit"
-                  disabled={sending || !input.trim()}
+                disabled={sending || !input.trim() || isOffline}
                   className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full disabled:opacity-100"
                   aria-label="Send"
                 >
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="block shrink-0">
-                    <circle cx="12" cy="12" r="12" fill={input.trim() && !sending ? "#5E23DC" : "#E1E2E8"} />
+                    <circle cx="12" cy="12" r="12" fill={input.trim() && !sending && !isOffline ? "#5E23DC" : "#E1E2E8"} />
                     <path d="M18.5624 11.9935C18.5628 12.1605 18.5186 12.3246 18.4343 12.4688C18.35 12.6131 18.2288 12.7321 18.0831 12.8138L8.244 18.4394C8.1028 18.5194 7.9434 18.5618 7.78111 18.5624C7.63157 18.5616 7.48439 18.525 7.35187 18.4558C7.21934 18.3865 7.1053 18.2865 7.01928 18.1642C6.93326 18.0419 6.87775 17.9008 6.85738 17.7526C6.83702 17.6045 6.85238 17.4536 6.9022 17.3126L8.48423 12.628C8.49969 12.5822 8.52894 12.5423 8.56796 12.5138C8.60698 12.4853 8.65387 12.4695 8.7022 12.4687H12.9374C13.0016 12.4688 13.0652 12.4557 13.1242 12.4303C13.1832 12.4048 13.2363 12.3675 13.2803 12.3206C13.3243 12.2737 13.3581 12.2183 13.3797 12.1578C13.4014 12.0973 13.4104 12.033 13.4061 11.9689C13.3955 11.8483 13.3397 11.7363 13.25 11.6551C13.1602 11.5739 13.0431 11.5297 12.9221 11.5312H8.70337C8.65434 11.5312 8.60653 11.5158 8.5667 11.4872C8.52686 11.4586 8.49699 11.4182 8.4813 11.3718L6.89927 6.68781C6.8363 6.50827 6.82945 6.31382 6.87962 6.1303C6.92979 5.94678 7.03462 5.78286 7.18016 5.66033C7.32571 5.5378 7.5051 5.46246 7.69449 5.4443C7.88388 5.42615 8.07431 5.46605 8.24048 5.5587L18.0842 11.1773C18.2291 11.2587 18.3498 11.3772 18.4338 11.5206C18.5178 11.6641 18.5622 11.8272 18.5624 11.9935Z" fill="white" />
                   </svg>
                 </button>

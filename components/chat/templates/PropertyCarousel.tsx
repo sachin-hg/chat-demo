@@ -326,21 +326,26 @@ export function PropertyCarousel({
           className="flex-shrink-0 w-[262px] rounded-[24px] bg-white border border-[#e1e2e8] overflow-hidden"
           style={{ scrollSnapAlign: "start" }}
         >
-          <div className="h-full min-h-[380px] p-4 flex flex-col items-center justify-center text-center">
-            <p className="text-sm text-[#767676] mb-4">
-              Showing {properties.length} of {propertyCount} properties
-            </p>
+          <div className="h-full min-h-[380px]">
             <button
               type="button"
               data-demo-action="view-all"
               disabled={disabled}
-              className="h-12 px-5 rounded-lg bg-[#5E23DC] text-white text-sm font-medium hover:bg-[#4a1bb5] transition-colors disabled:opacity-40"
+              className="w-full h-full rounded-[24px] bg-white hover:bg-[#fafafe] transition-colors disabled:opacity-40"
               onClick={() => {
                 if (disabled) return;
                 window.open(viewAllUrl, "_blank", "noopener,noreferrer");
               }}
             >
-              View all
+              <div className="h-full flex flex-col items-center justify-center gap-4">
+                <span className="w-9 h-9 rounded-full bg-[#6D6D74] text-white flex items-center justify-center">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M5 12h12" />
+                    <path d="M13 6l6 6-6 6" />
+                  </svg>
+                </span>
+                <span className="text-[18px] leading-none font-medium text-[#34343A]">View more</span>
+              </div>
             </button>
           </div>
         </div>
