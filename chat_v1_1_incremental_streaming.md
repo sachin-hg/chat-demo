@@ -100,7 +100,7 @@ All incremental events include:
 
 ```txt
 event: message_start
-data: {"messageId":"msg_b_101","sourceMessageId":"msg_u_99","sequenceNumber":0,"messageType":"markdown","context":{"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]}}}
+data: {"messageId":"msg_b_101","sourceMessageId":"msg_u_99","sequenceNumber":0,"messageType":"markdown","context":{"user_intent":"SRP","service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","poly":["dce9290ec3fe8834a293"],"est":194298,"properties":[{"id":123,"type":"project"}],"uuid":[],"filters":{"type":"project"}}}
 ```
 
 Notes:
@@ -249,7 +249,7 @@ event: connection_ack
 data: {"eventId":"evt_u_12","messageState":"PENDING"}
 
 event: message_start
-data: {"messageId":"msg_b_31","sourceMessageId":"msg_u_12","sequenceNumber":0,"messageType":"markdown","context":{"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]}}}
+data: {"messageId":"msg_b_31","sourceMessageId":"msg_u_12","sequenceNumber":0,"messageType":"markdown","context":{"user_intent":"SRP","service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","poly":["dce9290ec3fe8834a293"],"est":194298,"properties":[{"id":123,"type":"project"}],"uuid":[],"filters":{"type":"project"}}}
 
 event: message_delta
 data: {"messageId":"msg_b_31","chunkIndex":0,"deltaText":"# Great options","isFinalChunk":false}

@@ -89,17 +89,20 @@ function mlContextDataForLocality(variant: "sector_32_gurgaon" | "sector_21_gurg
       ? ["dce9290ec3fe8834a293"]
       : ["a1b2c3d4e5f6sector21gurgaonpoly"];
   return {
-    page: "SRP",
+    user_intent: "SRP",
     service: "buy",
     category: "residential",
     city: "526acdc6c33455e9e4e9",
+    poly,
+    est: 194298,
+    properties: [{ id: 123, type: "project" }],
+    uuid: [],
     filters: {
       apartment_type_id: [1, 2],
       max_price: 4800000,
       min_price: 100,
       property_type_id: [1, 2],
       type: "project",
-      poly,
     },
   };
 }

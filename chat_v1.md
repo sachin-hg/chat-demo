@@ -636,7 +636,7 @@ sequenceDiagram
 - Context is emitted **only when** ML detects user intent / search context changed such that FE should update client-side context—not on every reply.  
 - All parts for the turn share **`sourceMessageId`**. Use **`sequenceNumber`** for ordering.  
 - Intermediate events (including a mid-chain **`context`** row) use **`messageState: IN_PROGRESS`** on the ML envelope as appropriate; **`messageState: COMPLETED`** appears **only on the last** ML→BE event for that `sourceMessageId`. BE then marks the **source user message** `COMPLETED` and may emit **`connection_close`**.  
-- **Locality intent shift (example):** e.g. user pivots from **Sector 21 → Sector 32** (or the reverse). ML may emit **`context`** with updated **`filters.poly`** (or equivalent) before the visible template (e.g. `nested_qna`). Part B §4.1.1 shows a concrete envelope.
+- **Locality intent shift (example):** e.g. user pivots from **Sector 21 → Sector 32** (or the reverse). ML may emit **`context`** with updated top-level **`poly`** (and related SRP fields) before the visible template (e.g. `nested_qna`). Part B §4.3.10.21 shows a concrete envelope.
 
 ```mermaid
 sequenceDiagram
@@ -700,7 +700,7 @@ This section records how the **chat-demo** implementation diverges from or exten
 ### A.8 Context-out (Option 3) in this app
 
 - Canonical rules are §5.2, Part B §2 matrix, §10.6. **`summarisedChatContext` is removed** from the TypeScript contract and mock ML payloads.
-- The **mock `ml-flow`** emits a mid-turn **`messageType: "context"`** (`messageState: IN_PROGRESS`, then `nested_qna` as `COMPLETED`) when the user message targets **only Sector 32** (“learn more / tell more about sector 32”, …) or **only Sector 21** (“tell more about sector 21”, …), with **`content.data`** matching the system-context shape (Part B §4.1) and **different `filters.poly`** per locality. The **`/chat?demo=true`** scripted steps for those phrases exercise this path. **`send-message-streamed`** persists ML **`messageState`** as-is (no forced `COMPLETED` on intermediate rows).
+- The **mock `ml-flow`** emits a mid-turn **`messageType: "context"`** (`messageState: IN_PROGRESS`, then `nested_qna` as `COMPLETED`) when the user message targets **only Sector 32** (“learn more / tell more about sector 32”, …) or **only Sector 21** (“tell more about sector 21”, …), with **`content.data`** matching the system-context shape (Part B §4.1) and **different top-level `poly`** per locality. The **`/chat?demo=true`** scripted steps for those phrases exercise this path. **`send-message-streamed`** persists ML **`messageState`** as-is (no forced `COMPLETED` on intermediate rows).
 
 ---
 
@@ -883,8 +883,14 @@ Property payload shape reference APIs (for template `data.property` / `data.prop
 
 ### 4.1 Context on Chat Open (SRP)
 
-> 📎 **Filter Reference:** See [`filterMap.js`](https://github.com/elarahq/housing.brahmand/blob/a17bf76ad06f0da180b270c840b1fb4ab14eb627/common/modules/filter-encoder/source/filterMap.js) for all possible filter keys.  
-> 📎 **page_type values:** See [`pageTypes.js`](https://github.com/elarahq/housing.brahmand/blob/master/common/constants/pageTypes.js).
+> 📎 **Filter Reference:** See [`filterMap.js`](https://github.com/elarahq/housing.brahmand/blob/a17bf76ad06f0da180b270c840b1fb4ab14eb627/common/modules/filter-encoder/source/filterMap.js) for all possible keys inside **`filters`**.  
+> 📎 **`user_intent` values:** See [`pageTypes.js`](https://github.com/elarahq/housing.brahmand/blob/master/common/constants/pageTypes.js) for the full set used across the app. **`user_intent`** replaces former **`page`** / **`page_type`** on this payload.
+
+**Semantics (system & bot `messageType: "context"`):** `content.data` uses one shape for **both** `sender.type: "system"` and `sender.type: "bot"`.
+
+- **`user_intent`:** **System** messages (Phase 1): `home`, `SRP`, `details`. **Bot** messages: `SRP`, `details`, `localityReviewDedicated`, `localityOverview`, `PRICE_TRENDS`, … — as of Phase 1 the FE only consumes **`SRP`** for navigation/update behavior.
+- **SRP routing hints (top-level, driven by ML / launch context):** when **`user_intent === "SRP"`**, FE may use **`poly`**, **`est`**, **`uuid`**, **`properties`** (e.g. `type === "project"`) to open the relevant SRP. **`poly`** — polygon UUIDs for polygon SRP (today). Future **`user_intent`** values (e.g. `localityOverview`) may reuse these fields for other flows.
+- **`filters`:** Search filters (see `filterMap.js`). Do **not** duplicate **`poly`** / **`est`** / **`uuid`** / **`properties`** inside `filters`; those live at the top level of **`data`** above.
 
 ```json
 {
@@ -892,22 +898,15 @@ Property payload shape reference APIs (for template `data.property` / `data.prop
   "messageType": "context",
   "content": {
     "data": {
-      "page_type": "SRP",
+      "user_intent": "SRP",
       "service": "buy",
       "category": "residential",
       "city": "526acdc6c33455e9e4e9",
+      "poly": ["dce9290ec3fe8834a293"],
+      "est": 194298,
+      "properties": [{ "id": 123, "type": "project" }],
+      "uuid": [],
       "filters": {
-          
-        "poly": ["dce9290ec3fe8834a293"], // list of polygon uuids for polygon SRP
-        "est": 194298, // landmark SRP page - this is landmark/establishment id
-        // below 2 fields are used when chat is initiated either from project SRP or from project dedicated page. 
-        "region_entity_id": 31817,
-        "region_entity_type": "project",
-        "uuid": [], // builder uuid when searching for properties posted by a builder - builder SRP page
-        "qv_resale_id": 1234, // property id when chat is initiated from resale details page 
-        "qv_rent_id": 12345 // property id when chat is initiated from rent details page 
-
-      // below are all filters
         "apartment_type_id": [1, 2],
         "contact_person_id": [1, 2],
         "facing": ["east", "west"],
@@ -923,45 +922,15 @@ Property payload shape reference APIs (for template `data.property` / `data.prop
         "min_price": 100,
         "property_type_id": [1, 2],
         "type": "project", // project/resale
-      }
-    },
-  }
-}
-```
-
-### 4.1.1 ML context-out — locality intent shift (examples)
-
-**Scenario:** User shifts focus from one locality to another (e.g. **Sector 21 → Sector 32**). ML emits **`messageType: "context"`** first (same `content.data` schema as §4.1), then the visible reply (e.g. `nested_qna`). **`sequenceNumber`** orders the chain; **`messageState: IN_PROGRESS`** on the context row; **`COMPLETED`** only on the **last** ML event for that `sourceMessageId`. See §5.2, §10.6.
-
-**1) Intent narrowed to Sector 32, Gurgaon (abridged):**
-
-```json
-{
-  "sender": { "type": "bot" },
-  "messageType": "context",
-  "sourceMessageId": "msg_u_9",
-  "sequenceNumber": 0,
-  "messageState": "IN_PROGRESS",
-  "content": {
-    "data": {
-      "page": "SRP",
-      "service": "buy",
-      "category": "residential",
-      "city": "526acdc6c33455e9e4e9",
-      "filters": {
-        "type": "project",
-        "poly": ["dce9290ec3fe8834a293"],
-        "apartment_type_id": [1, 2],
-        "min_price": 100,
-        "max_price": 4800000,
-        "property_type_id": [1, 2]
+        "region_entity_id": 31817,
+        "region_entity_type": "project",
+        "qv_resale_id": 1234,
+        "qv_rent_id": 12345
       }
     }
   }
 }
 ```
-
-**2) Intent narrowed to Sector 21, Gurgaon (abridged):** same envelope; **`filters.poly`** differs (e.g. mock uses `["a1b2c3d4e5f6sector21gurgaonpoly"]` to distinguish from Sector 32). The next event in the chain is typically `nested_qna` with `sequenceNumber: 1`, `messageState: COMPLETED`.
 
 ---
 ### 4.2 Transport-level SSE examples
@@ -1574,7 +1543,44 @@ data: {"reason":"response_complete"}
   }
 }
 ```
-#### 4.3.10.21 Bot markdown: learn more sector 21
+#### 4.3.10.21 ML context-out — locality intent shift (examples)
+
+**Scenario:** User shifts focus from one locality to another (e.g. **Sector 21 → Sector 32**). ML emits **`messageType: "context"`** first (same `content.data` schema as §4.1), then the visible reply (e.g. `nested_qna`). **`sequenceNumber`** orders the chain; **`messageState: IN_PROGRESS`** on the context row; **`COMPLETED`** only on the **last** ML event for that `sourceMessageId`. See §5.2, §10.6.
+
+**1) Intent narrowed to Sector 32, Gurgaon (abridged):**
+
+```json
+{
+  "sender": { "type": "bot" },
+  "messageType": "context",
+  "sourceMessageId": "msg_u_9",
+  "sequenceNumber": 0,
+  "messageState": "IN_PROGRESS",
+  "content": {
+    "data": {
+      "user_intent": "SRP",
+      "service": "buy",
+      "category": "residential",
+      "city": "526acdc6c33455e9e4e9",
+      "poly": ["dce9290ec3fe8834a293"],
+      "est": 194298,
+      "properties": [{ "id": 123, "type": "project" }],
+      "uuid": [],
+      "filters": {
+        "type": "project",
+        "apartment_type_id": [1, 2],
+        "min_price": 100,
+        "max_price": 4800000,
+        "property_type_id": [1, 2]
+      }
+    }
+  }
+}
+```
+
+**2) Intent narrowed to Sector 21, Gurgaon (abridged):** same envelope; top-level **`poly`** differs (e.g. mock uses `["a1b2c3d4e5f6sector21gurgaonpoly"]` to distinguish from Sector 32). The next event in the chain is typically `nested_qna` with `sequenceNumber: 1`, `messageState: COMPLETED`.
+
+#### 4.3.10.22 Bot markdown: learn more sector 21
 ```json
 {
   "sender": { "type": "bot" },
@@ -1584,7 +1590,7 @@ data: {"reason":"response_complete"}
   }
 }
 ```
-#### 4.3.10.22 User text: to learn more about sector 32
+#### 4.3.10.23 User text: to learn more about sector 32
 ```json
 {
   "sender": { "type": "user" },
@@ -1593,7 +1599,7 @@ data: {"reason":"response_complete"}
   "content": { "text": "to learn more about sector 32" }
 }
 ```
-#### 4.3.10.23 Bot template: nested_qna for sector 32
+#### 4.3.10.24 Bot template: nested_qna for sector 32
 ```json
 {
   "sender": { "type": "bot" },
@@ -1617,7 +1623,7 @@ data: {"reason":"response_complete"}
   }
 }
 ```
-#### 4.3.10.24 User action: types sector 32 faridabad
+#### 4.3.10.25 User action: types sector 32 faridabad
 ```json
 {
   "sender": { "type": "user" },
@@ -1633,7 +1639,7 @@ data: {"reason":"response_complete"}
   }
 }
 ```
-#### 4.3.10.25 Bot markdown: learn more sector 32
+#### 4.3.10.26 Bot markdown: learn more sector 32
 ```json
 {
   "sender": { "type": "bot" },
@@ -1643,7 +1649,7 @@ data: {"reason":"response_complete"}
   }
 }
 ```
-#### 4.3.10.26 User text: locality comparison of sector 32, sector 21
+#### 4.3.10.27 User text: locality comparison of sector 32, sector 21
 ```json
 {
   "sender": { "type": "user" },
@@ -1652,7 +1658,7 @@ data: {"reason":"response_complete"}
   "content": { "text": "locality comparison of sector 32, sector 21" }
 }
 ```
-#### 4.3.10.27 Bot template: nested_qna for sector 32 + sector 21
+#### 4.3.10.28 Bot template: nested_qna for sector 32 + sector 21
 ```json
 {
   "sender": { "type": "bot" },
@@ -1669,7 +1675,7 @@ data: {"reason":"response_complete"}
   }
 }
 ```
-#### 4.3.10.28 User action: sector 32 gurgaon + skip sector 21
+#### 4.3.10.29 User action: sector 32 gurgaon + skip sector 21
 ```json
 {
   "sender": { "type": "user" },
@@ -1688,7 +1694,7 @@ data: {"reason":"response_complete"}
   }
 }
 ```
-#### 4.3.10.29 Bot markdown: learn more sector 32 gurgaon
+#### 4.3.10.30 Bot markdown: learn more sector 32 gurgaon
 ```json
 {
   "sender": { "type": "bot" },
@@ -1698,7 +1704,7 @@ data: {"reason":"response_complete"}
   }
 }
 ```
-#### 4.3.10.30 User text: show properties near me
+#### 4.3.10.31 User text: show properties near me
 ```json
 {
   "sender": { "type": "user" },
@@ -1707,7 +1713,7 @@ data: {"reason":"response_complete"}
   "content": { "text": "show properties near me" }
 }
 ```
-#### 4.3.10.31 Bot template: share_location
+#### 4.3.10.32 Bot template: share_location
 ```json
 {
   "sender": { "type": "bot" },
@@ -1715,7 +1721,7 @@ data: {"reason":"response_complete"}
   "content": { "templateId": "share_location", "data": {} }
 }
 ```
-#### 4.3.10.32 FE action: location_denied
+#### 4.3.10.33 FE action: location_denied
 ```json
 {
   "sender": { "type": "system" },
@@ -1724,7 +1730,7 @@ data: {"reason":"response_complete"}
   "content": { "data": { "action": "location_denied" } }
 }
 ```
-#### 4.3.10.33 User text: properties near me (retry)
+#### 4.3.10.34 User text: properties near me (retry)
 ```json
 {
   "sender": { "type": "user" },
@@ -1733,7 +1739,7 @@ data: {"reason":"response_complete"}
   "content": { "text": "properties near me" }
 }
 ```
-#### 4.3.10.34 Bot template: share_location again
+#### 4.3.10.35 Bot template: share_location again
 ```json
 {
   "sender": { "type": "bot" },
@@ -1741,7 +1747,7 @@ data: {"reason":"response_complete"}
   "content": { "templateId": "share_location", "data": {} }
 }
 ```
-#### 4.3.10.35 FE action: location_shared
+#### 4.3.10.36 FE action: location_shared
 ```json
 {
   "sender": { "type": "system" },
@@ -1750,7 +1756,7 @@ data: {"reason":"response_complete"}
   "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } }
 }
 ```
-#### 4.3.10.36 Bot template: property_carousel
+#### 4.3.10.37 Bot template: property_carousel
 ```json
 {
   "sender": { "type": "bot" },
@@ -1845,7 +1851,7 @@ data: {"reason":"response_complete"}
   }
 }
 ```
-#### 4.3.10.37 User text: 3bhk properties near me
+#### 4.3.10.38 User text: 3bhk properties near me
 ```json
 {
   "sender": { "type": "user" },
@@ -1854,7 +1860,7 @@ data: {"reason":"response_complete"}
   "content": { "text": "3bhk properties near me" }
 }
 ```
-#### 4.3.10.38 FE auto-action: location_shared without rendering share_location
+#### 4.3.10.39 FE auto-action: location_shared without rendering share_location
 // Note: This line is explanatory only and not part of API contract payload.
 ```json
 {
@@ -1864,7 +1870,7 @@ data: {"reason":"response_complete"}
   "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } }
 }
 ```
-#### 4.3.10.39 Bot template: property_carousel
+#### 4.3.10.40 Bot template: property_carousel
 ```json
 {
   "sender": { "type": "bot" },
@@ -1959,7 +1965,7 @@ data: {"reason":"response_complete"}
   }
 }
 ```
-#### 4.3.10.40 User text: show me more properties in sector 32, sector 21
+#### 4.3.10.41 User text: show me more properties in sector 32, sector 21
 ```json
 {
   "sender": { "type": "user" },
@@ -2225,7 +2231,7 @@ This section documents current behavior in this repository where it differs from
 ### A.5 Current mock-trigger notes (`lib/mock/ml-flow.ts`)
 
 - Greeting uses **whole-word** matching for `hi|hello|hey` (avoids false positives from words like `this`).
-- **Context-out (Option 3):** user messages that target **only Sector 32** or **only Sector 21** (e.g. “learn more about sector 32”, “tell more about sector 21”) receive a mid-turn **`messageType: "context"`** (IN_PROGRESS) before **`nested_qna`** (COMPLETED), with different **`filters.poly`** in `content.data` per locality (see Part B §4.1.1, first Appendix A.8).
+- **Context-out (Option 3):** user messages that target **only Sector 32** or **only Sector 21** (e.g. “learn more about sector 32”, “tell more about sector 21”) receive a mid-turn **`messageType: "context"`** (IN_PROGRESS) before **`nested_qna`** (COMPLETED), with different top-level **`poly`** in `content.data` per locality (see Part B §4.3.10.21, first Appendix A.8).
 - `locality comparison` returns locality carousel unless text explicitly contains sector ambiguity (`sector 32` / `sector 21`), in which case nested QnA route handles it.
 - Additional text triggers supported in implementation include:
   - `show me properties according to my preference`,

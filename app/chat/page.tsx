@@ -75,10 +75,14 @@ function buildContextEvent(conversationId: string): ChatEventFromUser {
     responseRequired: false,
     content: {
       data: {
-        page: "SRP",
+        user_intent: "SRP",
         service: "buy",
         category: "residential",
         city: "526acdc6c33455e9e4e9",
+        poly: ["dce9290ec3fe8834a293"],
+        est: 194298,
+        properties: [{ id: 123, type: "project" }],
+        uuid: [],
         filters: {
           apartment_type_id: [1, 2],
           max_price: 4800000,
@@ -353,7 +357,7 @@ type DemoStep =
     }
   | { kind: "wait_for_user" };
 
-/** Scripted demo (`/chat?demo=true`). Steps below that mention only Sector 21 or only Sector 32 trigger mock ML **context-out** (Option 3): `context` IN_PROGRESS → `nested_qna` COMPLETED (see chat_v1 §4.1.1, Appendix A.8). */
+/** Scripted demo (`/chat?demo=true`). Steps below that mention only Sector 21 or only Sector 32 trigger mock ML **context-out** (Option 3): `context` IN_PROGRESS → `nested_qna` COMPLETED (see chat_v1 Part B §4.3.10.21, Appendix A.8). */
 const DEMO_STEPS: DemoStep[] = [
   { kind: "text", text: "tell me about modiji" },
   { kind: "text", text: "show me properties according to my preference" },
