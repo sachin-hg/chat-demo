@@ -11,7 +11,7 @@ import {
   migrateChat,
 } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
-import type { ChatEventFromUser, ChatEventToUser } from "@/lib/contract-types";
+import { getTurnOrMessageState, type ChatEventFromUser, type ChatEventToUser } from "@/lib/contract-types";
 import { ChatMessage } from "@/components/chat/ChatMessage";
 import { useToast } from "@/components/ui/ToastProvider";
 
@@ -30,7 +30,7 @@ type ReplyStatus = "idle" | "sending" | "awaiting" | "timeout" | "error";
 
 /** Clears awaiting when the turn ends: bot COMPLETED/ERRORED_AT_ML, or BE timeout (TIMED_OUT_BY_BE on any surfaced row). */
 function isTerminalSseChatEvent(ev: ChatEventToUser): boolean {
-  const ms = ev.messageState;
+  const ms = getTurnOrMessageState(ev);
   if (ms === "TIMED_OUT_BY_BE") return true;
   return (
     ev.sender?.type === "bot" && (ms === "COMPLETED" || ms === "ERRORED_AT_ML")

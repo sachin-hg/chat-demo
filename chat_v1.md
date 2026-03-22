@@ -7,7 +7,7 @@ This file is the canonical consolidated reference for architecture, API contract
 
 1. Property carousel metadata: `property_count` vs `hasViewMore`.
 2. Chat migration behavior when a user logs in mid-session.
-3. **Context-out (Option 3 — proposed, not closed):** Wider team alignment is still pending; **Option 3** is the **preferred** direction in this document. ML does **not** attach rolling context to every bot payload. When user intent / search context changes in a way FE must know, ML emits a standalone **`messageType: "context"`** in the same `sourceMessageId` chain, using the **same `content.data` schema** as FE/system context on chat open (Part B §4.1). Context messages are **optional and infrequent**. **`messageState: COMPLETED`** on the **last** ML→BE event for that turn (after any context + all visible response parts) ends the request; BE must not mark the source user message `COMPLETED` on an intermediate `context` event alone. See §5.2, Part B §2 matrix, §10.6.
+3. **Context-out (Option 3 — proposed, not closed):** Wider team alignment is still pending; **Option 3** is the **preferred** direction in this document. ML does **not** attach rolling context to every bot payload. When user intent / search context changes in a way FE must know, ML emits a standalone **`messageType: "context"`** in the same `sourceMessageId` chain, using the **same `content.data` schema** as FE/system context on chat open (Part B §4.1). Context messages are **optional and infrequent**. Terminal **`sourceMessageState: COMPLETED`** (ML turn progress; see Appendix A §A.0) on the **last** ML→BE event for that turn (after any context + all visible response parts) ends the request; BE must not mark the source user message `COMPLETED` on an intermediate `context` event alone. See §5.2, Part B §2 matrix, §10.6.
 
 ---
 
@@ -77,7 +77,7 @@ CANCELLED_BY_USER
 - [`ChatEventFromUser`](lib/contract-types.ts#L38): FE -> BE event shape for send-message APIs.
 - [`ChatEventToML`](lib/contract-types.ts#L51): BE -> ML event shape for user turn dispatch.
 - [`CancelEventToML`](lib/contract-types.ts#L65): BE -> ML cancellation signal shape.
-- [`ChatEventFromML`](lib/contract-types.ts#L76): ML -> BE event shape (includes `sourceMessageId`, `messageType`, `messageState`, `sequenceNumber`, `content`, optional `error`).
+- [`ChatEventFromML`](lib/contract-types.ts#L76): ML -> BE event shape (includes `sourceMessageId`, **`sourceMessageState`** (ML progress on the **user turn**, not the part row), `messageType`, `sequenceNumber`, `content`, optional `error`).
 - [`ChatEventToUser`](lib/contract-types.ts#L94): BE -> FE event shape for history and stream delivery.
 - [`SendMessageResponse`](lib/contract-types.ts#L123): ack shape for send-message/send-message-streamed (`messageId`, `messageState?`).
 - [`GetHistoryResponse`](lib/contract-types.ts#L128): history API shape (`conversationId`, `messages`: [`ChatEventToUser`](lib/contract-types.ts#L94)`[]`, `hasMore`).
@@ -290,7 +290,7 @@ data: {"reason":"response_complete"}
 
 - **Awaiting indicator**: FE shows inline awaiting status only when:
   - outbound event has `responseRequired === true`, and
-  - the turn has not yet reached a terminal outcome: no bot `chat_event` with `messageState: COMPLETED | ERRORED_AT_ML`, and no surfaced `chat_event` with `messageState: TIMED_OUT_BY_BE` for this request (see §6 SSE).
+  - the turn has not yet reached a terminal outcome: the stream has not yet delivered a bot `chat_event` with **terminal** **`sourceMessageState: COMPLETED | ERRORED_AT_ML`** for this turn (Appendix A §A.0), and no surfaced `chat_event` with `messageState: TIMED_OUT_BY_BE` for this request (see §6 SSE).
 - **Timeout**: FE maintains a local reply timeout safeguard (current app value: `25s`); after timeout UI is shown, FE relies on polling (`get-history` with `messages_after`) until it receives the response for that message.
 - **Input/CTA behavior**:
   - while `sending`: composer submit disabled
@@ -341,13 +341,11 @@ data: {"reason":"response_complete"}
 ```json
 {
   "conversationId": "conv_1",
-  "messageId": "msg_b_457",
   "sender": { "type": "bot" },
   "sourceMessageId": "msg_u_456",
   "sequenceNumber": 1,
-  "messageState": "COMPLETED",
+  "sourceMessageState": "COMPLETED",
   "messageType": "template",
-  "createdAt": "2025-03-16T12:00:00.000Z",
   "content": {
     "templateId": "property_carousel",
     "data": { "...": "template payload" }
@@ -355,22 +353,24 @@ data: {"reason":"response_complete"}
 }
 ```
 
-*(ML → BE `ChatEventFromML` omits `responseRequired`. Persisted bot rows delivered to FE do **not** carry `responseRequired`.)*
+*(ML → BE **`ChatEventFromML`** uses **`sourceMessageState`** for turn progress; BE assigns **`messageId`** / **`createdAt`** when persisting. `ChatEventFromML` omits `responseRequired`. Persisted bot rows delivered to FE do **not** carry `responseRequired`.)*
 
 **Context-out (Option 3 — proposed)**  
 - **Not a closed org decision** — Option 3 is the **preferred** approach here; finalize with the larger team.  
 - There is **no** `summarisedChatContext` (or equivalent) on ML bot payloads. Rolling context updates are conveyed only via **`messageType: "context"`** when ML decides FE must be notified (e.g. filters, city, service changed). Those events use the **same `content.data` shape** as the context event FE sends on chat open (system) — see Part B §4.1.  
 - Context is **not** sent on every ML response—only when intent/context materially changes.  
 - Context and all user-visible bot parts for a turn share the same **`sourceMessageId`** and are ordered by **`sequenceNumber`**.  
-- **`messageState: COMPLETED`** on the **final** ML output for that `sourceMessageId` means the full response (including any preceding `context` and bot content events) is complete. Earlier events in the chain use **`IN_PROGRESS`** (or non-terminal states as defined by BE/ML). BE applies **`COMPLETED`** to the **source user message** only when processing that **final** event—not when a standalone `context` message arrives mid-chain.
+- **`sourceMessageState: COMPLETED`** on the **final** ML output for that `sourceMessageId` means the full response (including any preceding `context` and bot content events) is complete. Earlier events in the chain use **`sourceMessageState: IN_PROGRESS`** (or non-terminal states as defined by BE/ML). BE applies **`COMPLETED`** to the **source user message** only when processing that **final** event—not when a standalone `context` message arrives mid-chain.
 
 BE persistence semantics for ML outputs:
 - BE persists each ML output as a new message with a newly generated `messageId`. Bot-visible rows use `sender.type = "bot"`; `messageType: "context"` from ML may also use `sender.type: "bot"` (Part B §2 matrix).
-- BE applies the source user message’s terminal `messageState` from the **last** ML event in the chain for that `sourceMessageId` (see above).
+- BE applies the source user message’s terminal `messageState` from the **last** ML event’s **`sourceMessageState`** in the chain for that `sourceMessageId` (see above).
 
 ---
 
 ### 5.3 ML Error Output
+
+ML emits **`sourceMessageState: "ERRORED_AT_ML"`** on `ChatEventFromML` (no per-part `messageState`). After BE persists, FE-facing **`ChatEventToUser`** rows use **`messageState: "COMPLETED"`** on the bot **part** row and **`sourceMessageState: "ERRORED_AT_ML"`** for the turn (Appendix A §A.0).
 
 ```json
 {
@@ -379,7 +379,8 @@ BE persistence semantics for ML outputs:
   "sender": { "type": "bot" },
   "sourceMessageId": "msg_u_456",
   "sequenceNumber": 0,
-  "messageState": "ERRORED_AT_ML",
+  "messageState": "COMPLETED",
+  "sourceMessageState": "ERRORED_AT_ML",
   "messageType": "text",
   "createdAt": "2025-03-16T12:00:00.000Z",
   "error": {
@@ -439,7 +440,7 @@ The stream uses the following **event** values and comment lines:
 - **`connection_close`**: Sent by the BE once, immediately before closing the stream when:
   - inactivity `>= 15s`, or
   - `responseRequired === false`, or
-  - terminal turn outcome received on the stream (e.g. bot `chat_event` with `messageState: COMPLETED | ERRORED_AT_ML`, or surfaced `TIMED_OUT_BY_BE` for the request per §6).
+  - terminal turn outcome received on the stream (e.g. bot `chat_event` with **`sourceMessageState: COMPLETED | ERRORED_AT_ML`, or surfaced `TIMED_OUT_BY_BE` for the request per §6).
 
 **Comments** (lines starting with `:`) do not set an `event` type and are not delivered to `EventSource` message listeners; they are used for connection liveness and keepalive only.
 
@@ -451,7 +452,7 @@ The stream uses the following **event** values and comment lines:
 - Close SSE when any of:
   - inactivity `>= 15s`
   - `responseRequired === false`
-  - terminal turn outcome emitted (e.g. bot `messageState: COMPLETED | ERRORED_AT_ML`, or request surfaced as `TIMED_OUT_BY_BE` per §6)
+  - terminal turn outcome emitted (e.g. bot **`sourceMessageState: COMPLETED | ERRORED_AT_ML`, or request surfaced as `TIMED_OUT_BY_BE` per §6)
 
 ### FE
 - Treat each `send-message-streamed` stream as request-scoped and terminal on `connection_close`.
@@ -527,7 +528,7 @@ sequenceDiagram
 
     ML->>BE: success response
     BE->>BE: create bot event, mark request COMPLETED
-    BE-->>FE: SSE chat_event (repeat until terminal messageState)
+    BE-->>FE: SSE chat_event (repeat until terminal sourceMessageState / turn complete)
     BE-->>FE: SSE connection_close (response_complete)
 ```
 ---
@@ -657,7 +658,7 @@ sequenceDiagram
 **Rules**  
 - Context is emitted **only when** ML detects user intent / search context changed such that FE should update client-side context—not on every reply.  
 - All parts for the turn share **`sourceMessageId`**. Use **`sequenceNumber`** for ordering.  
-- Intermediate events (including a mid-chain **`context`** row) use **`messageState: IN_PROGRESS`** on the ML envelope as appropriate; **`messageState: COMPLETED`** appears **only on the last** ML→BE event for that `sourceMessageId`. BE then marks the **source user message** `COMPLETED` and may emit **`connection_close`**.  
+- Intermediate events (including a mid-chain **`context`** row) use **`sourceMessageState: IN_PROGRESS`** on the ML envelope as appropriate; **`sourceMessageState: COMPLETED`** appears **only on the last** ML→BE event for that `sourceMessageId`. (In **chat-demo**, each persisted bot **part** still uses **`messageState: "COMPLETED"`**; turn progress is **`sourceMessageState`** — Appendix A §A.0.) BE then marks the **source user message** `COMPLETED` and may emit **`connection_close`**.  
 - **Locality intent shift (example):** e.g. user pivots from **Sector 21 → Sector 32** (or the reverse). ML may emit **`context`** with updated top-level **`poly`** (and related SRP fields) before the visible template (e.g. `nested_qna`). Part B §4.3.10.21 shows a concrete envelope.
 
 ```mermaid
@@ -670,14 +671,14 @@ sequenceDiagram
     BE-->>FE: SSE connection_ack {messageId, messageState:PENDING}
     BE->>ML: dispatch ChatEventToML
 
-    ML->>BE: bot markdown (messageState=IN_PROGRESS, sourceMessageId=msg_u_1, sequenceNumber=0)
+    ML->>BE: bot markdown (sourceMessageState=IN_PROGRESS, sourceMessageId=msg_u_1, sequenceNumber=0)
     BE-->>FE: SSE chat_event
 
     Note over ML: User intent / context changed — notify FE
-    ML->>BE: context (messageType=context, sender=bot, sourceMessageId=msg_u_1, sequenceNumber=1, messageState=IN_PROGRESS)
+    ML->>BE: context (messageType=context, sender=bot, sourceMessageId=msg_u_1, sequenceNumber=1, sourceMessageState=IN_PROGRESS)
     BE-->>FE: SSE chat_event (not rendered; same content.data schema as system context)
 
-    ML->>BE: bot template (messageState=COMPLETED, sourceMessageId=msg_u_1, sequenceNumber=2)
+    ML->>BE: bot template (sourceMessageState=COMPLETED, sourceMessageId=msg_u_1, sequenceNumber=2)
     BE->>BE: mark source msg_u_1 COMPLETED (final event in chain)
     BE-->>FE: SSE chat_event (final bot content)
     BE-->>FE: SSE connection_close (response_complete)
@@ -709,6 +710,7 @@ This section records how the **chat-demo** implementation diverges from or exten
 ### A.7 UI behavior for messageState
 
 - Canonical messageState placement and rendering rules are documented in §4.4.
+- **This app:** for bot rows, terminal checks and error handling use **`getTurnOrMessageState()`** ( **`sourceMessageState`** when present, else **`messageState`** ) — see `lib/contract-types.ts`.
 
 ### A.5 Template and action handling
 
@@ -723,7 +725,7 @@ This section records how the **chat-demo** implementation diverges from or exten
 ### A.8 Context-out (Option 3) in this app
 
 - Canonical rules are §5.2, Part B §2 matrix, §10.6. **`summarisedChatContext` is removed** from the TypeScript contract and mock ML payloads.
-- The **mock `ml-flow`** emits a mid-turn **`messageType: "context"`** (`messageState: IN_PROGRESS`, then `nested_qna` as `COMPLETED`) when the user message targets **only Sector 32** (“learn more / tell more about sector 32”, …) or **only Sector 21** (“tell more about sector 21”, …), with **`content.data`** matching the system-context shape (Part B §4.1) and **different top-level `poly`** per locality. The **`/chat?demo=true`** scripted steps for those phrases exercise this path. **`send-message-streamed`** persists ML **`messageState`** as-is (no forced `COMPLETED` on intermediate rows).
+- The **mock `ml-flow`** emits a mid-turn **`messageType: "context"`** (`sourceMessageState: IN_PROGRESS`, then `nested_qna` with `sourceMessageState: COMPLETED`) when the user message targets **only Sector 32** (“learn more / tell more about sector 32”, …) or **only Sector 21** (“tell more about sector 21”, …), with **`content.data`** matching the system-context shape (Part B §4.1) and **different top-level `poly`** per locality. The **`/chat?demo=true`** scripted steps for those phrases exercise this path. **`send-message-streamed`** persists each bot row with **`messageState: "COMPLETED"`** and echoes ML’s **`sourceMessageState`** on the stored event (Appendix A §A.0).
 
 ---
 
@@ -735,7 +737,7 @@ This section records how the **chat-demo** implementation diverges from or exten
 - **Message origin**: `system` and `user` messages are generated by the **client app**; `bot` messages are generated by **ML** and relayed via BE.  
   **Rendering rule:** `system` and `bot` messages are rendered as bot-side messages, while only `sender.type = user` is rendered in user bubbles.
 - **Message IDs**: `messageId` is generated by **BE** (not FE/ML) for all persisted messages. Every message delivered to FE must include `messageId`.
-- **Every bot message MUST have `messageId`, `sourceMessageId`, `sequenceNumber`, `messageState`, `conversationId`, and `createdAt`** on the persisted **`ChatEventToUser`** shape delivered to FE. **`responseRequired`** applies to **user/system-originated** events only; **do not** set it on bot rows (see §4.3 examples).
+- **Every bot message MUST have `messageId`, `sourceMessageId`, `sequenceNumber`, `messageState`, `conversationId`, and `createdAt`** on the persisted **`ChatEventToUser`** shape delivered to FE. **Turn progress** from ML is carried in **`sourceMessageState`** (see Appendix A §A.0); **`messageState`** on bot rows in **chat-demo** is **`COMPLETED`** for each stored part. **`responseRequired`** applies to **user/system-originated** events only; **do not** set it on bot rows (see §4.3 examples).
 - **`sourceMessageId`** ties all bot response messages back to the user message that triggered them
 - In FE-facing events, `sourceMessageId` is optional and generally not required for rendering logic.
 - **`user_action` visibility**: hidden by default — only rendered when `isVisible === true` and `derivedLabel` is set
@@ -875,7 +877,7 @@ This section records how the **chat-demo** implementation diverges from or exten
 
 **Context-out (Option 3 — proposed)**  
 - ML may emit `messageType: "context"` with `sender.type: "bot"` (matrix above). `content.data` matches the **same schema** as FE/system context (Part B §4.1). FE does not render `context` rows (§3 decision table).  
-- See §5.2 and §10.6 for ordering, `sequenceNumber`, and when `messageState: COMPLETED` closes the request.
+- See §5.2 and §10.6 for ordering, `sequenceNumber`, and when **terminal `sourceMessageState`** closes the request.
 
 ---
 
@@ -885,7 +887,7 @@ This section records how the **chat-demo** implementation diverges from or exten
 |---------|-------------|
 | messageType = context | Do not render |
 | messageState = CANCELLED_BY_USER | Do not render |
-| messageState = ERRORED_AT_ML or TIMED_OUT_BY_BE | Render generic error text (“Something went wrong. Please try again.”) |
+| **Effective turn state** on bot rows (`getTurnOrMessageState()` / **`sourceMessageState`** when present) = ERRORED_AT_ML or TIMED_OUT_BY_BE | Render generic error text (“Something went wrong. Please try again.”) |
 | messageType = user_action AND isVisible != true | Do not render (hidden by default) |
 | messageType = user_action AND isVisible = true | Render derivedLabel |
 | template supported | Render template |
@@ -968,17 +970,17 @@ data: {"messageId":"msg_user_001","messageState":"PENDING"}
 
 id: msg_bot_010
 event: chat_event
-data: {"sender":{"type":"bot"},"messageId":"msg_b1","sourceMessageId":"msg_u1","sequenceNumber":0,"messageState":"IN_PROGRESS","messageType":"text","content":{"text":"Here are 2bhk properties in sector 32 gurgaon"}}
+data: {"sender":{"type":"bot"},"messageId":"msg_b1","sourceMessageId":"msg_u1","sequenceNumber":0,"messageState":"COMPLETED","sourceMessageState":"IN_PROGRESS","messageType":"text","content":{"text":"Here are 2bhk properties in sector 32 gurgaon"}}
 
 id: msg_bot_011
 event: chat_event
-data: {"sender":{"type":"bot"},"messageId":"msg_b2","sourceMessageId":"msg_u1","sequenceNumber":1,"messageState":"COMPLETED","messageType":"template","content":{"templateId":"property_carousel","data":{"properties":[{"id":"p1","type":"project","title":"2, 3 BHK Apartments","name":"Godrej Air","short_address":[{"display_name":"Sector 85"},{"display_name":"Gurgaon"}],"is_rera_verified":true,"inventory_canonical_url":"https://example.com/property/p1","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":["Ready to move"],"formatted_min_price":"3 Cr","formatted_max_price":"3.5 Cr","unit_of_area":"sq.ft.","display_area_type":"Built up area","min_selected_area_in_unit":2500,"max_selected_area_in_unit":4750,"inventory_configs":[]},{"id":"p2","type":"rent","title":"3 BHK flat","short_address":[{"display_name":"Sector 33"},{"display_name":"Sohna"},{"display_name":"Gurgaon"}],"region_entities":[{"name":"M3M Solitude Ralph Estate"}],"is_rera_verified":false,"is_verified":true,"inventory_canonical_url":"https://example.com/property/p2","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":[],"formatted_price":"30,000","unit_of_area":"sq.ft.","display_area_type":"Built up area","inventory_configs":[{"furnish_type_id":2,"area_value_in_unit":4750}]},{"id":"p4","type":"rent","title":"2 BHK independent floor","short_address":[{"display_name":"Sector 23"},{"display_name":"Sohna"},{"display_name":"Gurgaon"}],"is_rera_verified":true,"is_verified":false,"inventory_canonical_url":"https://example.com/property/p4","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":[],"formatted_price":"12,000","unit_of_area":"sq.ft.","display_area_type":"Built up area","inventory_configs":[{"furnish_type_id":3,"area_value_in_unit":750}]}]}}}
+data: {"sender":{"type":"bot"},"messageId":"msg_b2","sourceMessageId":"msg_u1","sequenceNumber":1,"messageState":"COMPLETED","sourceMessageState":"COMPLETED","messageType":"template","content":{"templateId":"property_carousel","data":{"properties":[{"id":"p1","type":"project","title":"2, 3 BHK Apartments","name":"Godrej Air","short_address":[{"display_name":"Sector 85"},{"display_name":"Gurgaon"}],"is_rera_verified":true,"inventory_canonical_url":"https://example.com/property/p1","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":["Ready to move"],"formatted_min_price":"3 Cr","formatted_max_price":"3.5 Cr","unit_of_area":"sq.ft.","display_area_type":"Built up area","min_selected_area_in_unit":2500,"max_selected_area_in_unit":4750,"inventory_configs":[]},{"id":"p2","type":"rent","title":"3 BHK flat","short_address":[{"display_name":"Sector 33"},{"display_name":"Sohna"},{"display_name":"Gurgaon"}],"region_entities":[{"name":"M3M Solitude Ralph Estate"}],"is_rera_verified":false,"is_verified":true,"inventory_canonical_url":"https://example.com/property/p2","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":[],"formatted_price":"30,000","unit_of_area":"sq.ft.","display_area_type":"Built up area","inventory_configs":[{"furnish_type_id":2,"area_value_in_unit":4750}]},{"id":"p4","type":"rent","title":"2 BHK independent floor","short_address":[{"display_name":"Sector 23"},{"display_name":"Sohna"},{"display_name":"Gurgaon"}],"is_rera_verified":true,"is_verified":false,"inventory_canonical_url":"https://example.com/property/p4","thumb_image_url":"https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600","property_tags":[],"formatted_price":"12,000","unit_of_area":"sq.ft.","display_area_type":"Built up area","inventory_configs":[{"furnish_type_id":3,"area_value_in_unit":750}]}]}}}
 
 event: connection_close
 data: {"reason":"response_complete"}
 ```
 
-> **SSE `data` lines:** The `chat_event` payloads above are **abbreviated** for readability. Production **`chat_event`** / **`get-history`** rows use the full **`ChatEventToUser`** object (`conversationId`, `createdAt`, …; bot rows omit `responseRequired`) as in §4.3.
+> **SSE `data` lines:** The `chat_event` payloads above are **abbreviated** for readability. Production **`chat_event`** / **`get-history`** rows use the full **`ChatEventToUser`** object (`conversationId`, `createdAt`, **`sourceMessageState`** on bot rows for turn progress, …; bot rows omit `responseRequired`) as in §4.3.
 
 > **Important:** For **non-streaming** turns only (`responseRequired === false`, not user text), FE uses `POST /chats/send-message` and receives JSON `{ messageId, messageState: "COMPLETED" }`. User **text** always uses **`send-message-streamed`**.
 
@@ -986,7 +988,7 @@ data: {"reason":"response_complete"}
 
 ### 4.3 Demo-flow-aligned examples
 
-**`ChatEventToUser` (bot rows):** Bot examples use the full persisted / BE → FE shape: **`conversationId`**, **`messageId`**, **`sender`**, **`sourceMessageId`**, **`sequenceNumber`**, **`messageState`**, **`messageType`**, **`createdAt`**, **`content`** — **no `responseRequired`**. **User/system** examples show **client → BE** request bodies: **no `createdAt`** or **`messageId`** (BE assigns on persist). Include **`responseRequired`** on those rows where relevant.
+**`ChatEventToUser` (bot rows):** Bot examples use the full persisted / BE → FE shape: **`conversationId`**, **`messageId`**, **`sender`**, **`sourceMessageId`**, **`sequenceNumber`**, **`messageState`**, **`sourceMessageState`** (ML turn progress; Appendix A §A.0), **`messageType`**, **`createdAt`**, **`content`** — **no `responseRequired`**. In **chat-demo**, each stored bot **part** uses **`messageState: "COMPLETED"`**; **`sourceMessageState`** carries **`IN_PROGRESS`** until the last part, then **`COMPLETED`**. **User/system** examples show **client → BE** request bodies: **no `createdAt`** or **`messageId`** (BE assigns on persist). Include **`responseRequired`** on those rows where relevant.
 
 #### 4.3.1 User text: non-real-estate intent
 ```json
@@ -1007,6 +1009,7 @@ data: {"reason":"response_complete"}
   "sourceMessageId": "msg_u_001",
   "sequenceNumber": 0,
   "messageState": "COMPLETED",
+  "sourceMessageState": "COMPLETED",
   "messageType": "text",
   "createdAt": "2025-03-16T12:00:00.000Z",
   "content": { "text": "Hey! I'm still learning. Wont be able to help you with this. Anything else?" }
@@ -1031,7 +1034,8 @@ data: {"reason":"response_complete"}
   "sender": { "type": "bot" },
   "sourceMessageId": "msg_u_010",
   "sequenceNumber": 0,
-  "messageState": "IN_PROGRESS",
+  "messageState": "COMPLETED",
+  "sourceMessageState": "IN_PROGRESS",
   "messageType": "text",
   "createdAt": "2025-03-16T12:00:00.000Z",
   "content": { "text": "Here are 2bhk properties in sector 32 gurgaon" }
@@ -1045,6 +1049,7 @@ data: {"reason":"response_complete"}
   "sourceMessageId": "msg_u_010",
   "sequenceNumber": 1,
   "messageState": "COMPLETED",
+  "sourceMessageState": "COMPLETED",
   "messageType": "template",
   "createdAt": "2025-03-16T12:00:00.000Z",
   "content": {
@@ -1404,7 +1409,8 @@ data: {"reason":"response_complete"}
   "sender": { "type": "bot" },
   "sourceMessageId": "msg_u_030",
   "sequenceNumber": 0,
-  "messageState": "IN_PROGRESS",
+  "messageState": "COMPLETED",
+  "sourceMessageState": "IN_PROGRESS",
   "messageType": "markdown",
   "createdAt": "2025-03-16T12:00:00.000Z",
   "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" }
@@ -1418,6 +1424,7 @@ data: {"reason":"response_complete"}
   "sourceMessageId": "msg_u_030",
   "sequenceNumber": 1,
   "messageState": "COMPLETED",
+  "sourceMessageState": "COMPLETED",
   "messageType": "markdown",
   "createdAt": "2025-03-16T12:00:00.000Z",
   "content": { "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?" }
@@ -1603,7 +1610,7 @@ data: {"reason":"response_complete"}
 ```
 #### 4.3.10.21 ML context-out — locality intent shift (examples)
 
-**Scenario:** User shifts focus from one locality to another (e.g. **Sector 21 → Sector 32**). ML emits **`messageType: "context"`** first (same `content.data` schema as §4.1), then the visible reply (e.g. `nested_qna`). **`sequenceNumber`** orders the chain; **`messageState: IN_PROGRESS`** on the context row; **`COMPLETED`** only on the **last** ML event for that `sourceMessageId`. See §5.2, §10.6.
+**Scenario:** User shifts focus from one locality to another (e.g. **Sector 21 → Sector 32**). ML emits **`messageType: "context"`** first (same `content.data` schema as §4.1), then the visible reply (e.g. `nested_qna`). **`sequenceNumber`** orders the chain; **`sourceMessageState: IN_PROGRESS`** on non-final parts; **`sourceMessageState: COMPLETED`** only on the **last** ML event for that `sourceMessageId` (each persisted part still has **`messageState: "COMPLETED"`** in chat-demo — Appendix A §A.0). See §5.2, §10.6.
 
 **1) Intent narrowed to Sector 32, Gurgaon (abridged):**
 
@@ -1614,7 +1621,8 @@ data: {"reason":"response_complete"}
   "sender": { "type": "bot" },
   "sourceMessageId": "msg_u_10_23",
   "sequenceNumber": 0,
-  "messageState": "IN_PROGRESS",
+  "messageState": "COMPLETED",
+  "sourceMessageState": "IN_PROGRESS",
   "messageType": "context",
   "createdAt": "2025-03-16T12:00:00.000Z",
   "content": {
@@ -1640,7 +1648,7 @@ data: {"reason":"response_complete"}
 }
 ```
 
-**2) Intent narrowed to Sector 21, Gurgaon (abridged):** same envelope; top-level **`poly`** differs (e.g. mock uses `["a1b2c3d4e5f6sector21gurgaonpoly"]` to distinguish from Sector 32). The next event in the chain is typically `nested_qna` with `sequenceNumber: 1`, `messageState: COMPLETED`.
+**2) Intent narrowed to Sector 21, Gurgaon (abridged):** same envelope; top-level **`poly`** differs (e.g. mock uses `["a1b2c3d4e5f6sector21gurgaonpoly"]` to distinguish from Sector 32). The next event in the chain is typically `nested_qna` with `sequenceNumber: 1`, `messageState: "COMPLETED"`, `sourceMessageState: "COMPLETED"`.
 
 #### 4.3.10.22 Bot markdown: learn more sector 21
 ```json
@@ -1651,6 +1659,7 @@ data: {"reason":"response_complete"}
   "sourceMessageId": "msg_u_10_20",
   "sequenceNumber": 0,
   "messageState": "COMPLETED",
+  "sourceMessageState": "COMPLETED",
   "messageType": "markdown",
   "createdAt": "2025-03-16T12:00:00.000Z",
   "content": {
@@ -1676,6 +1685,7 @@ data: {"reason":"response_complete"}
   "sourceMessageId": "msg_u_10_23",
   "sequenceNumber": 1,
   "messageState": "COMPLETED",
+  "sourceMessageState": "COMPLETED",
   "messageType": "template",
   "createdAt": "2025-03-16T12:00:00.000Z",
   "content": {
@@ -2199,7 +2209,7 @@ When a guest chat (`_ga`) becomes authenticated mid-session:
 ### 4.5 FE runtime behavior notes
 
 - FE starts awaiting UI only when `responseRequired: true` and no final bot event has been received.
-- FE stops loader/awaiting and marks response complete on first terminal outcome on the stream: bot `messageState: COMPLETED | ERRORED_AT_ML`, or any surfaced `messageState: TIMED_OUT_BY_BE` for the active request.
+- FE stops loader/awaiting and marks response complete on first terminal outcome on the stream: bot row **`sourceMessageState: COMPLETED | ERRORED_AT_ML`** (use **`getTurnOrMessageState()`** in chat-demo), or any surfaced `messageState: TIMED_OUT_BY_BE` for the active request.
 - FE treats `connection_close` as stream completion for the turn.
 - FE keeps a local timeout safeguard (current app value: 25s). On timeout, FE shows Retry/Dismiss and then relies on polling (`get-history` with `messages_after`) until it receives the response for that message.
 - Input/CTA behavior:
@@ -2303,6 +2313,14 @@ function renderEvent(event) {
 
 This section documents current behavior in this repository where it differs from or extends the frozen v1.0 examples.
 
+### A.0 Turn state vs part rows (`sourceMessageState` vs `messageId`)
+
+- For a single **user** message, ML may emit multiple **parts** (partial responses). Each part is a distinct persisted row with its own **`messageId`**; all parts in the turn share the same **`sourceMessageId`** (the user message id) and are ordered by **`sequenceNumber`**.
+- **`sourceMessageState`** (`IN_PROGRESS` \| `COMPLETED` \| `ERRORED_AT_ML`) on ML → BE (`ChatEventFromML`) describes **where ML is in finishing the reply** for that **`sourceMessageId`** — it is **not** the state of the individual part row. `IN_PROGRESS` means further parts may follow; `COMPLETED` or `ERRORED_AT_ML` means the turn is terminal from ML’s perspective.
+- BE uses **`sourceMessageState`** to update the **`messageState`** of the **original user message** row in storage.
+- In [`lib/contract-types.ts`](lib/contract-types.ts), persisted **bot** `ChatEventToUser` rows set **`messageState: "COMPLETED"`** for each materialized part and expose **`sourceMessageState`** for turn semantics; FE uses **`getTurnOrMessageState()`** for display and terminal detection.
+- Older narrative in Part B that refers to `messageState` on ML envelopes for turn progress should be read as this **turn / source-message** concept; the TypeScript name **`sourceMessageState`** is the canonical field in this repo.
+
 ### A.1 Transport and request lifecycle
 
 - FE uses:
@@ -2360,7 +2378,7 @@ This section documents current behavior in this repository where it differs from
 ### A.5 Current mock-trigger notes (`lib/mock/ml-flow.ts`)
 
 - Greeting uses **whole-word** matching for `hi|hello|hey` (avoids false positives from words like `this`).
-- **Context-out (Option 3):** user messages that target **only Sector 32** or **only Sector 21** (e.g. “learn more about sector 32”, “tell more about sector 21”) receive a mid-turn **`messageType: "context"`** (IN_PROGRESS) before **`nested_qna`** (COMPLETED), with different top-level **`poly`** in `content.data` per locality (see Part B §4.3.10.21, first Appendix A.8).
+- **Context-out (Option 3):** user messages that target **only Sector 32** or **only Sector 21** (e.g. “learn more about sector 32”, “tell more about sector 21”) receive a mid-turn **`messageType: "context"`** (`sourceMessageState: IN_PROGRESS`) before **`nested_qna`** (`sourceMessageState: COMPLETED`), with different top-level **`poly`** in `content.data` per locality (see Part B §4.3.10.21, first Appendix A.8).
 - `locality comparison` returns locality carousel unless text explicitly contains sector ambiguity (`sector 32` / `sector 21`), in which case nested QnA route handles it.
 - Additional text triggers supported in implementation include:
   - `show me properties according to my preference`,
@@ -2383,7 +2401,7 @@ This section documents current behavior in this repository where it differs from
 
 - Eligible base condition:
   - `sender.type` is `bot` or `system`, and
-  - `messageState === "COMPLETED"` or `messageState === "ERRORED_AT_ML"`, and
+  - **`getTurnOrMessageState(event)`** is `"COMPLETED"` or `"ERRORED_AT_ML"` (bot rows: prefer **`sourceMessageState`** when set), and
   - message is the latest visible message (`isLastMessage`).
 - Text/markdown:
   - rendered for final bot/system `text` and `markdown` messages.

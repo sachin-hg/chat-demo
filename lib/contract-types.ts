@@ -16,6 +16,13 @@ export type MessageState =
   | "TIMED_OUT_BY_BE"
   | "CANCELLED_BY_USER";
 
+/**
+ * ML progress for the **user message** identified by `sourceMessageId` (the “turn”), not the state of an individual
+ * bot **part** row. Each bot response part has its own `messageId`; `sourceMessageState` repeats/updates until the turn completes.
+ * BE maps this onto the **stored user row’s** `messageState` in the DB.
+ */
+export type SourceMessageState = "IN_PROGRESS" | "COMPLETED" | "ERRORED_AT_ML";
+
 export interface Sender {
   type: SenderType;
 }
@@ -80,34 +87,54 @@ export interface ChatEventFromML {
 
   sourceMessageId: string;
   messageType: MessageType;
-  messageState: "IN_PROGRESS" | "COMPLETED" | "ERRORED_AT_ML";
+  /** ML’s progress completing the turn for `sourceMessageId` — not the lifecycle of this part’s row. */
+  sourceMessageState: SourceMessageState;
   error?: { code: string; message: string };
   isVisible?: boolean;
-  
+
   sequenceNumber: number;
-  
+
   content: ChatPayloadContent;
 }
 
 export interface ChatEventToUser {
   conversationId: string;
 
+  /** Unique id for this **row** (each bot “part” / partial response has its own `messageId`). */
   messageId: string;
-  sourceMessageId?: string; // not really required by FE in phase 1
+  sourceMessageId?: string;
   messageType: MessageType;
+  /**
+   * **User / system rows:** lifecycle of that message (PENDING, COMPLETED, …).
+   * **Bot ML rows:** each persisted **part** is typically `COMPLETED` once stored; use **`sourceMessageState`** for ML’s
+   * progress on the parent user turn (`sourceMessageId`).
+   */
   messageState: MessageState;
+  /**
+   * Present on **bot** (ML) rows with `sourceMessageId`: ML’s progress on answering that user message (`IN_PROGRESS` → more
+   * parts may follow; `COMPLETED` / `ERRORED_AT_ML` → terminal for the turn). Not the state of the part row itself.
+   */
+  sourceMessageState?: SourceMessageState;
   createdAt: string;
 
   /** Set on user/system-originated rows; omitted on bot messages (BE → FE). */
   responseRequired?: boolean;
   isVisible?: boolean; // mandatory where sender === user && messageType === user_action
-  
+
   sequenceNumber?: number; // mandatory where sender === bot
-  
+
   sender: Sender;
   content: ChatPayloadContent;
   // Used by BE -> FE (SSE/chat history/send-message responses).
   // Can represent sender types: user | bot | system.
+}
+
+/** For UI/terminals: bot rows use `sourceMessageState` when set; otherwise `messageState`. */
+export function getTurnOrMessageState(ev: ChatEventToUser): MessageState | SourceMessageState {
+  if (ev.sender.type === "bot" && ev.sourceMessageId && ev.sourceMessageState != null) {
+    return ev.sourceMessageState;
+  }
+  return ev.messageState;
 }
 
 export type ChatEvent =

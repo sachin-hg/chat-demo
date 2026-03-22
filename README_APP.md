@@ -64,6 +64,7 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
 ## API (aligned with spec)
 
 - `ChatEvent` is a **flat object** (no nested `payload` wrapper): top-level fields include `messageType`, `content`, `responseRequired`, `isVisible`, `sourceMessageId`, and `sequenceNumber`.
+- **ML multi-part replies:** each bot **part** has its own `messageId`; **`sourceMessageState`** on ML → BE / bot rows is ML’s progress on the **user turn** (`sourceMessageId`), not the part row’s lifecycle. See **`chat_v1.md` Appendix A §A.0** and **`getTurnOrMessageState()`** in `lib/contract-types.ts`.
 - In FE-facing events, `sourceMessageId` is optional and typically not required for rendering.
 - `GET /api/chats/get-conversation-id` → `{ conversationId, isNew }` (`isNew` is demo-app convenience; not required for production clients)
 - Phase 1 identity mapping: BE keeps a stable 1:1 `conversationId` per `userId` (or per `_ga` for anonymous users), so the same user consistently gets the same conversation.
@@ -80,10 +81,10 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
   - SSE events:
     - **`event: connection_ack`** — immediate ack: `data: { "messageId": "...", "messageState": "PENDING" }`
     - **`event: chat_event`** — bot events streamed as they’re produced: `id: <messageId>`, `data: <JSON ChatEvent>`
-    - **`event: connection_close`** — emitted when the turn reaches a terminal outcome (e.g. bot `messageState: COMPLETED | ERRORED_AT_ML`, or surfaced `TIMED_OUT_BY_BE`) or stream inactivity reaches 15s.
+    - **`event: connection_close`** — emitted when the turn reaches a terminal outcome (e.g. bot row **`sourceMessageState`: `COMPLETED` \| `ERRORED_AT_ML`**, or surfaced `TIMED_OUT_BY_BE`) or stream inactivity reaches 15s.
 - ML response handling:
-  - each ML output is stored by BE as a new bot message with `messageState: "COMPLETED"`.
-  - ML `messageState` is applied to the source user message identified by `sourceMessageId`.
+  - each ML output is stored by BE as a new bot message with **`messageState: "COMPLETED"`** (per **part** row) and **`sourceMessageState`** echoing ML’s turn progress.
+  - **`sourceMessageState`** from each ML event is mapped onto the **source user message** row’s **`messageState`** (see `chat_v1.md` Appendix A §A.0).
 - `POST /api/migrate-chat?currentConversationId=c1` with `login_auth_token` header
   - When migration strategy is enabled, BE returns `{ newConversationId: "c2" }` and merges/moves c1-tagged history to c2 in mock DB.
   - FE switches to `c2` for all subsequent API calls; an immediate `get-history` refresh is **optional** (BE merges prior c2 + migrated c1 + new c2 on any `get-history` call with `conversationId=c2`).

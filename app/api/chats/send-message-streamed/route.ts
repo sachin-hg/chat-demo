@@ -150,18 +150,19 @@ export async function POST(request: NextRequest) {
           if (sourceState !== "PENDING" && sourceState !== "IN_PROGRESS") {
             continue;
           }
-          updateMessageStateByUserMessageId(ev.sourceMessageId, ev.messageState);
+          updateMessageStateByUserMessageId(ev.sourceMessageId, ev.sourceMessageState);
           const storedBot = appendEvent({
             ...ev,
             sender: { type: "bot" },
             conversationId: event.conversationId,
-            // Preserve ML messageState (e.g. IN_PROGRESS mid-chain context before final COMPLETED).
-            messageState: ev.messageState,
+            // Each persisted bot **part** is a complete row; turn progress is `sourceMessageState`.
+            messageState: "COMPLETED",
+            sourceMessageState: ev.sourceMessageState,
           });
 
           writeSse({ event: "chat_event", id: storedBot.messageId, data: storedBot });
 
-          if (ev.messageState === "COMPLETED" || ev.messageState === "ERRORED_AT_ML") {
+          if (ev.sourceMessageState === "COMPLETED" || ev.sourceMessageState === "ERRORED_AT_ML") {
             completeRequest(stored.messageId!);
             writeSse({ event: "connection_close", data: { reason: "response_complete" } });
             close();

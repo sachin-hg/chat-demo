@@ -4,6 +4,8 @@ Draft specification for incremental bot text streaming (word/phrase/sentence chu
 
 This document is additive to `chat_v1.md` and only defines v1.1 deltas.
 
+**Turn vs part state (aligned with `chat_v1.md` Appendix A §A.0):** Incremental **`message_done`** and subsequent **`chat_event`** payloads should carry **`sourceMessageState`** for ML turn progress; each materialized bot **part** uses **`messageState: "COMPLETED"`** when stored (see `lib/contract-types.ts`).
+
 ---
 
 ## 1) Scope and Goals
@@ -21,23 +23,21 @@ This document is additive to `chat_v1.md` and only defines v1.1 deltas.
 
 ---
 
-## 2) Backward Compatibility and Version Negotiation
+## 2) Backward Compatibility and Capability Negotiation
 
-Two compatibility knobs are supported. BE should accept both:
+Incremental (v1.1) streaming is negotiated **only** via the **query parameter** on `POST /chats/send-message-streamed`:
 
-1. Query parameter flag:
-   - `POST /chats/send-message-streamed?streamingEnabled=true`
-2. Version header:
-   - `x-chat-api-version: 1.1`
+- `streamingEnabled=true` — request v1.1 incremental SSE (`message_start` / `message_delta` / `message_done`) when the BE feature flag allows.
+- Omitted or `streamingEnabled=false` — **v1 behavior**: SSE uses full `chat_event` bot messages only (no delta events).
+
+No separate API version header is used; clients rely on this query flag only.
 
 ### Effective behavior matrix
 
-| FE capability signal | BE behavior |
+| Query parameter | BE behavior |
 |---|---|
-| No flag/header (legacy FE) | v1 behavior only: `chat_event` full messages, no deltas |
-| `streamingEnabled=true`, no version header | v1.1 incremental mode if BE feature flag allows; otherwise v1 fallback |
-| `x-chat-api-version: 1.1`, no query flag | v1.1 incremental mode if BE feature flag allows; otherwise v1 fallback |
-| both supplied | v1.1 incremental mode if BE feature flag allows; otherwise v1 fallback |
+| `streamingEnabled` absent or `false` (legacy / default) | v1 only: `chat_event` full messages, no `message_*` delta events |
+| `streamingEnabled=true` | v1.1 incremental mode if `ENABLE_INCREMENTAL_STREAMING` allows; otherwise v1 `chat_event` fallback |
 
 ### Recommended BE feature flag
 - `ENABLE_INCREMENTAL_STREAMING=true|false`
@@ -56,9 +56,8 @@ No new endpoint is required.
 
 Request body remains identical to v1.
 
-Additional optional request controls:
-- Query: `streamingEnabled=true|false` (default `false`)
-- Header: `x-chat-api-version: 1.1` (optional)
+Additional optional request control:
+- Query: `streamingEnabled=true|false` (default `false`) — **only** signal for v1.1 incremental SSE (see §2).
 
 Required header:
 - `Accept: text/event-stream`
@@ -72,7 +71,7 @@ v1.1 introduces 3 incremental message events:
 - `message_delta`
 - `message_done`
 
-`message_delta` may include **optional** `chunkId` and `chunkState` (and related rules) — see **§4.4.1**.
+`message_delta` may include **optional** `chunkId` — see **§4.4.1**.
 
 Existing v1 events remain valid:
 - `connection_ack`
@@ -91,9 +90,14 @@ For each bot message stream unit (`messageId`):
 
 ### 4.2 Correlation fields
 
-All incremental events include:
-- `eventId`: persisted event id where relevant (`message_done` must include final persisted id)
-- `messageId`
+Shared across `message_start`, `message_delta`, and `message_done` for a given streaming unit:
+
+- **`messageId`** — BE-assigned id for the **resulting bot message**. Announced in **`message_start`** and repeated on **`message_done`**; this is the **persisted** message id (same as in `get-history` / `ChatEventToUser.messageId`). **Do not** use a separate `eventId` on `message_done` for persistence identity — **`messageId` is the final persisted id.**
+
+**Intermediate (non-persistent) fragments** are **`message_delta`** payloads only. They are **not** stored as separate history rows; each fragment may carry **`chunkId`** (optional but recommended for dedup) to identify that ephemeral chunk across retries/reconnects.
+
+Also included where applicable:
+
 - `sourceMessageId`
 - `sequenceNumber`
 - `messageType` (`text` or `markdown`)
@@ -113,7 +117,7 @@ Notes:
 
 ```txt
 event: message_delta
-data: {"messageId":"msg_b_101","chunkIndex":3,"deltaText":" in Sector 32 Gurgaon","isFinalChunk":false}
+data: {"messageId":"msg_b_101","chunkIndex":3,"deltaText":" in Sector 32 Gurgaon"}
 ```
 
 Rules:
@@ -121,23 +125,19 @@ Rules:
 - `chunkIndex` starts at `0` and increments by 1.
 - FE must ignore duplicate or out-of-order chunks (`chunkIndex <= lastAppliedIndex`).
 
-#### 4.4.1 Optional chunk identity and state (`chunkId`, `chunkState`)
+#### 4.4.1 Optional chunk identity (`chunkId`)
 
-These fields are **optional** on each `message_delta`. Clients that ignore them remain fully compatible; **`chunkIndex`** stays **required** and **authoritative for ordering**.
+On each `message_delta`, **`chunkId`** is **optional**. Clients that ignore it remain fully compatible; **`chunkIndex`** stays **required** and **authoritative for ordering**.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `chunkIndex` | number | **Yes** | Monotonic sequence `0, 1, 2, …` within this `messageId`. |
 | `deltaText` | string | **Yes** | Append-only UTF-8 fragment (word / phrase / sentence). |
-| `chunkId` | string | No | Stable id per chunk (e.g. ULID/UUID). If the same `chunkId` is received twice (retries, reconnect), FE **must** apply **at most once** (idempotent dedup). |
-| `chunkState` | `"INTERMEDIATE"` \| `"FINAL"` | No | **INTERMEDIATE** (default): more deltas may follow for this message. **FINAL**: optional hint that this is the last **delta** payload before completion; FE **must still** process **`message_done`** for canonical `fullText`, `messageState`, and persistence alignment (see below). |
-| `isFinalChunk` | boolean | No | Optional hint; prefer **`message_done`** as the single completion boundary (see below). |
+| `chunkId` | string | No | **Identity for this intermediate, non-persisted chunk** (e.g. ULID/UUID). Deltas are not separate `ChatEvent` rows; `chunkId` identifies the fragment for dedup/observability. If the same `chunkId` is received twice (retries, reconnect), FE **must** apply **at most once** (idempotent dedup). |
 
-**Recommended completion semantics (production):**
+**Completion:** only **`message_done`** marks the end of the stream for that `messageId` (canonical `fullText`, **`messageState`** on the part, **`sourceMessageState`** for turn progress, persistence). No redundant “final chunk” flags on `message_delta`.
 
-- **Primary FINAL signal:** **`message_done`** — carries `fullText` (must equal concatenation of all **accepted** `deltaText` fragments in `chunkIndex` order), plus terminal `messageState` and correlation fields. FE clears transient streaming state here.
-- **Why optional `chunkState` / `chunkId`:** BE may normalize provider streams that emit chunk ids or “final token” markers; exposing them helps idempotency and observability without replacing **`message_done`**.
-- **Avoid ambiguity:** do not require FE to treat **`chunkState: "FINAL"`** alone as stream end; **`message_done`** remains required unless a future minor revision explicitly defines a “delta-only completion” profile (not recommended for v1.1).
+- **Why optional `chunkId`:** BE may normalize provider streams that emit per-chunk ids; exposing them helps idempotency and observability. **`message_done`** remains the sole completion signal.
 
 **FE handling summary:**
 
@@ -146,24 +146,25 @@ These fields are **optional** on each `message_delta`. Clients that ignore them 
 3. Append `deltaText` to `bufferText` for accepted chunks.
 4. On **`message_done`**, verify `fullText` matches `bufferText` (or replace buffer with `fullText` if policy allows repair), then finalize.
 
-Optional example including identity fields:
+Optional example with `chunkId`:
 
 ```txt
 event: message_delta
-data: {"messageId":"msg_b_101","chunkIndex":3,"chunkId":"01ARZ3NDEKTSV4RRFFQ69G2FAV","chunkState":"INTERMEDIATE","deltaText":" in Sector 32 Gurgaon"}
+data: {"messageId":"msg_b_101","chunkIndex":3,"chunkId":"01ARZ3NDEKTSV4RRFFQ69G2FAV","deltaText":" in Sector 32 Gurgaon"}
 ```
 
 ### 4.5 `message_done`
 
 ```txt
 event: message_done
-data: {"eventId":"evt_601","messageId":"msg_b_101","sourceMessageId":"msg_u_99","sequenceNumber":0,"messageType":"markdown","messageState":"IN_PROGRESS","fullText":"# Top picks\nHere are 2BHK options in Sector 32 Gurgaon."}
+data: {"messageId":"msg_b_101","sourceMessageId":"msg_u_99","sequenceNumber":0,"messageType":"markdown","messageState":"COMPLETED","sourceMessageState":"IN_PROGRESS","fullText":"# Top picks\nHere are 2BHK options in Sector 32 Gurgaon."}
 ```
 
 Rules:
+- **`messageId`** is the persisted bot message id (matches `message_start` for this unit). No separate `eventId` field is required on `message_done` for storage correlation.
 - `fullText` must equal concatenation of all accepted deltas (after applying `chunkIndex` ordering and optional `chunkId` dedup per §4.4.1).
-- `messageState` follows existing response sequencing semantics.
-- `message_done` is idempotent; FE may receive duplicates and should upsert by `eventId` or `messageId`.
+- **`messageState`** on `message_done` reflects the **part** row (typically **`COMPLETED`** once finalized); **`sourceMessageState`** carries **turn** progress (e.g. **`IN_PROGRESS`** when a template `chat_event` still follows).
+- `message_done` is idempotent; FE may receive duplicates and should upsert by **`messageId`**.
 
 ### 4.6 Existing `chat_event` in v1.1
 
@@ -175,7 +176,7 @@ Example:
 ```txt
 id: evt_602
 event: chat_event
-data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b_102","sourceMessageId":"msg_u_99","sequenceNumber":1,"messageState":"COMPLETED","messageType":"template","content":{"templateId":"property_carousel","data":{"property_count":15,"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]},"properties":[{"id":"p1"}]}}}}
+data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b_102","sourceMessageId":"msg_u_99","sequenceNumber":1,"messageState":"COMPLETED","sourceMessageState":"COMPLETED","messageType":"template","content":{"templateId":"property_carousel","data":{"property_count":15,"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]},"properties":[{"id":"p1"}]}}}}
 ```
 
 ### 4.7 `connection_close`
@@ -191,8 +192,7 @@ No change from v1 reasons:
 ## 5) Canonical FE Handling Rules
 
 ### 5.1 Capability detection
-- FE sends `streamingEnabled=true` only when client implements incremental logic.
-- FE may additionally send `x-chat-api-version: 1.1`.
+- FE adds `streamingEnabled=true` to the `send-message-streamed` URL only when the client implements incremental (`message_start` / `message_delta` / `message_done`) handling.
 
 ### 5.2 Incremental render state
 
@@ -205,7 +205,7 @@ Maintain per-`messageId` transient state:
 
 ### 5.3 Event handling
 - `message_start`: create transient message slot if missing.
-- `message_delta`: append `deltaText` when `chunkIndex` is the next expected index; if `chunkId` is present, skip when already in `seenChunkIds` (§4.4.1). Ignore optional `chunkState` for completion — wait for `message_done`.
+- `message_delta`: append `deltaText` when `chunkIndex` is the next expected index; if `chunkId` is present, skip when already in `seenChunkIds` (§4.4.1). Completion is only via `message_done`.
 - `message_done`: finalize/persist in UI list and clear transient state.
 - `chat_event` template: append directly (no transient buffer).
 
@@ -224,7 +224,7 @@ Maintain per-`messageId` transient state:
 ### 6.1 Provider normalization
 - BE adapts provider token stream into v1.1 normalized events.
 - FE never receives provider-native chunk format.
-- When upstream provides stable per-chunk ids or “final segment” hints, BE **may** emit optional `chunkId` / `chunkState` on `message_delta` (§4.4.1); **`chunkIndex`** remains the canonical ordering key.
+- When upstream provides stable per-chunk ids, BE **may** emit optional `chunkId` on `message_delta` (§4.4.1); **`chunkIndex`** remains the canonical ordering key.
 
 ### 6.2 Persistence strategy
 - Persist final bot message at `message_done` (or equivalent completion point).
@@ -263,7 +263,7 @@ data: {"eventId":"evt_u_11","messageState":"PENDING"}
 
 id: evt_b_21
 event: chat_event
-data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b_21","sourceMessageId":"msg_u_11","sequenceNumber":0,"messageState":"COMPLETED","messageType":"markdown","content":{"text":"Here are options for you."}}}
+data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b_21","sourceMessageId":"msg_u_11","sequenceNumber":0,"messageState":"COMPLETED","sourceMessageState":"COMPLETED","messageType":"markdown","content":{"text":"Here are options for you."}}}
 
 event: connection_close
 data: {"reason":"response_complete"}
@@ -276,7 +276,6 @@ Request:
 POST /api/chats/send-message-streamed?streamingEnabled=true
 Accept: text/event-stream
 Content-Type: application/json
-x-chat-api-version: 1.1
 ```
 
 SSE response:
@@ -288,17 +287,17 @@ event: message_start
 data: {"messageId":"msg_b_31","sourceMessageId":"msg_u_12","sequenceNumber":0,"messageType":"markdown","context":{"user_intent":"SRP","service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","poly":["dce9290ec3fe8834a293"],"est":194298,"properties":[{"id":123,"type":"project"}],"uuid":[],"filters":{"type":"project"}}}
 
 event: message_delta
-data: {"messageId":"msg_b_31","chunkIndex":0,"deltaText":"# Great options","isFinalChunk":false}
+data: {"messageId":"msg_b_31","chunkIndex":0,"deltaText":"# Great options"}
 
 event: message_delta
-data: {"messageId":"msg_b_31","chunkIndex":1,"deltaText":" in Sector 32 Gurgaon","isFinalChunk":false}
+data: {"messageId":"msg_b_31","chunkIndex":1,"deltaText":" in Sector 32 Gurgaon"}
 
 event: message_done
-data: {"eventId":"evt_b_31","messageId":"msg_b_31","sourceMessageId":"msg_u_12","sequenceNumber":0,"messageType":"markdown","messageState":"IN_PROGRESS","fullText":"# Great options in Sector 32 Gurgaon"}
+data: {"messageId":"msg_b_31","sourceMessageId":"msg_u_12","sequenceNumber":0,"messageType":"markdown","messageState":"COMPLETED","sourceMessageState":"IN_PROGRESS","fullText":"# Great options in Sector 32 Gurgaon"}
 
 id: evt_b_32
 event: chat_event
-data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b_32","sourceMessageId":"msg_u_12","sequenceNumber":1,"messageState":"COMPLETED","messageType":"template","content":{"templateId":"property_carousel","data":{"property_count":15,"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]},"properties":[{"id":"p1"},{"id":"p2"}]}}}}
+data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b_32","sourceMessageId":"msg_u_12","sequenceNumber":1,"messageState":"COMPLETED","sourceMessageState":"COMPLETED","messageType":"template","content":{"templateId":"property_carousel","data":{"property_count":15,"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]},"properties":[{"id":"p1"},{"id":"p2"}]}}}}
 
 event: connection_close
 data: {"reason":"response_complete"}
@@ -310,7 +309,7 @@ Request:
 ```http
 POST /api/chats/send-message-streamed?streamingEnabled=true
 Accept: text/event-stream
-x-chat-api-version: 1.1
+Content-Type: application/json
 ```
 
 SSE response:
@@ -345,20 +344,22 @@ These are transport event payload contracts (SSE `data` field), not stored `Chat
   "messageId": "string",
   "chunkIndex": 0,
   "deltaText": "string",
-  "isFinalChunk": false
+  "chunkId": "string"
 }
 ```
+
+`chunkId` is **optional** (§4.4.1). When present, it identifies that **non-persisted** intermediate fragment.
 
 ### 8.3 `MessageDoneEvent`
 ```json
 {
-  "eventId": "string",
   "messageId": "string",
   "sourceMessageId": "string",
   "sequenceNumber": 0,
   "messageType": "text | markdown",
   "fullText": "string",
   "messageState": "COMPLETED",
+  "sourceMessageState": "IN_PROGRESS | COMPLETED | ERRORED_AT_ML",
   "context": {
     "service": "buy",
     "category": "residential",
@@ -367,6 +368,8 @@ These are transport event payload contracts (SSE `data` field), not stored `Chat
   }
 }
 ```
+
+**Persistence:** `messageId` is the sole id for the stored bot row; **`message_done` does not carry `eventId`** for that purpose.
 
 ---
 
@@ -380,14 +383,14 @@ sequenceDiagram
     participant BE as Chat Backend
     participant ML as ML Provider
 
-    FE->>BE: POST /chats/send-message-streamed?streamingEnabled=true + x-chat-api-version:1.1
+    FE->>BE: POST /chats/send-message-streamed?streamingEnabled=true
     BE-->>FE: SSE connection_ack
     BE->>ML: Start provider streaming call
     ML-->>BE: token chunks
     BE-->>FE: SSE message_start
     BE-->>FE: SSE message_delta (0..N)
-    BE-->>FE: SSE message_done (messageState=IN_PROGRESS)
-    BE-->>FE: SSE chat_event (template, messageState=COMPLETED)
+    BE-->>FE: SSE message_done (messageState=COMPLETED, sourceMessageState=IN_PROGRESS)
+    BE-->>FE: SSE chat_event (template, messageState=COMPLETED, sourceMessageState=COMPLETED)
     BE-->>FE: SSE connection_close(response_complete)
 ```
 
@@ -410,7 +413,7 @@ sequenceDiagram
 
 1. Ship BE support behind `ENABLE_INCREMENTAL_STREAMING`.
 2. FE adds parser for new events; keep v1 `chat_event` path intact.
-3. Enable FE flag for internal users only (`streamingEnabled=true` + version header).
+3. Enable incremental mode for internal users first (`streamingEnabled=true` on the request URL).
 4. Monitor:
    - time to first chunk
    - stream completion rate
@@ -422,7 +425,6 @@ sequenceDiagram
 
 ## 11) Open Decisions Before Implementation
 
-1. Should `streamingEnabled=true` alone be sufficient, or must FE also send `x-chat-api-version: 1.1`?
-2. Should `message_done.fullText` be mandatory (recommended) or optional when BE can guarantee exact reconstruction?
-3. Should `context` be emitted only in `message_done`, or both `message_start` and `message_done` (current recommendation: both)?
+1. Should `message_done.fullText` be mandatory (recommended) or optional when BE can guarantee exact reconstruction?
+2. Should `context` be emitted only in `message_done`, or both `message_start` and `message_done` (current recommendation: both)?
 

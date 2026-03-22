@@ -1,6 +1,6 @@
 "use client";
 
-import type { ChatEventFromUser, ChatEventToUser } from "@/lib/contract-types";
+import { getTurnOrMessageState, type ChatEventFromUser, type ChatEventToUser } from "@/lib/contract-types";
 import { RichText } from "./RichText";
 import { PropertyCarousel, getClipboardTextForPropertyCarousel } from "./templates/PropertyCarousel";
 import { LoginScreen } from "./templates/LoginScreen";
@@ -62,6 +62,7 @@ export function ChatMessage({
 }: ChatMessageProps) {
   const { sender, messageType, content } = event;
   const messageState = event.messageState;
+  const turnOrMessageState = getTurnOrMessageState(event);
   const isBot = sender.type === "bot";
   const isSystemOrBot = sender.type === "bot" || sender.type === "system";
   const isUser = sender.type === "user";
@@ -70,7 +71,7 @@ export function ChatMessage({
   if (messageType === "analytics") return null;
   if (messageType === "context") return null;
   if (messageState === "CANCELLED_BY_USER") return null;
-  if (messageState === "ERRORED_AT_ML" || messageState === "TIMED_OUT_BY_BE") {
+  if (turnOrMessageState === "ERRORED_AT_ML" || messageState === "TIMED_OUT_BY_BE") {
     return (
       <div className="mb-2">
         <p className="text-sm text-[#0a0a0a] leading-[1.35]">Something went wrong. Please try again.</p>
@@ -117,7 +118,7 @@ export function ChatMessage({
   }
 
   // FeedbackRow is only eligible for bot/system messages.
-  const showFeedbackBase = isSystemOrBot && event.messageState === "COMPLETED";
+  const showFeedbackBase = isSystemOrBot && turnOrMessageState === "COMPLETED";
 
   // Bot text
   if (messageType === "text" && content.text) {

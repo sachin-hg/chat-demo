@@ -1,4 +1,4 @@
-import type { ChatEvent, ChatEventFromUser, SenderType } from "./contract-types";
+import type { ChatEvent, ChatEventFromUser, SenderType, SourceMessageState } from "./contract-types";
 
 const DEFAULT_CONV_ID = "c1";
 const MIGRATED_CONV_ID = "c2";
@@ -27,6 +27,8 @@ export type StoredEvent = ChatEvent & {
   createdAt: string;
   /** Present on persisted user rows when tracking request lifecycle (not on `ChatEventFromUser` wire shape). */
   messageState?: MessageState;
+  /** Bot ML rows: turn progress for `sourceMessageId` (see `chat_v1.md` / contract-types). */
+  sourceMessageState?: SourceMessageState;
 };
 
 type SSEClient = (data: string) => void;
@@ -282,37 +284,35 @@ function getRequestByUserMessageId(userMessageId: string): ChatRequest | undefin
   return requests.find((r) => r.userMessageId === userMessageId);
 }
 
-function getRequestBySourceMessageId(sourceMessageId?: string): ChatRequest | undefined {
-  if (!sourceMessageId) return undefined;
-  const userEvent = events.find(
-    (e) => e.sender.type === "user" && e.messageId === sourceMessageId
-  );
-  if (!userEvent?.messageId) return undefined;
-  return getRequestByUserMessageId(userEvent.messageId);
-}
-
 function resolveMessageState(event: StoredEvent): MessageState | undefined {
+  // Bot rows carry their own `messageState` (part row) + optional `sourceMessageState` (turn); never infer from user request.
+  if (event.sender?.type === "bot") return undefined;
+
   // user-originated request event
   const direct = getRequestByUserMessageId(event.messageId);
   if (direct) return direct.state;
-
-  // bot responses tied through sourceMessageId
-  const fromSource = getRequestBySourceMessageId(
-    "sourceMessageId" in event ? (event as { sourceMessageId?: string }).sourceMessageId : undefined
-  );
-  if (fromSource) return fromSource.state;
 
   return undefined;
 }
 
 function withMessageState(event: StoredEvent): StoredEvent {
-  if (event.messageState) return event;
+  if (event.messageState != null && event.messageState !== undefined) return event;
+
   const resolved = resolveMessageState(event);
-  if (!resolved) return event;
-  return {
-    ...event,
-    messageState: resolved,
-  };
+  if (resolved) {
+    return { ...event, messageState: resolved };
+  }
+
+  // Bot bubbles: materialized part rows use messageState COMPLETED; turn progress is sourceMessageState (see contract-types).
+  if (event.sender?.type === "bot") {
+    const sms = (event as { sourceMessageState?: SourceMessageState }).sourceMessageState;
+    if (sms != null) {
+      return { ...event, messageState: "COMPLETED" };
+    }
+    return { ...event, messageState: "COMPLETED" };
+  }
+
+  return event;
 }
 
 function pushEventWithoutBroadcast(event: Parameters<typeof appendEvent>[0]) {
@@ -350,6 +350,7 @@ function seedLoggedInConversationIfNeeded(conversationId: string) {
     sourceMessageId: "msg_old_1",
     sequenceNumber: 0,
     messageState: "COMPLETED",
+    sourceMessageState: "COMPLETED",
     content: { text: "Here are some older recommendations from your previous logged-in chat." },
     createdAt: "2026-01-06T10:00:02.000Z",
   } as Parameters<typeof appendEvent>[0]);
