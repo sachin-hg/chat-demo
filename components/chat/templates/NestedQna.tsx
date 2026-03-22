@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 export interface NestedQnaOption {
   id: string;
@@ -43,30 +43,22 @@ export function NestedQna({
   onComplete,
   disabled = false,
 }: Props) {
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [answers, setAnswers] = useState<
+    Record<string, { selectionId?: string; selectionLabel?: string; text?: string; skipped?: true }>
+  >({});
+  const didSubmitRef = useRef(false);
+
+  const isSingle = selections?.length === 1;
+
   if (!selections?.length) return null;
 
-  const isSingle = selections.length === 1;
-  const [currentIdx, setCurrentIdx] = useState(0);
   const current = selections[Math.min(currentIdx, selections.length - 1)];
   const currentQid = current.questionId;
   const isLast = currentIdx === selections.length - 1;
 
-  const didSubmitRef = useRef(false);
-
-  const [answers, setAnswers] = useState<
-    Record<string, { selectionId?: string; selectionLabel?: string; text?: string; skipped?: true }>
-  >({});
-
   const currentText = answers[currentQid]?.text ?? "";
   const currentSelectedId = answers[currentQid]?.selectionId;
-
-  const allDone = useMemo(() => {
-    if (isSingle) return true; // single submits immediately
-    return selections.every((s) => {
-      const a = answers[s.questionId];
-      return Boolean(a?.selectionId) || Boolean(a?.text?.trim()) || a?.skipped === true;
-    });
-  }, [answers, selections, isSingle]);
 
   const buildPayloadAndLabel = (
     answersState: typeof answers
@@ -100,6 +92,11 @@ export function NestedQna({
     onComplete(payload, derivedLabel);
   };
 
+  /** Never call `onComplete` (parent setState) synchronously inside a `setAnswers` updater — defer to after render. */
+  const submitAllAfterRender = (answersState: typeof answers) => {
+    queueMicrotask(() => submitAll(answersState));
+  };
+
   const setText = (qid: string, text: string) => {
     setAnswers((prev) => ({
       ...prev,
@@ -128,7 +125,7 @@ export function NestedQna({
           ...prev,
           [currentQid]: { selectionId: optId, selectionLabel: label },
         };
-        submitAll(next);
+        submitAllAfterRender(next);
         return next;
       });
       return;
@@ -150,7 +147,7 @@ export function NestedQna({
       if (!trimmed) return;
       setAnswers((prev) => {
         const next = { ...prev, [currentQid]: { text: trimmed } };
-        submitAll(next);
+        submitAllAfterRender(next);
         return next;
       });
       return;
@@ -165,7 +162,7 @@ export function NestedQna({
         } else if (trimmed) {
           next[currentQid] = { text: trimmed };
         }
-        submitAll(next);
+        submitAllAfterRender(next);
         return next;
       });
       return;
@@ -188,7 +185,7 @@ export function NestedQna({
     // single skip via X
     setAnswers((prev) => {
       const next: typeof answers = { ...prev, [currentQid]: { skipped: true as const } };
-      submitAll(next);
+      submitAllAfterRender(next);
       return next;
     });
   };

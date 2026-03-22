@@ -98,7 +98,8 @@ export interface ChatEventToUser {
   messageState: MessageState;
   createdAt: string;
 
-  responseRequired: boolean; // mandatory where sender === user
+  /** Set on user/system-originated rows; omitted on bot messages (BE → FE). */
+  responseRequired?: boolean;
   isVisible?: boolean; // mandatory where sender === user && messageType === user_action
   
   sequenceNumber?: number; // mandatory where sender === bot

@@ -22,6 +22,8 @@ interface StoredMessage extends ChatEventToUser {
 
 const INITIAL_PAGE_SIZE = 6;
 const LOAD_MORE_PAGE_SIZE = 6;
+/** After this many auto-loads (scroll-up), user must tap "View older messages" to protect BE. */
+const AUTO_LOAD_OLDER_MAX = 4;
 const REPLY_TIMEOUT_MS = 25000;
 
 type ReplyStatus = "idle" | "sending" | "awaiting" | "timeout" | "error";
@@ -401,6 +403,8 @@ function ChatPageContent() {
   const [awaitingElapsedSec, setAwaitingElapsedSec] = useState(0);
   const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const [loadingMoreOlder, setLoadingMoreOlder] = useState(false);
+  /** Successful auto-loads via IntersectionObserver (0 … AUTO_LOAD_OLDER_MAX). */
+  const [autoOlderLoadsCount, setAutoOlderLoadsCount] = useState(0);
   const [input, setInput] = useState("");
   const toast = useToast();
   const [showInfoModal, setShowInfoModal] = useState(false);
@@ -419,6 +423,8 @@ function ChatPageContent() {
   const cancelledPendingLocalIdsRef = useRef<Set<string>>(new Set());
   const activeSendStreamAbortRef = useRef<AbortController | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement | null>(null);
+  const loadOlderSentinelRef = useRef<HTMLDivElement | null>(null);
+  const olderLoadInFlightRef = useRef(false);
   const scrollRestoreAfterPrependRef = useRef<{ scrollTop: number; scrollHeight: number } | null>(null);
   const lastRenderedMessageIdRef = useRef<string | undefined>(undefined);
   const lastMessagesRef = useRef<StoredMessage[]>([]);
@@ -505,6 +511,11 @@ function ChatPageContent() {
     };
   }, [isDemo]);
 
+  // Reset auto older-load budget when conversation changes.
+  useEffect(() => {
+    setAutoOlderLoadsCount(0);
+  }, [conversationId]);
+
   // Login-time migration (mock): move anon c1 history into logged-in c2 and switch FE to c2.
   useEffect(() => {
     if (!auth.isLoggedIn || !conversationId || hasMigratedRef.current) return;
@@ -545,18 +556,31 @@ function ChatPageContent() {
     }
   }, [messages]);
 
-  // Back to bottom visibility
-  useEffect(() => {
+  // Back to bottom visibility — must re-subscribe when the scroll container mounts (when loading finishes).
+  // On first mount, `loading` is true and the ref isn't in the DOM, so an effect with `[]` never attaches.
+  const updateBackToBottomVisibility = useCallback(() => {
     const el = messagesScrollRef.current;
     if (!el) return;
-    const handleScroll = () => {
-      const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-      // Show only when user is significantly above bottom (at least half viewport).
-      setShowBackToBottom(distFromBottom > el.clientHeight * 0.5);
-    };
-    el.addEventListener("scroll", handleScroll, { passive: true });
-    return () => el.removeEventListener("scroll", handleScroll);
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    // Show when clearly not at bottom (common ~100px threshold; also scales on tall viewports).
+    const threshold = Math.max(100, el.clientHeight * 0.2);
+    setShowBackToBottom(distFromBottom > threshold);
   }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    updateBackToBottomVisibility();
+    el.addEventListener("scroll", updateBackToBottomVisibility, { passive: true });
+    return () => el.removeEventListener("scroll", updateBackToBottomVisibility);
+  }, [loading, updateBackToBottomVisibility]);
+
+  // Content height changes without a scroll event (e.g. prepend history) — keep FAB in sync.
+  useEffect(() => {
+    if (loading) return;
+    updateBackToBottomVisibility();
+  }, [loading, messages.length, updateBackToBottomVisibility]);
 
   useEffect(() => {
     const onOnline = () => {
@@ -575,18 +599,22 @@ function ChatPageContent() {
     };
   }, []);
 
-  const loadMoreOlder = useCallback(async () => {
-    if (!conversationId || loadingMoreOlder || messages.length === 0) return;
-    const firstMessageId = messages[0].messageId;
+  const loadMoreOlder = useCallback(async (source: "auto" | "manual" = "manual") => {
+    if (!conversationId || olderLoadInFlightRef.current) return;
+    const list = lastMessagesRef.current;
+    if (list.length === 0) return;
+    const firstMessageId = list[0].messageId;
     if (!firstMessageId) return;
+
+    olderLoadInFlightRef.current = true;
     setLoadingMoreOlder(true);
     try {
       const hist = await getHistory(conversationId, {
         messages_before: firstMessageId,
         page_size: LOAD_MORE_PAGE_SIZE,
       });
-      const list = hist.messages as StoredMessage[];
-      const toPrepend = list.filter(
+      const histList = hist.messages as StoredMessage[];
+      const toPrepend = histList.filter(
         (m) => m.messageId && !knownMessageIdsRef.current.has(m.messageId)
       );
       toPrepend.forEach((m) => m.messageId && knownMessageIdsRef.current.add(m.messageId));
@@ -601,11 +629,47 @@ function ChatPageContent() {
         }
         setMessages((prev) => [...toPrepend, ...prev]);
       }
-    } catch (_) {}
-    finally {
+      if (source === "auto" && toPrepend.length > 0) {
+        setAutoOlderLoadsCount((c) => Math.min(c + 1, AUTO_LOAD_OLDER_MAX));
+      }
+    } catch (_) {
+      // keep autoOlderLoadsCount unchanged on failure
+    } finally {
+      olderLoadInFlightRef.current = false;
       setLoadingMoreOlder(false);
     }
-  }, [conversationId, loadingMoreOlder, messages]);
+  }, [conversationId]);
+
+  const manualOlderLoadOnly = autoOlderLoadsCount >= AUTO_LOAD_OLDER_MAX;
+
+  // Auto-load older messages when user scrolls near the top (first AUTO_LOAD_OLDER_MAX times per conversation).
+  // useLayoutEffect so sentinel ref exists before observe. deps[5] changes only when older messages prepend.
+  useLayoutEffect(() => {
+    if (loading || !hasMoreOlder || manualOlderLoadOnly) return;
+    const root = messagesScrollRef.current;
+    const sentinel = loadOlderSentinelRef.current;
+    if (!root || !sentinel) return;
+
+    let prevIntersecting = false;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        const now = entry.isIntersecting;
+        if (now && !prevIntersecting && !olderLoadInFlightRef.current) {
+          void loadMoreOlder("auto");
+        }
+        prevIntersecting = now;
+      },
+      {
+        root,
+        rootMargin: "280px 0px 0px 0px",
+        threshold: 0,
+      }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loading, hasMoreOlder, manualOlderLoadOnly, loadMoreOlder, messages[0]?.messageId]);
 
   const startAwaitingReply = useCallback(
     (_userMessageId: string) => {
@@ -731,7 +795,11 @@ function ChatPageContent() {
 
   const handleUserAction = useCallback(
     async (event: ChatEventFromUser) => {
-      if (!conversationId || sending || replyStatus === "awaiting") return;
+      if (!conversationId || replyStatus === "awaiting") return;
+      const expectsResponse = event.responseRequired === true;
+      // Fire-and-forget user_action (shortlist, contact ack, etc.) must not be blocked by an in-flight
+      // streamed send — otherwise postAck succeeds but this handler no-ops and the derivedLabel never appears.
+      if (expectsResponse && sending) return;
       if (isOffline) {
         setNetworkError(true);
         return;
@@ -750,22 +818,25 @@ function ChatPageContent() {
         messageState: "PENDING",
         createdAt: new Date().toISOString(),
       };
-      currentPendingLocalMessageIdRef.current = pendingId;
-      lastRequestMessageIdRef.current = null;
       setMessages((prev) => [...prev, stored]);
-      setSending(true);
-      setReplyStatus("sending");
+
+      // Only touch global send/stream refs when this turn participates in the main send pipeline.
       const abortController = new AbortController();
-      activeSendStreamAbortRef.current = abortController;
+      if (expectsResponse) {
+        currentPendingLocalMessageIdRef.current = pendingId;
+        lastRequestMessageIdRef.current = null;
+        setSending(true);
+        setReplyStatus("sending");
+        activeSendStreamAbortRef.current = abortController;
+      }
+
       let ackReceived = false;
-      const expectsResponse = fullEvent.responseRequired === true;
 
       try {
         if (!expectsResponse) {
           const ack = await sendMessage(fullEvent);
           setNetworkError(false);
           ackReceived = true;
-          currentPendingLocalMessageIdRef.current = null;
           if (cancelledPendingLocalIdsRef.current.has(pendingId)) {
             cancelledPendingLocalIdsRef.current.delete(pendingId);
             setMessages((prev) =>
@@ -778,12 +849,14 @@ function ChatPageContent() {
             if (conversationId) cancelRequest(ack.messageId, conversationId).catch(() => {});
             return;
           }
-          lastRequestMessageIdRef.current = ack.messageId;
           knownMessageIdsRef.current.add(ack.messageId);
           setMessages((prev) =>
-            prev.map((m) => (m.messageId === pendingId ? { ...m, messageId: ack.messageId } : m))
+            prev.map((m) =>
+              m.messageId === pendingId
+                ? { ...m, messageId: ack.messageId, messageState: "COMPLETED" as const }
+                : m
+            )
           );
-          setReplyStatus("idle");
         } else {
           await sendMessageStream(
             fullEvent,
@@ -824,14 +897,17 @@ function ChatPageContent() {
         }
       } catch (e) {
         // Abort can happen on cancel/timeout; don't flip UI into "error".
-        if (abortController.signal.aborted) return;
+        if (expectsResponse && abortController.signal.aborted) return;
         console.error(e);
         if (isNetworkFailure(e)) setNetworkError(true);
-        setReplyStatus("error");
+        // Ack-only turns run alongside an active stream; don't clobber replyStatus / sending for the main turn.
+        if (expectsResponse) setReplyStatus("error");
         if (!ackReceived) setMessages((prev) => prev.filter((m) => m.messageId !== pendingId));
       } finally {
-        if (activeSendStreamAbortRef.current === abortController) activeSendStreamAbortRef.current = null;
-        setSending(false);
+        if (expectsResponse) {
+          if (activeSendStreamAbortRef.current === abortController) activeSendStreamAbortRef.current = null;
+          setSending(false);
+        }
       }
     },
     [
@@ -1126,17 +1202,30 @@ function ChatPageContent() {
         {/* Message list */}
         {hasMessages && (
           <div className="pt-3 pb-2">
-            {/* View older messages */}
+            {/* Older messages: IO auto-load (first 4 batches), then manual "View older" to protect BE */}
             {hasMoreOlder && (
-              <div className="flex justify-center mb-3">
-                <button
-                  type="button"
-                  onClick={loadMoreOlder}
-                  disabled={loadingMoreOlder}
-                  className="text-xs font-medium text-[#5E23DC] px-4 py-1.5 rounded-full bg-white border border-[#e1e2e8] shadow-sm hover:bg-[#f1ebff] disabled:opacity-50 transition-colors"
-                >
-                  {loadingMoreOlder ? "Loading…" : "View older messages"}
-                </button>
+              <div className="flex flex-col items-center justify-center mb-3 gap-2 min-h-[32px]">
+                {loadingMoreOlder ? (
+                  <div
+                    className="w-6 h-6 rounded-full border-2 border-[#5E23DC] border-t-transparent animate-spin shrink-0"
+                    aria-label="Loading older messages"
+                  />
+                ) : manualOlderLoadOnly ? (
+                  <button
+                    type="button"
+                    onClick={() => void loadMoreOlder("manual")}
+                    className="text-xs font-medium text-[#5E23DC] px-4 py-1.5 rounded-full bg-white border border-[#e1e2e8] shadow-sm hover:bg-[#f1ebff] transition-colors"
+                  >
+                    View older messages
+                  </button>
+                ) : null}
+                {!manualOlderLoadOnly && (
+                  <div
+                    ref={loadOlderSentinelRef}
+                    className="w-full h-px shrink-0 pointer-events-none"
+                    aria-hidden
+                  />
+                )}
               </div>
             )}
 
@@ -1231,7 +1320,7 @@ function ChatPageContent() {
         <button
           type="button"
           onClick={scrollToBottom}
-          className="absolute left-1/2 -translate-x-1/2 bottom-[88px] w-12 h-12 rounded-full bg-white border border-[#f0f0f0] shadow-[0_2px_10px_rgba(0,0,0,0.12)] flex items-center justify-center text-[#111] hover:bg-[#fafafa] transition-colors z-20"
+          className="absolute left-1/2 -translate-x-1/2 bottom-[88px] w-12 h-12 rounded-full bg-white border border-[#f0f0f0] shadow-[0_2px_10px_rgba(0,0,0,0.12)] flex items-center justify-center text-[#111] hover:bg-[#fafafa] transition-colors z-40 pointer-events-auto"
           aria-label="Back to bottom"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">

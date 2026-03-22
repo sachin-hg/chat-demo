@@ -352,7 +352,6 @@ function seedLoggedInConversationIfNeeded(conversationId: string) {
     messageState: "COMPLETED",
     content: { text: "Here are some older recommendations from your previous logged-in chat." },
     createdAt: "2026-01-06T10:00:02.000Z",
-    responseRequired: false,
   } as Parameters<typeof appendEvent>[0]);
   prependEventWithoutBroadcast({
     conversationId,
