@@ -721,11 +721,17 @@ This section records how the **chat-demo** implementation diverges from or exten
 - **Behavior** (`app/api/chats/send-message-streamed/route.ts`):
   - When **enabled:** ~**6s** after `connection_ack` before the **first** bot `chat_event` (`MOCK_ML_INITIAL_DELAYS_MS`), then **5s** between each subsequent `chat_event` in the same turn (`MOCK_ML_PER_CHAT_EVENT_MS`).
   - When **disabled:** **100ms** after ack, then all `chat_event` lines are sent back-to-back.
-- See also `README_APP.md` → **Mock ML delays (optional)**.
 
 ### A.3.2 SSE recovery — `get-history` polling (chat-demo)
 
-When **`sendMessageStream`** ends without a **`connection_close`** event (see `lib/api.ts` **`onStreamDisconnected`**), **`app/chat/page.tsx`** calls **`fetchHistoryAfterSseDisconnect`**, which polls **`GET /chats/get-history`** until **`isTurnTerminalInHistory()`** is satisfied for the acked user message id (**`lastRequestMessageIdRef`**), or until **`HISTORY_POLL_MAX_MS`** (default **90s**), with **`HISTORY_POLL_INTERVAL_MS`** between requests (default **1500ms**). Terminal semantics align with **`isTerminalSseChatEvent`** / **`getTurnOrMessageState`** (`sourceMessageState` **`COMPLETED`** / **`ERRORED_AT_ML`** on the last bot part for the turn, or **`TIMED_OUT_BY_BE`**). Polling is aborted if the user dismisses/cancels (**`sseHistoryPollAbortRef`**). Local testing of abrupt SSE close: **`README_APP.md`** → **Mock SSE abrupt disconnect** (`ENABLE_MOCK_SSE_RANDOM_DROP` / `MOCK_SSE_RANDOM_DROP_PROBABILITY`).
+When **`sendMessageStream`** ends without a **`connection_close`** event (see `lib/api.ts` **`onStreamDisconnected`**), **`app/chat/page.tsx`** calls **`fetchHistoryAfterSseDisconnect`**, which polls **`GET /chats/get-history`** until **`isTurnTerminalInHistory()`** is satisfied for the acked user message id (**`lastRequestMessageIdRef`**), or until **`HISTORY_POLL_MAX_MS`** (default **90s**), with **`HISTORY_POLL_INTERVAL_MS`** between requests (default **1500ms**). Terminal semantics align with **`isTerminalSseChatEvent`** / **`getTurnOrMessageState`** (`sourceMessageState` **`COMPLETED`** / **`ERRORED_AT_ML`** on the last bot part for the turn, or **`TIMED_OUT_BY_BE`**). Polling is aborted if the user dismisses/cancels (**`sseHistoryPollAbortRef`**).
+
+**Mock SSE abrupt disconnect (local testing only):** set these **server** env vars when starting `npm run dev` to simulate the stream ending without `connection_close`. The mock still **persists** the first bot message; the client uses this §A.3.2 polling path to reconcile.
+
+| Variable | Effect |
+|----------|--------|
+| `ENABLE_MOCK_SSE_RANDOM_DROP=true` or `1` | After the first persisted bot part, always close the SSE stream without sending `chat_event` / `connection_close`. |
+| `MOCK_SSE_RANDOM_DROP_PROBABILITY` | e.g. `0.3` → 30% chance of the same behavior each request (`0`–`1`; values `≥ 1` behave like always-on). Ignored when `ENABLE_MOCK_SSE_RANDOM_DROP` is set. |
 
 ### A.4 Cancel
 
@@ -2395,7 +2401,7 @@ This section documents current behavior in this repository where it differs from
   - `chat_event` (0..N),
   - `connection_close` (`reason` in `response_complete | inactivity_15s`).
 - **Optional mock pacing (local dev):** `ENABLE_MOCK_ML_DELAYS` — see the **first** *Appendix A* block in this file (**§A.3.1**).
-- **Incomplete SSE (no `connection_close`):** interval **`get-history`** polling until terminal turn — **§A.3.2** (`HISTORY_POLL_*` in `app/chat/page.tsx`); optional mock abrupt close: **`README_APP.md`** (Mock SSE abrupt disconnect).
+- **Incomplete SSE (no `connection_close`):** interval **`get-history`** polling until terminal turn — **first Appendix A §A.3.2** (`HISTORY_POLL_*` in `app/chat/page.tsx`); optional mock abrupt close: same §A.3.2 table (`ENABLE_MOCK_SSE_RANDOM_DROP` / `MOCK_SSE_RANDOM_DROP_PROBABILITY`).
 - FE reply timeout is 25s (`replyStatus: timeout`), with Retry and Dismiss; FE then relies on polling (`get-history` with `messages_after`) until response arrives for that message.
 - **Awaiting UI:** staged status line while streaming (§4.7) — see first Appendix A **§A.2** (`getAwaitingFeedbackMessage` / `getAwaitingMessageText`).
 - Canonical stream/cancel/runtime semantics are defined in §4.5 and examples in §4.2.
@@ -2452,14 +2458,23 @@ This section documents current behavior in this repository where it differs from
   - `show me properties according to my preference`,
   - shortlist/contact via text fallbacks,
   - price trend / ratings & reviews / transaction data markdown reports.
+- **Broader flow coverage (chat-demo mock):**
+  - **Context on open:** each chat-open sends a hidden `context` event (fire-and-forget).
+  - **Greeting / off-domain:** `hi`/`hello`/`hey` (word-level) → greeting markdown; `tell me about modiji` / generic off-domain → fallback text.
+  - **Property discovery:** `show me properties` / `show me properties according to my preference` → intro text + `property_carousel`; carousel supports shortlist, contact, learn-more; payload includes `property_count`, `service`, `category`, `city`, `filters` for SRP deep-linking.
+  - **Shortlist/contact/brochure:** FE-driven actions with hidden/shown `user_action`; text `shortlist this property` → `shortlist_property`; `contact seller` → `contact_seller`; `show me brochure` → `download_brochure`; brochure click sends hidden `brochure_downloaded`.
+  - **Locality / nested QnA:** `locality comparison` → `locality_carousel` (except explicit sector 32+21 ambiguity); locality items include sample `url`; `sector 32` + `sector 21` ambiguity → `nested_qna`; `learn more about sector 32` (without 21) → single-question `nested_qna`; `nested_qna_selection` → locality learn-more markdown in mock flow.
+  - **Locality analytics:** `price trend`, `rating reviews`, `transaction data` → markdown report templates.
+  - **Near-me:** `near me` / `3bhk properties near me` → `share_location`; `ShareLocation` auto-path uses Permissions API + `getCurrentPosition` (non-zero **`maximumAge`**, module-level coordinate cache) → **`location_shared`** or **`location_not_available`**; **`location_denied`** reserved for explicit deny. Mock treats **`location_denied`** and **`location_not_available`** with the same fallback (Part B §4.3.10.33, §4.3.11, §4.3.10.39a).
 
 ### A.6 Demo mode (`/chat?demo=true`)
 
-- Auto-play script runs one step at a time with 2s delay.
+- Auto-play script runs **one step at a time** with **2s** spacing between steps.
+- Mix of **user text** and **real UI clicks** (heart / contact / learn more / locality / nested_qna / brochure).
+- **Auth:** popup auto-fill (phone + OTP) when login is required.
+- **Location:** steps pause on location-permission (deny/allow); resumes after user action.
 - Uses real DOM clicks for templates, nested_qna typing/selection, and brochure CTA.
-- Auth popup is auto-filled (phone + OTP) when shown.
-- Near-me steps intentionally pause for user deny/allow actions.
-- Debug logs are emitted with `[demo]` prefix in browser console.
+- Debug logs use **`[demo]`** prefix in the browser console.
 
 ### A.7 Feedback row (thumbs up/down + copy)
 
@@ -2510,6 +2525,79 @@ This section documents current behavior in this repository where it differs from
     - `template_id`, `message_type`, `sender`
     - optional `user_message` (free-text suggestion from thumbs-down sheet)
 - Thumbs-down opens a feedback bottom sheet with predefined reasons and optional free-text; submit sends analytics and closes sheet.
+
+### A.9 Chat demo — local run, stack, and HTTP/UI snapshot (from `README_APP.md`)
+
+This subsection consolidates **how to run the Next.js app**, **Phase 1 stack**, **HTTP routes as implemented**, and **extra UI detail** that complements **§A.1**–**§A.3** above. Mock pacing / abrupt SSE / demo script are also summarized earlier in this file: **first Appendix A §A.3.1**, **§A.3.2**, **§A.6** (mid-doc), and **§A.5** / **§A.6** (this appendix).
+
+#### Local run
+
+```bash
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000), then **Open Chat** to go to `/chat`.
+
+#### Stack (Phase 1)
+
+- **BE/ML:** Co-located in the same service (method calls; **no Kafka** in Phase 1).
+- **BE:** Next.js API routes under `/api/chats/*`: `get-conversation-id`, `get-chats`, `get-history`, **`send-message` (JSON)**, **`send-message-streamed` (SSE)**, `cancel`.
+- **FE:**
+  - Uses `send-message-streamed` for `responseRequired=true` turns.
+  - Uses `send-message` for `responseRequired=false` fire-and-forget turns.
+  - **Ack-only `user_action`** (`responseRequired=false`, e.g. shortlist/contact after property API success) is **not blocked** by an in-flight streamed user turn: it appends its optimistic row and calls `send-message` without taking over the stream’s pending/abort refs or the global `sending` flag for that path (see **§A.1.2**).
+  - Keeps request-scoped streams (no long-lived SSE subscription).
+- **Mock:** In-memory event log and request state; mock “ML” in `lib/mock/ml-flow.ts` returns the next bot message(s) per contract examples.
+- **Data:** Mock properties/localities and derived markdown in `lib/mock/data.ts`.
+
+#### `ChatEvent` / ML multi-part (FE-facing)
+
+- `ChatEvent` is a **flat object** (no nested `payload` wrapper): top-level fields include `messageType`, `content`, `responseRequired`, `isVisible`, `sourceMessageId`, and `sequenceNumber`.
+- **ML multi-part replies:** each bot **part** has its own `messageId`; **`sourceMessageState`** on ML → BE / bot rows is ML’s progress on the **user turn** (`sourceMessageId`), not the part row’s lifecycle. See **§A.0** above and **`getTurnOrMessageState()`** in `lib/contract-types.ts`.
+- In FE-facing events, `sourceMessageId` is optional and typically not required for rendering.
+
+#### HTTP API (paths as implemented under `/api`)
+
+- `GET /api/chats/get-conversation-id` → `{ conversationId, isNew }` (`isNew` is demo-app convenience; not required for production clients).
+- Phase 1 identity mapping: BE keeps a stable 1:1 `conversationId` per `userId` (or per `_ga` for anonymous users), so the same user consistently gets the same conversation.
+- `GET /api/chats/get-history?conversationId=...` with optional `page_size` (default 6), and optional cursor `messages_before` or `messages_after`.
+- `POST /api/chats/send-message` body `{ event: ChatEventFromUser }` (JSON-only)
+  - `event.conversationId` is required in payload (not query param).
+  - Used for `responseRequired=false` turns.
+  - Returns JSON `{ messageId, messageState }` (current app returns `messageState: "COMPLETED"`).
+- `POST /api/chats/send-message-streamed` body `{ event: ChatEventFromUser }` with `Accept: text/event-stream`
+  - `event.conversationId` is required in payload (not query param).
+  - Used for `responseRequired=true` turns.
+  - If `login_auth_token` is present, BE authenticates first and forwards derived identifiers (`userId`, `gaId`) in `ChatEventToML.sender`.
+  - `ChatEventToML.sender.userId` is derived by BE from auth/identity request headers.
+  - SSE events:
+    - **`event: connection_ack`** — immediate ack: `data: { "messageId": "...", "messageState": "PENDING" }`
+    - **`event: chat_event`** — bot events streamed as produced: `id: <messageId>`, `data: <JSON ChatEvent>`
+    - **`event: connection_close`** — emitted when the turn reaches a terminal outcome (e.g. bot row **`sourceMessageState`: `COMPLETED` \| `ERRORED_AT_ML`**, or surfaced `TIMED_OUT_BY_BE`) or stream inactivity reaches 15s.
+- ML response handling:
+  - Each ML output is stored by BE as a new bot message with **`messageState: "COMPLETED"`** (per **part** row) and **`sourceMessageState`** echoing ML’s turn progress.
+  - **`sourceMessageState`** from each ML event is mapped onto the **source user message** row’s **`messageState`** (see **§A.0**).
+- `POST /api/migrate-chat?currentConversationId=c1` with `login_auth_token` header
+  - When migration strategy is enabled, BE returns `{ newConversationId: "c2" }` and merges/moves c1-tagged history to c2 in mock DB.
+  - FE switches to `c2` for all subsequent API calls; an immediate `get-history` refresh is **optional** (BE merges prior c2 + migrated c1 + new c2 on any `get-history` call with `conversationId=c2`).
+
+#### UI notes (complements §A.1.1, §A.2, §A.3)
+
+- **Scroll to bottom:** a floating control appears when the user scrolls away from the bottom (threshold ~100px / ~20% of viewport height); the scroll listener attaches after the main chat layout mounts (not on the initial loading screen).
+- **Older messages:** `GET /api/chats/get-history` with `messages_before` + `page_size` (`LOAD_MORE_PAGE_SIZE`); auto-load via Intersection Observer for the first **`AUTO_LOAD_OLDER_MAX`** successful prepends, then **“View older messages”** — full rules in **§A.1.1**.
+- Transient templates (`share_location`, `shortlist_property`, `contact_seller`, `nested_qna`) render only for the **latest** bot message.
+- Property carousel **title** opens `inventory_canonical_url` in a new tab; trailing **View all** when `property_count > properties.length` opens `getSRPUrl(service, category, city, filters)`.
+- Locality carousel **locality name** opens locality `url` in a new tab.
+- `context` and `analytics` messages are never rendered; input is hidden while sticky `nested_qna` is active.
+- **`NestedQna`:** submitting defers parent updates (`queueMicrotask`) so React does not update the chat page while `NestedQna` is rendering; hooks run unconditionally before any early return when `selections` is empty (**§A.2**).
+- **Awaiting reply** (`replyStatus === "awaiting"`): copy rotates by elapsed second — exact strings in **first Appendix A §A.2** (`getAwaitingFeedbackMessage` in `app/chat/page.tsx`).
+- Reply **timeout** is **25s** with Retry/Dismiss; FE then relies on polling (`get-history` with `messages_after`) until the response arrives (**§A.1**).
+
+#### Where the two “Appendix A” clusters point
+
+- **Earlier in this document** (before Part B): **get-history** UX, **awaiting copy**, **mock SSE pacing** (**§A.3.1**), **SSE recovery polling** (**§A.3.2**), **demo mode** (**§A.6**), **context-out** (**§A.8**).
+- **This appendix** (end): **§A.0**–**§A.7** and **§A.9** — turn/part state, transport, pagination, `user_action` vs stream, templates, location, mock triggers, demo, feedback row, and this run/API snapshot.
 
 ---
 
