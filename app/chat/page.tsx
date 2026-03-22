@@ -426,6 +426,8 @@ function ChatPageContent() {
   const [networkError, setNetworkError] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const knownMessageIdsRef = useRef<Set<string>>(new Set());
+  /** After SSE `connection_ack`, true until `connection_close` or a terminal bot `chat_event` — drives get-history fallback on abrupt stream end. */
+  const pendingSseHistoryFallbackRef = useRef(false);
   const replyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const awaitingElapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSentEventRef = useRef<ChatEventFromUser | null>(null);
@@ -466,6 +468,20 @@ function ChatPageContent() {
     setAwaitingElapsedSec(0);
     setReplyStatus("idle");
   }, []);
+
+  const fetchHistoryAfterSseDisconnect = useCallback(async () => {
+    if (!conversationId) return;
+    const n = Math.max(INITIAL_PAGE_SIZE, lastMessagesRef.current.length + 5);
+    const hist = await getHistory(conversationId, { page_size: n });
+    const list = hist.messages as StoredMessage[];
+    setMessages(list);
+    knownMessageIdsRef.current = new Set(
+      list.map((m) => m.messageId).filter((id): id is string => Boolean(id))
+    );
+    setHasMoreOlder(hist.hasMore);
+    clearReplyWaiting();
+    setNetworkError(false);
+  }, [conversationId, clearReplyWaiting]);
 
   const cancelAndHideCurrentRequest = useCallback(async () => {
     activeSendStreamAbortRef.current?.abort();
@@ -739,6 +755,7 @@ function ChatPageContent() {
       const abortController = new AbortController();
       activeSendStreamAbortRef.current = abortController;
       let ackReceived = false;
+      pendingSseHistoryFallbackRef.current = false;
 
       try {
         await sendMessageStream(
@@ -765,13 +782,33 @@ function ChatPageContent() {
               setMessages((prev) =>
                 prev.map((m) => (m.messageId === pendingId ? { ...m, messageId: ack.messageId } : m))
               );
+              pendingSseHistoryFallbackRef.current = true;
               startAwaitingReply(ack.messageId);
             },
             onChatEvent: (botEvent) => {
               if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
               knownMessageIdsRef.current.add(botEvent.messageId);
               setMessages((prev) => [...prev, botEvent]);
-              if (isTerminalSseChatEvent(botEvent)) clearReplyWaiting();
+              if (isTerminalSseChatEvent(botEvent)) {
+                pendingSseHistoryFallbackRef.current = false;
+                clearReplyWaiting();
+              }
+            },
+            onConnectionClose: () => {
+              pendingSseHistoryFallbackRef.current = false;
+            },
+            onStreamDisconnected: async () => {
+              if (abortController.signal.aborted) return;
+              if (!pendingSseHistoryFallbackRef.current) return;
+              pendingSseHistoryFallbackRef.current = false;
+              try {
+                await fetchHistoryAfterSseDisconnect();
+              } catch (e) {
+                console.error(e);
+                if (isNetworkFailure(e)) setNetworkError(true);
+                setReplyStatus("error");
+                clearReplyWaiting();
+              }
             },
           },
           { signal: abortController.signal }
@@ -794,6 +831,7 @@ function ChatPageContent() {
       replyStatus,
       startAwaitingReply,
       clearReplyWaiting,
+      fetchHistoryAfterSseDisconnect,
     ]
   );
 
@@ -869,6 +907,7 @@ function ChatPageContent() {
             )
           );
         } else {
+          pendingSseHistoryFallbackRef.current = false;
           await sendMessageStream(
             fullEvent,
             {
@@ -894,13 +933,33 @@ function ChatPageContent() {
                   prev.map((m) => (m.messageId === pendingId ? { ...m, messageId: ack.messageId } : m))
                 );
 
+                pendingSseHistoryFallbackRef.current = true;
                 startAwaitingReply(ack.messageId);
               },
               onChatEvent: (botEvent) => {
                 if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
                 knownMessageIdsRef.current.add(botEvent.messageId);
                 setMessages((prev) => [...prev, botEvent]);
-                if (isTerminalSseChatEvent(botEvent)) clearReplyWaiting();
+                if (isTerminalSseChatEvent(botEvent)) {
+                  pendingSseHistoryFallbackRef.current = false;
+                  clearReplyWaiting();
+                }
+              },
+              onConnectionClose: () => {
+                pendingSseHistoryFallbackRef.current = false;
+              },
+              onStreamDisconnected: async () => {
+                if (abortController.signal.aborted) return;
+                if (!pendingSseHistoryFallbackRef.current) return;
+                pendingSseHistoryFallbackRef.current = false;
+                try {
+                  await fetchHistoryAfterSseDisconnect();
+                } catch (e) {
+                  console.error(e);
+                  if (isNetworkFailure(e)) setNetworkError(true);
+                  setReplyStatus("error");
+                  clearReplyWaiting();
+                }
               },
             },
             { signal: abortController.signal }
@@ -927,6 +986,7 @@ function ChatPageContent() {
       replyStatus,
       startAwaitingReply,
       clearReplyWaiting,
+      fetchHistoryAfterSseDisconnect,
     ]
   );
 
@@ -1053,6 +1113,7 @@ function ChatPageContent() {
 
     const expectsResponse =
       fullEvent.messageType === "text" || fullEvent.responseRequired === true;
+    pendingSseHistoryFallbackRef.current = false;
     try {
       await sendMessageStream(
         fullEvent,
@@ -1060,14 +1121,37 @@ function ChatPageContent() {
           onAck: (ack) => {
             lastRequestMessageIdRef.current = ack.messageId;
             knownMessageIdsRef.current.add(ack.messageId);
-            if (expectsResponse) startAwaitingReply(ack.messageId);
-            else setReplyStatus("idle");
+            if (expectsResponse) {
+              pendingSseHistoryFallbackRef.current = true;
+              startAwaitingReply(ack.messageId);
+            } else {
+              setReplyStatus("idle");
+            }
           },
           onChatEvent: (botEvent) => {
             if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
             knownMessageIdsRef.current.add(botEvent.messageId);
             setMessages((prev) => [...prev, botEvent]);
-            if (isTerminalSseChatEvent(botEvent)) clearReplyWaiting();
+            if (isTerminalSseChatEvent(botEvent)) {
+              pendingSseHistoryFallbackRef.current = false;
+              clearReplyWaiting();
+            }
+          },
+          onConnectionClose: () => {
+            pendingSseHistoryFallbackRef.current = false;
+          },
+          onStreamDisconnected: async () => {
+            if (abortController.signal.aborted) return;
+            if (!pendingSseHistoryFallbackRef.current) return;
+            pendingSseHistoryFallbackRef.current = false;
+            try {
+              await fetchHistoryAfterSseDisconnect();
+            } catch (e) {
+              console.error(e);
+              if (isNetworkFailure(e)) setNetworkError(true);
+              setReplyStatus("error");
+              clearReplyWaiting();
+            }
           },
         },
         { signal: abortController.signal }
@@ -1082,7 +1166,15 @@ function ChatPageContent() {
       if (activeSendStreamAbortRef.current === abortController) activeSendStreamAbortRef.current = null;
       setSending(false);
     }
-  }, [conversationId, sending, startAwaitingReply, cancelAndHideCurrentRequest, isOffline]);
+  }, [
+    conversationId,
+    sending,
+    startAwaitingReply,
+    cancelAndHideCurrentRequest,
+    isOffline,
+    fetchHistoryAfterSseDisconnect,
+    clearReplyWaiting,
+  ]);
 
   const handleCancel = useCallback(async () => {
     if (replyStatus !== "awaiting") return;

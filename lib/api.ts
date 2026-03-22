@@ -85,9 +85,18 @@ export async function sendMessageStream(
   handlers: {
     onAck: (ack: SendMessageResponse) => void;
     onChatEvent: (ev: ChatEventToUser & { messageId: string; createdAt?: string }) => void;
+    /** Fired when the server sends `connection_close` (normal end of the turn). */
+    onConnectionClose?: () => void;
+    /**
+     * Fired when the HTTP response body ends **without** a `connection_close` SSE event
+     * (e.g. network drop, proxy reset, or `MOCK_SSE_RANDOM_DROP_PROBABILITY` on the server).
+     * Use this to refetch `get-history` and reconcile UI.
+     */
+    onStreamDisconnected?: () => void | Promise<void>;
   },
   options?: { signal?: AbortSignal }
 ): Promise<void> {
+  let sawConnectionClose = false;
   const res = await fetch("/api/chats/send-message-streamed", {
     method: "POST",
     headers: withAuthHeaders({
@@ -105,40 +114,48 @@ export async function sendMessageStream(
   const reader = res.body.getReader();
   let buffer = "";
 
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
 
-    // SSE blocks are delimited by a blank line.
-    const parts = buffer.split("\n\n");
-    buffer = parts.pop() ?? "";
+      // SSE blocks are delimited by a blank line.
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() ?? "";
 
-    for (const part of parts) {
-      const trimmed = part.trim();
-      if (!trimmed) continue;
+      for (const part of parts) {
+        const trimmed = part.trim();
+        if (!trimmed) continue;
 
-      // Ignore comments like ": connected"
-      if (trimmed.startsWith(":")) continue;
+        // Ignore comments like ": connected"
+        if (trimmed.startsWith(":")) continue;
 
-      const { event: eventName, data } = parseSseEventBlock(trimmed);
-      if (!eventName || !data) continue;
+        const { event: eventName, data } = parseSseEventBlock(trimmed);
+        if (!eventName || !data) continue;
 
-      if (eventName === "connection_ack") {
-        const ack = JSON.parse(data) as SendMessageResponse;
-        handlers.onAck(ack);
-        continue;
+        if (eventName === "connection_ack") {
+          const ack = JSON.parse(data) as SendMessageResponse;
+          handlers.onAck(ack);
+          continue;
+        }
+
+        if (eventName === "chat_event") {
+          const ev = JSON.parse(data) as ChatEventToUser & { messageId: string; createdAt?: string };
+          handlers.onChatEvent(ev);
+          continue;
+        }
+
+        if (eventName === "connection_close") {
+          sawConnectionClose = true;
+          await handlers.onConnectionClose?.();
+          return;
+        }
       }
-
-      if (eventName === "chat_event") {
-        const ev = JSON.parse(data) as ChatEventToUser & { messageId: string; createdAt?: string };
-        handlers.onChatEvent(ev);
-        continue;
-      }
-
-      if (eventName === "connection_close") {
-        return;
-      }
+    }
+  } finally {
+    if (!sawConnectionClose && !options?.signal?.aborted) {
+      await handlers.onStreamDisconnected?.();
     }
   }
 }

@@ -33,6 +33,26 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Test-only: after the first bot message is persisted, randomly close the SSE stream **without**
+ * sending `chat_event` or `connection_close`, to simulate an abrupt disconnect. The bot row is
+ * still in the store so `GET /get-history` can recover.
+ *
+ * - `ENABLE_MOCK_SSE_RANDOM_DROP=true` — always drop after first persisted bot part.
+ * - `MOCK_SSE_RANDOM_DROP_PROBABILITY` — e.g. `0.3` for a 30% chance (0–1). Ignored when ENABLE is set.
+ */
+function shouldMockRandomSseDrop(): boolean {
+  if (process.env.ENABLE_MOCK_SSE_RANDOM_DROP === "true" || process.env.ENABLE_MOCK_SSE_RANDOM_DROP === "1") {
+    return true;
+  }
+  const raw = process.env.MOCK_SSE_RANDOM_DROP_PROBABILITY;
+  if (raw == null || raw === "") return false;
+  const p = Number(raw);
+  if (Number.isNaN(p) || p <= 0) return false;
+  if (p >= 1) return true;
+  return Math.random() < p;
+}
+
 export async function POST(request: NextRequest) {
   const accept = request.headers.get("accept") ?? "";
   if (!accept.includes("text/event-stream")) {
@@ -185,6 +205,12 @@ export async function POST(request: NextRequest) {
               messageState: "COMPLETED",
               sourceMessageState: ev.sourceMessageState,
             });
+
+            if (i === 0 && shouldMockRandomSseDrop()) {
+              completeRequest(stored.messageId!);
+              close();
+              return;
+            }
 
             writeSse({ event: "chat_event", id: storedBot.messageId, data: storedBot });
 

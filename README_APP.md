@@ -22,6 +22,15 @@ When unset, the first bot chunk is delayed **100ms** and all `chat_event` lines 
 
 Canonical write-up: **`chat_v1.md` Appendix A §A.3.1**.
 
+### Mock SSE abrupt disconnect (optional)
+
+Use these **server** env vars when starting `npm run dev` to simulate the stream ending without a `connection_close` event (e.g. proxy/network failure). The mock still **persists** the first bot message; the client detects the incomplete stream and **refetches `GET /api/chats/get-history`** to reconcile the UI.
+
+| Variable | Effect |
+|----------|--------|
+| `ENABLE_MOCK_SSE_RANDOM_DROP=true` or `1` | After the first persisted bot part, always close the SSE stream without sending `chat_event` / `connection_close`. |
+| `MOCK_SSE_RANDOM_DROP_PROBABILITY` | e.g. `0.3` → 30% chance of the same behavior each request (use `0`–`1`; values `≥ 1` behave like always-on). Ignored when `ENABLE_MOCK_SSE_RANDOM_DROP` is set. |
+
 ### Demo Mode
 
 Use `/chat?demo=true` to run an auto-played scripted demo.
