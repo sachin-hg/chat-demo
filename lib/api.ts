@@ -5,6 +5,7 @@ import type {
   GetHistoryResponse,
   GetConversationIdResponse,
   GetChatsResponse,
+  MessageDeltaEventToUser,
 } from "./contract-types";
 
 const BASE = "";
@@ -85,10 +86,16 @@ export async function sendMessageStream(
   handlers: {
     onAck: (ack: SendMessageResponse) => void;
     onChatEvent: (ev: ChatEventToUser & { messageId: string; createdAt?: string }) => void;
+    /** v1.1 incremental text; optional when `streamingEnabled` is false on the request. */
+    onMessageDelta?: (delta: MessageDeltaEventToUser) => void;
   },
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal; streamingEnabled?: boolean }
 ): Promise<void> {
-  const res = await fetch("/api/chats/send-message-streamed", {
+  const qs =
+    options?.streamingEnabled === true
+      ? "?streamingEnabled=true"
+      : "";
+  const res = await fetch(`/api/chats/send-message-streamed${qs}`, {
     method: "POST",
     headers: withAuthHeaders({
       "Content-Type": "application/json",
@@ -133,6 +140,12 @@ export async function sendMessageStream(
       if (eventName === "chat_event") {
         const ev = JSON.parse(data) as ChatEventToUser & { messageId: string; createdAt?: string };
         handlers.onChatEvent(ev);
+        continue;
+      }
+
+      if (eventName === "message_delta") {
+        const delta = JSON.parse(data) as MessageDeltaEventToUser;
+        handlers.onMessageDelta?.(delta);
         continue;
       }
 

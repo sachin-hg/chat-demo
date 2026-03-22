@@ -66,6 +66,62 @@ function normalizeText(s: string): string {
   return s.trim().toLowerCase();
 }
 
+/**
+ * Split bot text/markdown into phrases for v1.1 SSE `message_delta` streaming (mock).
+ * Uses paragraph → sentence boundaries, then word groups for very long segments.
+ */
+export function splitTextIntoStreamPhrases(text: string): string[] {
+  const t = text.trim();
+  if (!t) return [];
+
+  const MAX_SENTENCE = 140;
+  const WORD_GROUP = 8;
+
+  const wordGroups = (s: string): string[] => {
+    const words = s.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return [];
+    const out: string[] = [];
+    for (let i = 0; i < words.length; i += WORD_GROUP) {
+      out.push(words.slice(i, i + WORD_GROUP).join(" "));
+    }
+    return out;
+  };
+
+  const splitSentences = (paragraph: string): string[] => {
+    const p = paragraph.trim();
+    if (!p) return [];
+    // Split on . ! ? followed by space or end (keep delimiter on chunk)
+    const raw = p.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter(Boolean);
+    // Single run-on line: long char-wise → word groups; medium with many words → phrase groups for demo UX
+    if (raw.length === 1) {
+      const only = raw[0];
+      if (only.length > MAX_SENTENCE) return wordGroups(only);
+      const wc = only.split(/\s+/).filter(Boolean).length;
+      if (wc > 10) return wordGroups(only);
+    }
+    const acc: string[] = [];
+    for (const s of raw) {
+      if (s.length > MAX_SENTENCE) {
+        acc.push(...wordGroups(s));
+      } else {
+        acc.push(s);
+      }
+    }
+    return acc;
+  };
+
+  const paragraphs = t.split(/\n\n+/);
+  const out: string[] = [];
+  for (const para of paragraphs) {
+    const lines = para.split(/\n/);
+    for (const line of lines) {
+      out.push(...splitSentences(line));
+    }
+  }
+
+  return out.length > 0 ? out : [t];
+}
+
 function matchText(text: string, ...options: string[]): boolean {
   const t = normalizeText(text);
   return options.some((o) => t.includes(normalizeText(o)) || normalizeText(o).includes(t));

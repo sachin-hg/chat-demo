@@ -11,7 +11,12 @@ import {
   migrateChat,
 } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { getTurnOrMessageState, type ChatEventFromUser, type ChatEventToUser } from "@/lib/contract-types";
+import {
+  getTurnOrMessageState,
+  type ChatEventFromUser,
+  type ChatEventToUser,
+  type MessageDeltaEventToUser,
+} from "@/lib/contract-types";
 import { ChatMessage } from "@/components/chat/ChatMessage";
 import { useToast } from "@/components/ui/ToastProvider";
 
@@ -426,6 +431,8 @@ function ChatPageContent() {
   const [networkError, setNetworkError] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const knownMessageIdsRef = useRef<Set<string>>(new Set());
+  /** Bot `messageId`s that are receiving v1.1 `message_delta` until the final `chat_event` replaces the row. */
+  const streamingMessageIdsRef = useRef<Set<string>>(new Set());
   const replyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const awaitingElapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSentEventRef = useRef<ChatEventFromUser | null>(null);
@@ -466,6 +473,60 @@ function ChatPageContent() {
     setAwaitingElapsedSec(0);
     setReplyStatus("idle");
   }, []);
+
+  const applyMessageDelta = useCallback((delta: MessageDeltaEventToUser) => {
+    if (!conversationId) return;
+    const { messageId, chunkIndex, content, messageType, sequenceNumber, sourceMessageId } = delta;
+    if (!messageId || !content?.text) return;
+
+    if (chunkIndex === 0) {
+      streamingMessageIdsRef.current.add(messageId);
+      const mt: "text" | "markdown" = messageType === "markdown" ? "markdown" : "text";
+      const partial: StoredMessage = {
+        conversationId,
+        messageId,
+        sender: { type: "bot" },
+        messageType: mt,
+        messageState: "IN_PROGRESS",
+        sourceMessageState: "IN_PROGRESS",
+        sourceMessageId,
+        sequenceNumber,
+        content: { text: content.text },
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, partial]);
+      return;
+    }
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.messageId === messageId
+          ? { ...m, content: { ...m.content, text: (m.content?.text ?? "") + content.text } }
+          : m
+      )
+    );
+  }, [conversationId]);
+
+  const applySseChatEvent = useCallback(
+    (botEvent: ChatEventToUser & { messageId: string; createdAt?: string }) => {
+      if (!botEvent.messageId) return;
+      if (streamingMessageIdsRef.current.has(botEvent.messageId)) {
+        streamingMessageIdsRef.current.delete(botEvent.messageId);
+        knownMessageIdsRef.current.add(botEvent.messageId);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.messageId === botEvent.messageId ? ({ ...botEvent } as StoredMessage) : m
+          )
+        );
+        if (isTerminalSseChatEvent(botEvent)) clearReplyWaiting();
+        return;
+      }
+      if (knownMessageIdsRef.current.has(botEvent.messageId)) return;
+      knownMessageIdsRef.current.add(botEvent.messageId);
+      setMessages((prev) => [...prev, botEvent]);
+      if (isTerminalSseChatEvent(botEvent)) clearReplyWaiting();
+    },
+    [clearReplyWaiting]
+  );
 
   const cancelAndHideCurrentRequest = useCallback(async () => {
     activeSendStreamAbortRef.current?.abort();
@@ -767,14 +828,10 @@ function ChatPageContent() {
               );
               startAwaitingReply(ack.messageId);
             },
-            onChatEvent: (botEvent) => {
-              if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
-              knownMessageIdsRef.current.add(botEvent.messageId);
-              setMessages((prev) => [...prev, botEvent]);
-              if (isTerminalSseChatEvent(botEvent)) clearReplyWaiting();
-            },
+            onChatEvent: applySseChatEvent,
+            onMessageDelta: applyMessageDelta,
           },
-          { signal: abortController.signal }
+          { signal: abortController.signal, streamingEnabled: true }
         );
       } catch (e) {
         // Abort can happen on cancel/timeout; don't flip UI into "error".
@@ -794,6 +851,8 @@ function ChatPageContent() {
       replyStatus,
       startAwaitingReply,
       clearReplyWaiting,
+      applySseChatEvent,
+      applyMessageDelta,
     ]
   );
 
@@ -896,14 +955,10 @@ function ChatPageContent() {
 
                 startAwaitingReply(ack.messageId);
               },
-              onChatEvent: (botEvent) => {
-                if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
-                knownMessageIdsRef.current.add(botEvent.messageId);
-                setMessages((prev) => [...prev, botEvent]);
-                if (isTerminalSseChatEvent(botEvent)) clearReplyWaiting();
-              },
+              onChatEvent: applySseChatEvent,
+              onMessageDelta: applyMessageDelta,
             },
-            { signal: abortController.signal }
+            { signal: abortController.signal, streamingEnabled: true }
           );
         }
       } catch (e) {
@@ -927,6 +982,8 @@ function ChatPageContent() {
       replyStatus,
       startAwaitingReply,
       clearReplyWaiting,
+      applySseChatEvent,
+      applyMessageDelta,
     ]
   );
 
@@ -1063,14 +1120,10 @@ function ChatPageContent() {
             if (expectsResponse) startAwaitingReply(ack.messageId);
             else setReplyStatus("idle");
           },
-          onChatEvent: (botEvent) => {
-            if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
-            knownMessageIdsRef.current.add(botEvent.messageId);
-            setMessages((prev) => [...prev, botEvent]);
-            if (isTerminalSseChatEvent(botEvent)) clearReplyWaiting();
-          },
+          onChatEvent: applySseChatEvent,
+          onMessageDelta: applyMessageDelta,
         },
-        { signal: abortController.signal }
+        { signal: abortController.signal, streamingEnabled: true }
       );
     } catch (e) {
       if (!abortController.signal.aborted) {
@@ -1082,7 +1135,15 @@ function ChatPageContent() {
       if (activeSendStreamAbortRef.current === abortController) activeSendStreamAbortRef.current = null;
       setSending(false);
     }
-  }, [conversationId, sending, startAwaitingReply, cancelAndHideCurrentRequest, isOffline]);
+  }, [
+    conversationId,
+    sending,
+    startAwaitingReply,
+    cancelAndHideCurrentRequest,
+    isOffline,
+    applySseChatEvent,
+    applyMessageDelta,
+  ]);
 
   const handleCancel = useCallback(async () => {
     if (replyStatus !== "awaiting") return;
