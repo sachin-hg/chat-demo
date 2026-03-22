@@ -670,21 +670,21 @@ sequenceDiagram
     participant BE
     participant ML
 
-    FE->>BE: POST /chats/send-message-streamed (ChatEventFromUser)
-    BE-->>FE: SSE connection_ack {messageId, messageState:PENDING}
+    FE->>BE: POST send-message-streamed ChatEventFromUser
+    BE-->>FE: SSE connection_ack PENDING
     BE->>ML: dispatch ChatEventToML
 
-    ML->>BE: bot markdown (sourceMessageState=IN_PROGRESS, sourceMessageId=msg_u_1, sequenceNumber=0)
+    ML->>BE: bot markdown part seq0 sourceMessageState IN_PROGRESS
     BE-->>FE: SSE chat_event
 
-    Note over ML: User intent / context changed — notify FE
-    ML->>BE: context (messageType=context, sender=bot, sourceMessageId=msg_u_1, sequenceNumber=1, sourceMessageState=IN_PROGRESS)
-    BE-->>FE: SSE chat_event (not rendered; same content.data schema as system context)
+    Note over ML: Intent or context changed, notify FE
+    ML->>BE: context row seq1 sourceMessageState IN_PROGRESS
+    BE-->>FE: SSE chat_event context not rendered for UI
 
-    ML->>BE: bot template (sourceMessageState=COMPLETED, sourceMessageId=msg_u_1, sequenceNumber=2)
-    BE->>BE: mark source msg_u_1 COMPLETED (final event in chain)
-    BE-->>FE: SSE chat_event (final bot content)
-    BE-->>FE: SSE connection_close (response_complete)
+    ML->>BE: bot template seq2 sourceMessageState COMPLETED
+    BE->>BE: mark user message row COMPLETED
+    BE-->>FE: SSE chat_event visible template
+    BE-->>FE: SSE connection_close response_complete
 ```
 
 ---
