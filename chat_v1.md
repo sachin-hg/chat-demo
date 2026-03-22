@@ -279,7 +279,7 @@ data: {"reason":"response_complete"}
 
 - **Awaiting indicator**: FE shows inline awaiting status only when:
   - outbound event has `responseRequired === true`, and
-  - terminal bot response (`messageState` is not yet `COMPLETED`/`ERRORED_AT_ML`) has not yet been received.
+  - the turn has not yet reached a terminal outcome: no bot `chat_event` with `messageState: COMPLETED | ERRORED_AT_ML`, and no surfaced `chat_event` with `messageState: TIMED_OUT_BY_BE` for this request (see §6 SSE).
 - **Timeout**: FE maintains a local reply timeout safeguard (current app value: `25s`); after timeout UI is shown, FE relies on polling (`get-history` with `messages_after`) until it receives the response for that message.
 - **Input/CTA behavior**:
   - while `sending`: composer submit disabled
@@ -444,7 +444,7 @@ The stream uses the following **event** values and comment lines:
 - **`connection_close`**: Sent by the BE once, immediately before closing the stream when:
   - inactivity `>= 15s`, or
   - `responseRequired === false`, or
-  - terminal bot response received (`messageState: COMPLETED | ERRORED_AT_ML`).
+  - terminal turn outcome received on the stream (e.g. bot `chat_event` with `messageState: COMPLETED | ERRORED_AT_ML`, or surfaced `TIMED_OUT_BY_BE` for the request per §6).
 
 **Comments** (lines starting with `:`) do not set an `event` type and are not delivered to `EventSource` message listeners; they are used for connection liveness and keepalive only.
 
@@ -456,7 +456,7 @@ The stream uses the following **event** values and comment lines:
 - Close SSE when any of:
   - inactivity `>= 15s`
   - `responseRequired === false`
-  - terminal bot response emitted (`messageState: COMPLETED | ERRORED_AT_ML`)
+  - terminal turn outcome emitted (e.g. bot `messageState: COMPLETED | ERRORED_AT_ML`, or request surfaced as `TIMED_OUT_BY_BE` per §6)
 
 ### FE
 - Treat each `send-message-streamed` stream as request-scoped and terminal on `connection_close`.
@@ -2067,7 +2067,7 @@ When a guest chat (`_ga`) becomes authenticated mid-session:
 ### 4.5 FE runtime behavior notes
 
 - FE starts awaiting UI only when `responseRequired: true` and no final bot event has been received.
-- FE stops loader/awaiting and marks response complete on first terminal bot event (`messageState: COMPLETED | ERRORED_AT_ML`).
+- FE stops loader/awaiting and marks response complete on first terminal outcome on the stream: bot `messageState: COMPLETED | ERRORED_AT_ML`, or any surfaced `messageState: TIMED_OUT_BY_BE` for the active request.
 - FE treats `connection_close` as stream completion for the turn.
 - FE keeps a local timeout safeguard (current app value: 25s). On timeout, FE shows Retry/Dismiss and then relies on polling (`get-history` with `messages_after`) until it receives the response for that message.
 - Input/CTA behavior:

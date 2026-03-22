@@ -205,6 +205,7 @@ Maintain per-`messageId` transient state:
   - mark request terminal (`TIMED_OUT_BY_BE`),
   - close SSE with `connection_close`.
 - FE may continue history polling per existing v1 behavior.
+- FE clears awaiting / treats the turn as complete when `TIMED_OUT_BY_BE` is surfaced (same terminal semantics as bot `COMPLETED` / `ERRORED_AT_ML` on the stream per canonical `chat_v1.md` §4.5 / §6).
 
 ---
 

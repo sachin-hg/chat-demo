@@ -79,7 +79,7 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
   - SSE events:
     - **`event: connection_ack`** — immediate ack: `data: { "messageId": "...", "messageState": "PENDING" }`
     - **`event: chat_event`** — bot events streamed as they’re produced: `id: <messageId>`, `data: <JSON ChatEvent>`
-    - **`event: connection_close`** — emitted when response reaches terminal state (`messageState: COMPLETED | ERRORED_AT_ML`) or stream inactivity reaches 15s.
+    - **`event: connection_close`** — emitted when the turn reaches a terminal outcome (e.g. bot `messageState: COMPLETED | ERRORED_AT_ML`, or surfaced `TIMED_OUT_BY_BE`) or stream inactivity reaches 15s.
 - ML response handling:
   - each ML output is stored by BE as a new bot message with `messageState: "COMPLETED"`.
   - ML `messageState` is applied to the source user message identified by `sourceMessageId`.

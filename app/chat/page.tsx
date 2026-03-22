@@ -26,6 +26,15 @@ const REPLY_TIMEOUT_MS = 25000;
 
 type ReplyStatus = "idle" | "sending" | "awaiting" | "timeout" | "error";
 
+/** Clears awaiting when the turn ends: bot COMPLETED/ERRORED_AT_ML, or BE timeout (TIMED_OUT_BY_BE on any surfaced row). */
+function isTerminalSseChatEvent(ev: ChatEventToUser): boolean {
+  const ms = ev.messageState;
+  if (ms === "TIMED_OUT_BY_BE") return true;
+  return (
+    ev.sender?.type === "bot" && (ms === "COMPLETED" || ms === "ERRORED_AT_ML")
+  );
+}
+
 function isNetworkFailure(error: unknown): boolean {
   if (typeof navigator !== "undefined" && !navigator.onLine) return true;
   if (error instanceof TypeError) return true;
@@ -682,12 +691,7 @@ function ChatPageContent() {
               if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
               knownMessageIdsRef.current.add(botEvent.messageId);
               setMessages((prev) => [...prev, botEvent]);
-              if (
-                botEvent.sender?.type === "bot" &&
-                (botEvent.messageState === "COMPLETED" || botEvent.messageState === "ERRORED_AT_ML")
-              ) {
-                clearReplyWaiting();
-              }
+              if (isTerminalSseChatEvent(botEvent)) clearReplyWaiting();
             },
           },
           { signal: abortController.signal }
@@ -807,12 +811,7 @@ function ChatPageContent() {
                 if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
                 knownMessageIdsRef.current.add(botEvent.messageId);
                 setMessages((prev) => [...prev, botEvent]);
-                if (
-                  botEvent.sender?.type === "bot" &&
-                  (botEvent.messageState === "COMPLETED" || botEvent.messageState === "ERRORED_AT_ML")
-                ) {
-                  clearReplyWaiting();
-                }
+                if (isTerminalSseChatEvent(botEvent)) clearReplyWaiting();
               },
             },
             { signal: abortController.signal }
@@ -976,10 +975,7 @@ function ChatPageContent() {
             if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
             knownMessageIdsRef.current.add(botEvent.messageId);
             setMessages((prev) => [...prev, botEvent]);
-            if (
-              botEvent.sender?.type === "bot" &&
-              (botEvent.messageState === "COMPLETED" || botEvent.messageState === "ERRORED_AT_ML")
-            ) clearReplyWaiting();
+            if (isTerminalSseChatEvent(botEvent)) clearReplyWaiting();
           },
         },
         { signal: abortController.signal }
