@@ -4,7 +4,7 @@ Draft specification for incremental bot text streaming (word/phrase/sentence chu
 
 This document is additive to `chat_v1.md` and only defines v1.1 deltas.
 
-**Turn vs part state (aligned with `chat_v1.md` Appendix A §A.0):** Incremental **`message_done`** and subsequent **`chat_event`** payloads should carry **`sourceMessageState`** for ML turn progress; each materialized bot **part** uses **`messageState: "COMPLETED"`** when stored (see `lib/contract-types.ts`).
+**Turn vs part state (aligned with `chat_v1.md` Appendix A §A.0):** **`message_delta`** lines do **not** carry **`sourceMessageState`** on the wire — while deltas arrive for a part, FE may assume the turn is **in progress**; the **final `chat_event`** for that **`messageId`** (and persisted rows) carries authoritative **`sourceMessageState`** / **`messageState`**. Each materialized bot **part** uses **`messageState: "COMPLETED"`** when stored (see `lib/contract-types.ts`).
 
 ---
 
@@ -42,7 +42,7 @@ v1.1 **does not replace** this model; it adds **optional token-level streaming**
 
 Incremental (v1.1) streaming is negotiated **only** via the **query parameter** on `POST /chats/send-message-streamed`:
 
-- `streamingEnabled=true` — request v1.1 incremental SSE (`message_start` / `message_delta` / `message_done`) when the BE feature flag allows.
+- `streamingEnabled=true` — request v1.1 incremental SSE (`message_delta` chunks + final v1 **`chat_event`** per part, same **`messageId`**) when the BE feature flag allows.
 - Omitted or `streamingEnabled=false` — **v1 behavior**: SSE uses full `chat_event` bot messages only (no delta events).
 
 No separate API version header is used; clients rely on this query flag only.
@@ -81,12 +81,12 @@ Required header:
 
 ## 4) SSE Event Contract (v1.1)
 
-v1.1 introduces 3 incremental message events:
-- `message_start`
-- `message_delta`
-- `message_done`
+v1.1 adds **one** incremental SSE event type:
+- **`message_delta`** — append-only token chunks for a text/markdown part.
 
-`message_delta` may include **optional** `chunkId` — see **§4.4.1**.
+There is **no** `message_start` or `message_done`. The **first** chunk (`chunkIndex === 0`) carries the same correlation fields a separate “start” event would have (`messageId`, `sourceMessageId`, `sequenceNumber`, **`messageType`**). The **canonical persisted body** for history, `get-history`, and final UI is the **v1 `chat_event`** with the **same `messageId`** as the stream (full text/markdown in `content`).
+
+`message_delta` may include **optional** `chunkId` — see **§4.3.1**.
 
 Existing v1 events remain valid:
 - `connection_ack`
@@ -96,129 +96,108 @@ Existing v1 events remain valid:
 
 ### 4.1 Event ordering rules
 
-For each bot message stream unit (`messageId`):
-1. `message_start` exactly once
-2. `message_delta` zero or more times
-3. `message_done` exactly once
+For each streamed bot part (`messageId`):
+1. **`message_delta`** one or more times (`chunkIndex` from `0` upward).
+2. **`chat_event`** (v1 shape) **once** for that part, **same `messageId`**, carrying the **full** `content` — authoritative for persistence and for clients that only understand full rows.
+
+**Recommended:** BE emits the final **`chat_event`** for that **`messageId`** soon after the last **`message_delta`** (same ordering guarantees as §4.4). The **arrival of that `chat_event`** is what completes the streamed part for FE (no separate “stream complete” flag on deltas).
 
 `messageId` values must be unique within conversation history.
 
 ### 4.2 Correlation fields
 
-Shared across `message_start`, `message_delta`, and `message_done` for a given streaming unit:
+Shared across **`message_delta`** lines for a given streaming unit (and repeated on the final **`chat_event`**):
 
-- **`messageId`** — BE-assigned id for the **resulting bot message**. Announced in **`message_start`** and repeated on **`message_done`**; this is the **persisted** message id (same as in `get-history` / `ChatEventToUser.messageId`). **Do not** use a separate `eventId` on `message_done` for persistence identity — **`messageId` is the final persisted id.**
+- **`messageId`** — BE-assigned id for the **resulting bot message**. Present from the **first** delta onward and on the final **`chat_event`**; this is the **persisted** message id (same as in `get-history` / `ChatEventToUser.messageId`).
 
-**Intermediate (non-persistent) fragments** are **`message_delta`** payloads only. They are **not** stored as separate history rows; each fragment may carry **`chunkId`** (optional but recommended for dedup) to identify that ephemeral chunk across retries/reconnects.
+**Intermediate (non-persistent) fragments** are **`message_delta`** payloads only. They are **not** stored as separate history rows and **must not** be returned by **`get-history`** — history lists **complete persisted messages only** (v1 **`chat_event`** rows). Each fragment may carry **`chunkId`** (optional but recommended for dedup) to identify that ephemeral chunk across retries/reconnects.
 
 Also included where applicable:
 
 - `sourceMessageId`
 - `sequenceNumber`
-- `messageType` (`text` or `markdown`)
+- `messageType` (`text` or `markdown`) — **required on `chunkIndex === 0`**
 
 ### 4.2.1 Part identity, `messageId`, and ML envelope alignment (v1.1)
 
-- **One streamed bot part = one `messageId`.** All **`message_start` / `message_delta` / `message_done`** lines for that token stream reuse the **same** **`messageId`**. That id is the id the **final** persisted bot row will use (same as v1 **part** semantics; see §0).
-- **`sourceMessageId`** is repeated on deltas (and on **`message_done`**) so each chunk is traceable back to the **user message** and consistent with v1 **`ChatEventFromML`**.
-- **`sourceMessageState`** on deltas (when present) still means **turn-level** ML progress for **`sourceMessageId`**, not “this chunk’s row state” (same semantic as v1; see §0 and `chat_v1.md` Appendix A §A.0). BE continues to use it to update the **user row** in DB as in v1.
-- **Envelope shape:** Each **`message_delta`** payload may be treated as carrying the **same logical information as a v1 `ChatEventFromML`** would for this fragment — i.e. fields needed for tracing and normalization (`conversationId`, `sourceMessageId`, `sourceMessageState`, `sequenceNumber`, `messageType`, etc.), while **token content** is carried in **`deltaText`** (and ordering in **`chunkIndex`** / **`chunkId`**). Wire format is still SSE `event: message_delta`, not `event: chat_event` (see **§4.4.2**).
-- **Storage:** BE **does not** persist individual chunks as separate **`ChatEvent`** / DB rows; persistence of the text part happens when the part is **finalized** (see **§4.5**, **§6.2**, and final **`chat_event`** in **§4.6**).
+- **One streamed bot part = one `messageId`.** All **`message_delta`** lines for that token stream reuse the **same** **`messageId`** as the following **`chat_event`** for that part. That id is the id the **final** persisted bot row will use (same as v1 **part** semantics; see §0).
+- **`sourceMessageId`** is repeated on deltas so each chunk is traceable back to the **user message** and consistent with v1 **`ChatEventFromML`**.
+- **No `sourceMessageState` on `message_delta` (FE):** BE may still apply ML turn signals **when persisting** the user row / final **`chat_event`**, but the incremental transport does not need to repeat turn state per chunk. FE infers **in progress** while **`message_delta`** lines are arriving; the **`chat_event`** gives the real **`sourceMessageState`** update.
+- **Envelope shape:** Each **`message_delta`** carries correlation (`messageId`, `sourceMessageId`, `sequenceNumber`, `messageType` on chunk 0, …) and **`content.text`** as the append-only fragment (ordering via **`chunkIndex`** / **`chunkId`**). Wire format is SSE `event: message_delta`, not `event: chat_event` (see **§4.3.2**).
+- **Storage:** BE **does not** persist individual chunks as separate **`ChatEvent`** / DB rows; persistence of the text part happens when BE emits the **final `chat_event`** for that **`messageId`** (see **§4.4**, **§6.2**).
 
-### 4.3 `message_start`
+### 4.3 `message_delta`
 
-```txt
-event: message_start
-data: {"messageId":"msg_b_101","sourceMessageId":"msg_u_99","sequenceNumber":0,"messageType":"markdown","context":{"user_intent":"SRP","service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","poly":["dce9290ec3fe8834a293"],"est":194298,"properties":[{"id":123,"type":"project"}],"uuid":[],"filters":{"type":"project"}}}
-```
-
-Notes:
-- Announces a new incremental bot message.
-- `context` is optional by schema, but recommended to include (aligned with current strategy).
-
-### 4.4 `message_delta`
+First chunk (`chunkIndex === 0`) **must** include **`messageId`**, **`sourceMessageId`**, **`sequenceNumber`**, and **`messageType`** (`text` \| `markdown`).
 
 ```txt
 event: message_delta
-data: {"messageId":"msg_b_101","chunkIndex":3,"deltaText":" in Sector 32 Gurgaon"}
+data: {"messageId":"msg_b_101","sourceMessageId":"msg_u_99","sequenceNumber":0,"messageType":"markdown","chunkIndex":0,"content":{"text":"# Top picks"}}
+```
+
+```txt
+event: message_delta
+data: {"messageId":"msg_b_101","chunkIndex":3,"content":{"text":" in Sector 32 Gurgaon"}}
 ```
 
 Rules:
-- `deltaText` is append-only fragment (word/phrase/sentence).
+- **`content.text`** is the append-only fragment (word/phrase/sentence); FE treats every `message_delta` as a **delta** (incremental), not a full replacement.
 - `chunkIndex` starts at `0` and increments by 1.
 - FE must ignore duplicate or out-of-order chunks (`chunkIndex <= lastAppliedIndex`).
 
-#### 4.4.1 Optional chunk identity (`chunkId`)
+#### 4.3.1 Optional chunk identity (`chunkId`)
 
 On each `message_delta`, **`chunkId`** is **optional**. Clients that ignore it remain fully compatible; **`chunkIndex`** stays **required** and **authoritative for ordering**.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `chunkIndex` | number | **Yes** | Monotonic sequence `0, 1, 2, …` within this `messageId`. |
-| `deltaText` | string | **Yes** | Append-only UTF-8 fragment (word / phrase / sentence). |
+| `content.text` | string | **Yes** | Append-only UTF-8 fragment (word / phrase / sentence). |
 | `chunkId` | string | No | **Identity for this intermediate, non-persisted chunk** (e.g. ULID/UUID). Deltas are not separate `ChatEvent` rows; `chunkId` identifies the fragment for dedup/observability. If the same `chunkId` is received twice (retries, reconnect), FE **must** apply **at most once** (idempotent dedup). |
 
-**Completion (persistence boundary):** **`message_done`** remains the canonical signal for **final `fullText`**, part-level completion flags, and alignment with **`get-history`**. Optionally, the **last** **`message_delta`** may declare that the **token stream** for this `messageId` is complete — see **§4.4.2** — without replacing **`message_done`** (see **§12** for trade-offs).
+**Completion (persistence boundary):** The **final v1 `chat_event`** for this **`messageId`** is the canonical source for **full text**, **`messageState`**, **`sourceMessageState`**, and alignment with **`get-history`**. The **`message_delta`** stream is implicitly **in progress** until that **`chat_event`** arrives (no extra “complete” field on deltas).
 
 - **Why optional `chunkId`:** BE may normalize provider streams that emit per-chunk ids; exposing them helps idempotency and observability.
 
-#### 4.4.2 Per-chunk streaming state & `ChatEventFromML`-shaped fields (proposal)
+#### 4.3.2 Core fields (FE wire shape)
 
-For **tracing**, analytics, and alignment with v1 ML contracts, each **`message_delta`** **may** include:
+Each **`message_delta`** (BE → FE) includes:
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | `messageId` | **Yes** | Same id for all chunks of this streamed part (§4.2). |
 | `sourceMessageId` | **Yes** | User message id for the turn (v1 semantics). |
-| `chunkIndex` | **Yes** | Monotonic fragment index (§4.4.1). |
-| `deltaText` | **Yes** | Append-only fragment. |
-| `chunkId` | No | Optional dedup id (§4.4.1). |
-| `sourceMessageState` | Recommended | Turn-level ML state (`IN_PROGRESS` \| …) — same meaning as v1 `ChatEventFromML.sourceMessageState`. |
-| **Streaming part progress** | Recommended | Indicates whether **more token chunks** may follow for **this `messageId`**. |
+| `chunkIndex` | **Yes** | Monotonic fragment index (§4.3.1). |
+| `content.text` | **Yes** | Append-only fragment. |
+| `chunkId` | No | Optional dedup id (§4.3.1). |
+| `sequenceNumber` / `messageType` | See §4.2 | `messageType` required on chunk `0`. |
 
-**Streaming part progress (naming — open):** The following avoids overloading v1 **`messageState`** on stored **`ChatEventToUser`** rows (`COMPLETED`, `PENDING`, …):
+**No `sourceMessageState` on deltas (FE):** The **presence** of **`message_delta`** events for a **`messageId`** means streaming is **ongoing**; the **matching `chat_event`** supplies authoritative turn/part state. **No** separate “stream complete” flag on deltas.
 
-- **Recommended field name:** **`streamingPartState`** with values such as **`STREAMING`** (more deltas may follow) and **`COMPLETE`** (last token chunk for this **`messageId`** has been sent).
-
-**Alternative (explicitly requested in product discussion):** reuse the name **`messageState`** on deltas only with values like **`INTERMEDIATE`** / **`STREAMING`** / **`COMPLETE`** for the **chunk stream**. That **collides** with v1 **`MessageState`** naming and is easy to confuse with **part row** / **user row** state — if adopted, implementations **must** scope this to **SSE `message_delta` only** and never persist these values as the DB **`messageState`** without a transform (see **§12**).
-
-**Relationship to `ChatEventFromML`:** Conceptually, each delta can be viewed as a **non-persisted** fragment of what would be a single ML → BE message; the wire JSON may include the same top-level fields as **`ChatEventFromML`** where useful, with **`deltaText`** carrying the incremental text. **BE does not** append a **`chat_event`** per chunk.
+**Relationship to ML:** **`MessageDeltaEventFromML`** (ML → BE) uses the same fragment shape; BE normalizes and emits **`MessageDeltaEventToUser`** on SSE (see **§8**). **BE does not** append a **`chat_event`** per chunk.
 
 **FE handling summary:**
 
-1. If `chunkIndex` is not strictly `lastAppliedChunkIndex + 1`, apply §4.4 duplicate/out-of-order rules.
+1. If `chunkIndex` is not strictly `lastAppliedChunkIndex + 1`, apply §4.3 duplicate/out-of-order rules.
 2. If `chunkId` is present and already in `seenChunkIds`, skip (duplicate).
-3. Append `deltaText` to `bufferText` for accepted chunks.
-4. On **`message_done`**, verify `fullText` matches `bufferText` (or replace buffer with `fullText` if policy allows repair), then finalize.
+3. Append `content.text` to `bufferText` for accepted chunks.
+4. On the **final `chat_event`** for this **`messageId`**, replace the transient buffer with the canonical **`ChatEventToUser`** (verify `content` text matches `bufferText` if desired; **`chat_event`** wins on conflict).
 
 Optional example with `chunkId`:
 
 ```txt
 event: message_delta
-data: {"messageId":"msg_b_101","chunkIndex":3,"chunkId":"01ARZ3NDEKTSV4RRFFQ69G2FAV","deltaText":" in Sector 32 Gurgaon"}
+data: {"messageId":"msg_b_101","chunkIndex":3,"chunkId":"01ARZ3NDEKTSV4RRFFQ69G2FAV","content":{"text":" in Sector 32 Gurgaon"}}
 ```
 
-### 4.5 `message_done`
-
-```txt
-event: message_done
-data: {"messageId":"msg_b_101","sourceMessageId":"msg_u_99","sequenceNumber":0,"messageType":"markdown","messageState":"COMPLETED","sourceMessageState":"IN_PROGRESS","fullText":"# Top picks\nHere are 2BHK options in Sector 32 Gurgaon."}
-```
-
-Rules:
-- **`messageId`** is the persisted bot message id (matches `message_start` for this unit). No separate `eventId` field is required on `message_done` for storage correlation.
-- `fullText` must equal concatenation of all accepted deltas (after applying `chunkIndex` ordering and optional `chunkId` dedup per §4.4.1).
-- **`messageState`** on `message_done` reflects the **part** row (typically **`COMPLETED`** once finalized); **`sourceMessageState`** carries **turn** progress (e.g. **`IN_PROGRESS`** when a template `chat_event` still follows).
-- `message_done` is idempotent; FE may receive duplicates and should upsert by **`messageId`**.
-
-### 4.6 Existing `chat_event` in v1.1
+### 4.4 Existing `chat_event` in v1.1
 
 `chat_event` is still used for:
 - `messageType: "template"` events (atomic only)
 - non-incremental fallback behavior
-- **Final materialization of a streamed text/markdown part** for **`get-history`** and for clients that only understand full rows: once ML has produced the **complete** part, BE emits a **`chat_event`** whose **`messageId`** matches the id announced in **`message_start`** for that stream (same **`messageId`** as **`message_done`** for that part).
+- **Final materialization of a streamed text/markdown part** for **`get-history`** and for clients that only understand full rows: once ML has produced the **complete** part, BE emits a **`chat_event`** whose **`messageId`** matches the **`messageId`** on every **`message_delta`** for that stream (same id throughout).
 
-**FE behaviour (proposal):** While **`message_delta`** lines are arriving, FE shows a **transient** buffer keyed by **`messageId`**. When FE receives the final **`chat_event`** for that **`messageId`** (and/or after **`message_done`** — see **§12**), FE **removes** the transient streaming UI and **renders** the final message from the **`chat_event`** payload (equivalently: replace buffered text with the canonical **`ChatEventToUser`**). This keeps a single logical message in the thread and matches **`get-history`** after refresh.
+**FE behaviour:** While **`message_delta`** lines are arriving, FE shows a **transient** buffer keyed by **`messageId`**. When FE receives the final **`chat_event`** for that **`messageId`**, FE **removes** the transient streaming UI and **renders** the final message from the **`chat_event`** payload (equivalently: replace buffered text with the canonical **`ChatEventToUser`**). This keeps a single logical message in the thread and matches **`get-history`** after refresh.
 
 Example:
 ```txt
@@ -227,7 +206,7 @@ event: chat_event
 data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b_102","sourceMessageId":"msg_u_99","sequenceNumber":1,"messageState":"COMPLETED","sourceMessageState":"COMPLETED","messageType":"template","content":{"templateId":"property_carousel","data":{"property_count":15,"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]},"properties":[{"id":"p1"}]}}}}
 ```
 
-### 4.7 `connection_close`
+### 4.5 `connection_close`
 
 No change from v1 reasons:
 - `response_complete`
@@ -240,7 +219,7 @@ No change from v1 reasons:
 ## 5) Canonical FE Handling Rules
 
 ### 5.1 Capability detection
-- FE adds `streamingEnabled=true` to the `send-message-streamed` URL only when the client implements incremental (`message_start` / `message_delta` / `message_done`) handling.
+- FE adds `streamingEnabled=true` to the `send-message-streamed` URL only when the client implements incremental **`message_delta`** handling and final **`chat_event`** reconciliation for the same **`messageId`**.
 
 ### 5.2 Incremental render state
 
@@ -252,10 +231,9 @@ Maintain per-`messageId` transient state:
 - `startedAt`, `updatedAt`
 
 ### 5.3 Event handling
-- `message_start`: create transient message slot if missing.
-- `message_delta`: append `deltaText` when `chunkIndex` is the next expected index; if `chunkId` is present, skip when already in `seenChunkIds` (§4.4.1). Optionally read **`streamingPartState`** / **`sourceMessageState`** (§4.4.2). Completion of the **token stream** is signaled by **`message_done`** and/or final **`chat_event`** (§4.6, §12).
-- `message_done`: finalize buffered text for this **`messageId`**; align with **`fullText`**; clear transient streaming state when appropriate.
-- `chat_event` **for the same `messageId`**: replace transient streaming UI with the canonical **`ChatEventToUser`** row (§4.6).
+- `message_delta` (`chunkIndex === 0`): create transient message slot if missing; read **`messageType`**, **`sourceMessageId`**, **`sequenceNumber`**.
+- `message_delta`: append **`content.text`** when `chunkIndex` is the next expected index; if `chunkId` is present, skip when already in `seenChunkIds` (§4.3.1). The **token stream** for this part ends when the final **`chat_event`** for that **`messageId`** arrives (§4.4).
+- `chat_event` **for the same `messageId`**: replace transient streaming UI with the canonical **`ChatEventToUser`** row (§4.4); clear transient streaming state.
 - `chat_event` **template** (different `messageId`): append directly (no transient buffer for that event).
 
 ### 5.4 Rendering cadence
@@ -273,11 +251,12 @@ Maintain per-`messageId` transient state:
 ### 6.1 Provider normalization
 - BE adapts provider token stream into v1.1 normalized events.
 - FE never receives provider-native chunk format.
-- When upstream provides stable per-chunk ids, BE **may** emit optional `chunkId` on `message_delta` (§4.4.1); **`chunkIndex`** remains the canonical ordering key.
+- When upstream provides stable per-chunk ids, BE **may** emit optional `chunkId` on `message_delta` (§4.3.1); **`chunkIndex`** remains the canonical ordering key.
 
 ### 6.2 Persistence strategy
 - **Chunks are not stored** as separate chat rows: **`message_delta`** fragments are **ephemeral** on the wire only.
-- Persist the **final** bot **part** at **`message_done`** and/or when emitting the corresponding **`chat_event`** with full content (exact boundary is an **open decision** — see **§12**).
+- Persist the **final** bot **part** when emitting the **`chat_event`** with full **`content`** for that **`messageId`** (same row v1 clients already consume).
+- **`GET /chats/get-history`** returns **only** complete persisted **`ChatEventToUser`** rows. **`message_delta`** payloads **must not** appear in **`get-history`** — they are not history entities. Until the **`chat_event`** is committed, a client that only polls history may not see that part yet (see **§5.5**).
 - Optional: checkpoint partial text in ephemeral cache (Redis/in-memory) for operational resilience or reconnect (**§5.5**).
 
 ### 6.3 Cancellation semantics
@@ -295,7 +274,7 @@ Maintain per-`messageId` transient state:
 
 ### 6.5 Mock stream pacing (chat-demo `send-message-streamed` only)
 
-When testing the **v1** SSE path (full `chat_event` streaming, not incremental `message_*` deltas), the Next.js mock can slow multipart bot output: set **`ENABLE_MOCK_ML_DELAYS=true`** — see **`chat_v1.md` Appendix A §A.3.1** (initial delay ~6s, **5s** between each `chat_event`). Unrelated to v1.1 incremental token events but useful for observing staged awaiting copy (§4.7 / Appendix A §A.2).
+When testing the **v1** SSE path (full `chat_event` streaming, not incremental `message_*` deltas), the Next.js mock can slow multipart bot output: set **`ENABLE_MOCK_ML_DELAYS=true`** — see **`chat_v1.md` Appendix A §A.3.1** (initial delay ~6s, **5s** between each `chat_event`). Unrelated to v1.1 incremental token events but useful for observing staged awaiting copy (§4.5 / Appendix A §A.2).
 
 ---
 
@@ -337,17 +316,15 @@ SSE response:
 event: connection_ack
 data: {"eventId":"evt_u_12","messageState":"PENDING"}
 
-event: message_start
-data: {"messageId":"msg_b_31","sourceMessageId":"msg_u_12","sequenceNumber":0,"messageType":"markdown","context":{"user_intent":"SRP","service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","poly":["dce9290ec3fe8834a293"],"est":194298,"properties":[{"id":123,"type":"project"}],"uuid":[],"filters":{"type":"project"}}}
+event: message_delta
+data: {"messageId":"msg_b_31","sourceMessageId":"msg_u_12","sequenceNumber":0,"messageType":"markdown","chunkIndex":0,"content":{"text":"# Great options"}}
 
 event: message_delta
-data: {"messageId":"msg_b_31","chunkIndex":0,"deltaText":"# Great options"}
+data: {"messageId":"msg_b_31","chunkIndex":1,"content":{"text":" in Sector 32 Gurgaon"}}
 
-event: message_delta
-data: {"messageId":"msg_b_31","chunkIndex":1,"deltaText":" in Sector 32 Gurgaon"}
-
-event: message_done
-data: {"messageId":"msg_b_31","sourceMessageId":"msg_u_12","sequenceNumber":0,"messageType":"markdown","messageState":"COMPLETED","sourceMessageState":"IN_PROGRESS","fullText":"# Great options in Sector 32 Gurgaon"}
+id: evt_b_31
+event: chat_event
+data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b_31","sourceMessageId":"msg_u_12","sequenceNumber":0,"messageState":"COMPLETED","sourceMessageState":"IN_PROGRESS","messageType":"markdown","content":{"text":"# Great options in Sector 32 Gurgaon"}}}
 
 id: evt_b_32
 event: chat_event
@@ -367,69 +344,38 @@ Content-Type: application/json
 ```
 
 SSE response:
-- BE falls back to v1 `chat_event` only (no `message_start/message_delta/message_done`).
+- BE falls back to v1 `chat_event` only (no `message_delta` chunks).
 - FE must handle this without failure.
 
 ---
 
 ## 8) Updated Contract Types (v1.1 addenda)
 
-These are transport event payload contracts (SSE `data` field), not stored `ChatEvent` replacements.
+These are **non-persisted** transport payloads — not stored `ChatEvent` rows. **Canonical persisted fields** (`messageState`, **`sourceMessageState`**, full body) live on the **v1 `chat_event`** with the same **`messageId`**. **`get-history`** only returns those persisted rows, never **`message_delta`** fragments (§6.2).
 
-### 8.1 `MessageStartEvent`
+### 8.1 `MessageDeltaEventToUser` (BE → FE, SSE `message_delta` `data`)
+
 ```json
 {
   "messageId": "string",
   "sourceMessageId": "string",
   "sequenceNumber": 0,
   "messageType": "text | markdown",
-  "context": {
-    "service": "buy",
-    "category": "residential",
-    "city": "526acdc6c33455e9e4e9",
-    "filters": { "poly": ["dce9290ec3fe8834a293"] }
-  }
-}
-```
-
-### 8.2 `MessageDeltaEvent`
-```json
-{
-  "messageId": "string",
-  "sourceMessageId": "string",
-  "sequenceNumber": 0,
   "chunkIndex": 0,
-  "deltaText": "string",
-  "chunkId": "string",
-  "sourceMessageState": "IN_PROGRESS",
-  "streamingPartState": "STREAMING"
+  "content": { "text": "string" },
+  "chunkId": "string"
 }
 ```
 
-- **`chunkId`** is **optional** (§4.4.1). When present, it identifies that **non-persisted** intermediate fragment.
-- **`sourceMessageId`** / **`sourceMessageState`** — recommended for v1 alignment and tracing (§4.2.1, §4.4.2).
-- **`streamingPartState`** — optional; **`STREAMING`** until the last token chunk, then **`COMPLETE`** (or use alternative naming — §4.4.2). **Last chunk** may use **`COMPLETE`**; **`message_done`** remains the persistence boundary unless otherwise agreed (§12).
+- **`messageType`** — **required** on **`chunkIndex === 0`**; may be repeated on later chunks.
+- **`chunkId`** is **optional** (§4.3.1).
+- **No `sourceMessageState`** on the wire — FE treats **`message_delta`** as “stream in flight” for that **`messageId`** until the **`chat_event`** arrives.
 
-### 8.3 `MessageDoneEvent`
-```json
-{
-  "messageId": "string",
-  "sourceMessageId": "string",
-  "sequenceNumber": 0,
-  "messageType": "text | markdown",
-  "fullText": "string",
-  "messageState": "COMPLETED",
-  "sourceMessageState": "IN_PROGRESS | COMPLETED | ERRORED_AT_ML",
-  "context": {
-    "service": "buy",
-    "category": "residential",
-    "city": "526acdc6c33455e9e4e9",
-    "filters": { "poly": ["dce9290ec3fe8834a293"] }
-  }
-}
-```
+No **`context`** on **`message_delta`**: search / intent context uses v1 **`messageType: "context"`** via normal **`chat_event`**.
 
-**Persistence:** `messageId` is the sole id for the stored bot row; **`message_done` does not carry `eventId`** for that purpose.
+### 8.2 `MessageDeltaEventFromML` (ML → BE)
+
+Same fields as **`MessageDeltaEventToUser`**, plus optional **`conversationId`** for pipeline correlation. BE normalizes to **`MessageDeltaEventToUser`** on SSE. ML does not send turn state on deltas — BE persists **`sourceMessageState`** / **`messageState`** when materializing the final **`chat_event`**.
 
 ---
 
@@ -447,10 +393,9 @@ sequenceDiagram
     BE-->>FE: SSE connection_ack
     BE->>ML: Start provider streaming call
     ML-->>BE: token chunks
-    BE-->>FE: SSE message_start
     BE-->>FE: SSE message_delta (0..N)
-    BE-->>FE: SSE message_done (messageState=COMPLETED, sourceMessageState=IN_PROGRESS)
-    BE-->>FE: SSE chat_event (template, messageState=COMPLETED, sourceMessageState=COMPLETED)
+    BE-->>FE: SSE chat_event (markdown part, same messageId)
+    BE-->>FE: SSE chat_event (template, new messageId)
     BE-->>FE: SSE connection_close(response_complete)
 ```
 
@@ -485,10 +430,7 @@ sequenceDiagram
 
 ## 11) Open Decisions Before Implementation
 
-1. Should `message_done.fullText` be mandatory (recommended) or optional when BE can guarantee exact reconstruction?
-2. Should `context` be emitted only in `message_done`, or both `message_start` and `message_done` (current recommendation: both)?
-3. **Final row on the wire:** Single **`chat_event`** after streaming vs **`message_done` only** vs **both** (risk of duplicate content if FE mishandles — see **§12**).
-4. **Enum naming:** Adopt **`streamingPartState`** vs overloading **`messageState`** on deltas (§4.4.2).
+1. **Ordering:** Must **`chat_event`** always follow the last **`message_delta`** for the same **`messageId`**, or can they arrive in the same tick / interleaved with later events? (FE should treat **`chat_event`** as authoritative for that **`messageId`** either way.)
 
 ---
 
@@ -496,25 +438,21 @@ sequenceDiagram
 
 This section records issues to resolve **before** implementation. It does **not** reject the approach; it tightens contracts.
 
-### 12.1 Naming collision: `messageState` on chunks vs v1 `MessageState`
+### 12.1 Naming collision: overloading `messageState` on deltas vs v1 `MessageState`
 
-Reusing **`messageState`** with values like **`INTERMEDIATE`** / **`STREAMING`** / **`COMPLETE`** for **deltas** collides with the v1 **`MessageState`** enum (**`PENDING`**, **`COMPLETED`**, **`ERRORED_AT_ML`**, …) used on **stored** **`ChatEventToUser`** and **user** rows. Risk: bugs where a delta field is written to the DB or mis-rendered.
+v1.1 avoids putting **`messageState`** / **`sourceMessageState`** on **`message_delta`** so there is no collision with persisted enums — completion and turn state live on **`chat_event`** only.
 
-**Mitigation:** Prefer a **dedicated** field (e.g. **`streamingPartState`**) **only** on **`message_delta`** / transport payloads, and keep v1 enums for persisted events.
+### 12.2 Deltas vs final `chat_event`
 
-### 12.2 Two “completion” signals: last delta vs `message_done` vs `chat_event`
+The **final `chat_event`** carries the canonical full body. FE must not render **duplicate** text: keep a **single** slot per **`messageId`**; when **`chat_event`** arrives, **replace** the buffer with the **`ChatEventToUser`** payload.
 
-If the **last** delta carries “stream complete” **and** **`message_done`** carries **`fullText`**, **and** a final **`chat_event`** carries the full message, implementations need strict rules:
+**Authority:** **`chat_event`** / stored row is canonical for **`get-history`**. Deltas are for **live typing** UX only and **never** appear in **`get-history`**.
 
-- **Order:** Can **`chat_event`** arrive **before** **`message_done`**? After? Same tick?
-- **Authority:** Which object is canonical for **`get-history`**? (Typically the **`chat_event`** / stored row.)
-- **Duplicates:** FE must not show **both** buffered stream **and** full message, or **double** text.
+**Mitigation:** Specify that **`chat_event`** for a streamed part **follows** the last delta for that **`messageId`** (recommended), or document any allowed alternate ordering.
 
-**Mitigation:** Specify a **single** ordering (e.g. `message_done` always immediately before `chat_event` with same `messageId`, or merge into one event type for the final materialization).
+### 12.3 Turn state on the wire
 
-### 12.3 Redundant `sourceMessageState` on every delta
-
-Repeating **`sourceMessageState`** on each chunk is **verbose** and usually **unchanged** for the whole token stream. Acceptable for tracing; optional compression (omit on intermediate deltas, send only on `message_start` / `message_done`) could be considered.
+**`sourceMessageState`** is not repeated on each delta; the final **`chat_event`** (and persisted rows) carry the authoritative update.
 
 ### 12.4 Full `ChatEventFromML` on every delta
 
@@ -526,7 +464,7 @@ If BE **does not** persist chunks, after reconnect **`get-history`** may only sh
 
 ### 12.6 Multi-part turns
 
-**`sourceMessageState: IN_PROGRESS`** on a streamed markdown part correctly allows a later **template** `chat_event` with another **`messageId`**. Chunk streaming state (**`streamingPartState`**) applies **only** within one **`messageId`**, not across parts.
+**`sourceMessageState: IN_PROGRESS`** on the **final** streamed markdown **`chat_event`** correctly allows a later **template** `chat_event` with another **`messageId`**. Incremental **`message_delta`** lines apply **only** within one **`messageId`**, not across parts.
 
 ### 12.7 Backward compatibility
 

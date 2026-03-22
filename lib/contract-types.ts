@@ -1,4 +1,4 @@
-// Chat API Contract v1.0 types
+// Chat API Contract v1.0 types + v1.1 incremental streaming addenda (see `chat_v1_1_incremental_streaming.md` §8).
 
 export type MessageType =
   | "context"
@@ -152,6 +152,10 @@ export interface SendMessageResponse {
   messageState?: MessageState;
 }
 
+/**
+ * History is **persisted v1 message rows only** (`ChatEventToUser`). Ephemeral v1.1 **`message_delta`** chunks are never
+ * stored and **must not** appear in this response — only complete parts materialized as **`chat_event`** (see `chat_v1_1_incremental_streaming.md` §6.2).
+ */
 export interface GetHistoryResponse {
   conversationId: string;
   messages: ChatEventToUser[];
@@ -165,4 +169,40 @@ export interface GetConversationIdResponse {
 
 export interface GetChatsResponse {
   chats: { conversationId: string; createdAt: string; lastActivityAt: string }[];
+}
+
+// -----------------------------------------------------------------------------
+// v1.1 — SSE `message_delta` transport (`data` JSON only; no message_start / message_done).
+// Final text/markdown row is materialized by v1 `chat_event` with the same `messageId` (full body in `content`).
+// Deltas are ephemeral — not persisted, not in `get-history`. See `chat_v1_1_incremental_streaming.md` §8.
+// Search / SRP context: v1 `messageType: "context"` `chat_event` only.
+// -----------------------------------------------------------------------------
+
+/** One append-only fragment; FE concatenates by `chunkIndex` (event type `message_delta` implies delta semantics). */
+export interface MessageDeltaContent {
+  text: string;
+}
+
+/**
+ * BE → FE: SSE `event: message_delta` payload (`data`). No `sourceMessageState` on the wire — while **`message_delta`**
+ * lines arrive for a `messageId`, FE may treat the turn as **in progress**; the matching **`chat_event`** carries
+ * authoritative `messageState` / `sourceMessageState` and full `content`.
+ */
+export interface MessageDeltaEventToUser {
+  messageId: string;
+  sourceMessageId: string;
+  sequenceNumber: number;
+  /** Required on `chunkIndex === 0`; may be repeated on later chunks. */
+  messageType?: "text" | "markdown";
+  chunkIndex: number;
+  content: MessageDeltaContent;
+  chunkId?: string;
+}
+
+/**
+ * ML → BE: incremental fragment for a text/markdown part. Not a stored row. BE normalizes and forwards as
+ * `MessageDeltaEventToUser` on SSE.
+ */
+export interface MessageDeltaEventFromML extends MessageDeltaEventToUser {
+  conversationId?: string;
 }
