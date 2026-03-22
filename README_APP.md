@@ -31,6 +31,8 @@ Use these **server** env vars when starting `npm run dev` to simulate the stream
 | `ENABLE_MOCK_SSE_RANDOM_DROP=true` or `1` | After the first persisted bot part, always close the SSE stream without sending `chat_event` / `connection_close`. |
 | `MOCK_SSE_RANDOM_DROP_PROBABILITY` | e.g. `0.3` → 30% chance of the same behavior each request (use `0`–`1`; values `≥ 1` behave like always-on). Ignored when `ENABLE_MOCK_SSE_RANDOM_DROP` is set. |
 
+The chat client then **polls `GET /api/chats/get-history`** on an interval until the turn shows a terminal state (last bot part for that user message has `sourceMessageState` **`COMPLETED`** or **`ERRORED_AT_ML`**, or **`TIMED_OUT_BY_BE`** on the user row), or until a max wait — see `HISTORY_POLL_INTERVAL_MS` / `HISTORY_POLL_MAX_MS` in `app/chat/page.tsx`.
+
 ### Demo Mode
 
 Use `/chat?demo=true` to run an auto-played scripted demo.

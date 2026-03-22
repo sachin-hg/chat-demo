@@ -25,6 +25,9 @@ const LOAD_MORE_PAGE_SIZE = 6;
 /** After this many auto-loads (scroll-up), user must tap "View older messages" to protect BE. */
 const AUTO_LOAD_OLDER_MAX = 4;
 const REPLY_TIMEOUT_MS = 25000;
+/** After abrupt SSE end, poll `get-history` until the turn is terminal (see `isTurnTerminalInHistory`). */
+const HISTORY_POLL_INTERVAL_MS = 1500;
+const HISTORY_POLL_MAX_MS = 90_000;
 
 /**
  * Staged awaiting copy (1Hz `awaitingElapsedSec` from `startAwaitingReply`).
@@ -46,6 +49,44 @@ function isTerminalSseChatEvent(ev: ChatEventToUser): boolean {
   return (
     ev.sender?.type === "bot" && (ms === "COMPLETED" || ms === "ERRORED_AT_ML")
   );
+}
+
+/**
+ * Whether history shows the ML turn for user message `userTurnId` has finished:
+ * user row `TIMED_OUT_BY_BE`, or the **last** bot part for that `sourceMessageId` has terminal `sourceMessageState`
+ * (`COMPLETED` / `ERRORED_AT_ML` per contract).
+ */
+function isTurnTerminalInHistory(messages: ChatEventToUser[], userTurnId: string): boolean {
+  const userRow = messages.find((m) => m.messageId === userTurnId);
+  if (userRow && getTurnOrMessageState(userRow) === "TIMED_OUT_BY_BE") return true;
+
+  const botParts = messages.filter(
+    (m) => m.sender?.type === "bot" && m.sourceMessageId === userTurnId
+  );
+  if (botParts.length === 0) return false;
+  const sorted = [...botParts].sort(
+    (a, b) => (a.sequenceNumber ?? 0) - (b.sequenceNumber ?? 0)
+  );
+  const lastBot = sorted[sorted.length - 1];
+  return isTerminalSseChatEvent(lastBot);
+}
+
+function sleepAbortable(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    const t = setTimeout(resolve, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(t);
+        resolve();
+      },
+      { once: true }
+    );
+  });
 }
 
 function isNetworkFailure(error: unknown): boolean {
@@ -435,6 +476,8 @@ function ChatPageContent() {
   const currentPendingLocalMessageIdRef = useRef<string | null>(null);
   const cancelledPendingLocalIdsRef = useRef<Set<string>>(new Set());
   const activeSendStreamAbortRef = useRef<AbortController | null>(null);
+  /** Aborts `fetchHistoryAfterSseDisconnect` polling when user cancels or starts a new action. */
+  const sseHistoryPollAbortRef = useRef<AbortController | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement | null>(null);
   const loadOlderSentinelRef = useRef<HTMLDivElement | null>(null);
   const olderLoadInFlightRef = useRef(false);
@@ -471,19 +514,61 @@ function ChatPageContent() {
 
   const fetchHistoryAfterSseDisconnect = useCallback(async () => {
     if (!conversationId) return;
-    const n = Math.max(INITIAL_PAGE_SIZE, lastMessagesRef.current.length + 5);
-    const hist = await getHistory(conversationId, { page_size: n });
-    const list = hist.messages as StoredMessage[];
-    setMessages(list);
-    knownMessageIdsRef.current = new Set(
-      list.map((m) => m.messageId).filter((id): id is string => Boolean(id))
-    );
-    setHasMoreOlder(hist.hasMore);
-    clearReplyWaiting();
-    setNetworkError(false);
+    const userTurnId = lastRequestMessageIdRef.current;
+    sseHistoryPollAbortRef.current?.abort();
+    const ac = new AbortController();
+    sseHistoryPollAbortRef.current = ac;
+    const signal = ac.signal;
+
+    const applySnapshot = (hist: Awaited<ReturnType<typeof getHistory>>) => {
+      const list = hist.messages as StoredMessage[];
+      setMessages(list);
+      knownMessageIdsRef.current = new Set(
+        list.map((m) => m.messageId).filter((id): id is string => Boolean(id))
+      );
+      setHasMoreOlder(hist.hasMore);
+    };
+
+    const started = Date.now();
+
+    try {
+      if (userTurnId == null) {
+        const n = Math.max(INITIAL_PAGE_SIZE, lastMessagesRef.current.length + 5);
+        const hist = await getHistory(conversationId, { page_size: n });
+        if (signal.aborted) return;
+        applySnapshot(hist);
+        clearReplyWaiting();
+        setNetworkError(false);
+        return;
+      }
+
+      while (!signal.aborted && Date.now() - started < HISTORY_POLL_MAX_MS) {
+        const n = Math.max(INITIAL_PAGE_SIZE, lastMessagesRef.current.length + 5);
+        const hist = await getHistory(conversationId, { page_size: n });
+        if (signal.aborted) return;
+        applySnapshot(hist);
+
+        if (isTurnTerminalInHistory(hist.messages, userTurnId)) {
+          clearReplyWaiting();
+          setNetworkError(false);
+          return;
+        }
+
+        await sleepAbortable(HISTORY_POLL_INTERVAL_MS, signal);
+      }
+
+      if (signal.aborted) return;
+      // Max wait exceeded without a terminal turn — still leave UI on last snapshot; surface error.
+      setReplyStatus("error");
+      clearReplyWaiting();
+    } finally {
+      if (sseHistoryPollAbortRef.current === ac) sseHistoryPollAbortRef.current = null;
+    }
   }, [conversationId, clearReplyWaiting]);
 
   const cancelAndHideCurrentRequest = useCallback(async () => {
+    sseHistoryPollAbortRef.current?.abort();
+    sseHistoryPollAbortRef.current = null;
     activeSendStreamAbortRef.current?.abort();
     activeSendStreamAbortRef.current = null;
 
