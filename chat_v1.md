@@ -7,10 +7,7 @@ This file is the canonical consolidated reference for architecture, API contract
 
 1. Property carousel metadata: `property_count` vs `hasViewMore`.
 2. Chat migration behavior when a user logs in mid-session.
-3. Context-out strategy options (still open; current default is option 1):
-   - **Option 1 (current default):** include `summarisedChatContext` in every ML response.
-   - **Option 2:** FE calls a separate API to pull context from ML only when needed (reduces payload size, but can add latency).
-   - **Option 3:** ML emits context as a separate `context` message whenever context changes; in this mode ML also emits terminal `messageState` for the same `sourceMessageId` with that context update.
+3. **Context-out (closed — Option 3 adopted):** ML does **not** attach rolling context to every bot payload. When user intent / search context changes in a way FE must know, ML emits a standalone **`messageType: "context"`** in the same `sourceMessageId` chain, using the **same `content.data` schema** as FE/system context on chat open (Part B §4.1). Context messages are **optional and infrequent**. **`messageState: COMPLETED`** on the **last** ML→BE event for that turn (after any context + all visible response parts) ends the request; BE must not mark the source user message `COMPLETED` on an intermediate `context` event alone. See §5.2, Part B §2 matrix, §10.6.
 
 ---
 
@@ -80,7 +77,7 @@ CANCELLED_BY_USER
 - [`ChatEventFromUser`](lib/contract-types.ts#L38): FE -> BE event shape for send-message APIs.
 - [`ChatEventToML`](lib/contract-types.ts#L51): BE -> ML event shape for user turn dispatch.
 - [`CancelEventToML`](lib/contract-types.ts#L65): BE -> ML cancellation signal shape.
-- [`ChatEventFromML`](lib/contract-types.ts#L76): ML -> BE event shape (includes `sourceMessageId`, `messageState`, optional `error`, optional `summarisedChatContext`).
+- [`ChatEventFromML`](lib/contract-types.ts#L76): ML -> BE event shape (includes `sourceMessageId`, `messageType`, `messageState`, `sequenceNumber`, `content`, optional `error`).
 - [`ChatEventToUser`](lib/contract-types.ts#L94): BE -> FE event shape for history and stream delivery.
 - [`SendMessageResponse`](lib/contract-types.ts#L123): ack shape for send-message/send-message-streamed (`messageId`, `messageState?`).
 - [`GetHistoryResponse`](lib/contract-types.ts#L128): history API shape (`conversationId`, `messages`: [`ChatEventToUser`](lib/contract-types.ts#L94)`[]`, `hasMore`).
@@ -332,36 +329,7 @@ data: {"reason":"response_complete"}
   "sourceMessageId": "msg_u_456",
   "messageType": "template",
   "messageState": "COMPLETED",
-  "sequenceNumber": 0,
-  "summarisedChatContext": {
-    "service": "buy",
-    "category": "residential",
-    "city": "526acdc6c33455e9e4e9",
-    "filters": {
-      "poly": ["dce9290ec3fe8834a293"],
-      "est": 194298,
-      "region_entity_id": 31817,
-      "region_entity_type": "project",
-      "uuid": [],
-      "qv_resale_id": 1234,
-      "qv_rent_id": 12345,
-      "apartment_type_id": [1, 2],
-      "contact_person_id": [1, 2],
-      "facing": ["east", "west"],
-      "has_lift": true,
-      "is_gated_community": true,
-      "is_verified": true,
-      "max_area": 4000,
-      "max_poss": 0,
-      "max_price": 4800000,
-      "radius": 3000,
-      "routing_range": 10,
-      "routing_range_type": "time",
-      "min_price": 100,
-      "property_type_id": [1, 2],
-      "type": "project"
-    }
-  },
+  "sequenceNumber": 1,
   "content": {
     "templateId": "property_carousel",
     "data": { "...": "template payload" }
@@ -369,11 +337,15 @@ data: {"reason":"response_complete"}
 }
 ```
 
-BE persistence semantics for ML outputs:
-- BE persists each ML output as a new bot message (`sender.type = "bot"`) with a newly generated `messageId` and `messageState = "COMPLETED"`.
-- BE applies ML output `messageState` (`IN_PROGRESS`/`COMPLETED`/`ERRORED_AT_ML`) to the source user message referenced by `sourceMessageId`.
+**Context-out (Option 3 — adopted)**  
+- There is **no** `summarisedChatContext` (or equivalent) on ML bot payloads. Rolling context updates are conveyed only via **`messageType: "context"`** when ML decides FE must be notified (e.g. filters, city, service changed). Those events use the **same `content.data` shape** as the context event FE sends on chat open (system) — see Part B §4.1.  
+- Context is **not** sent on every ML response—only when intent/context materially changes.  
+- Context and all user-visible bot parts for a turn share the same **`sourceMessageId`** and are ordered by **`sequenceNumber`**.  
+- **`messageState: COMPLETED`** on the **final** ML output for that `sourceMessageId` means the full response (including any preceding `context` and bot content events) is complete. Earlier events in the chain use **`IN_PROGRESS`** (or non-terminal states as defined by BE/ML). BE applies **`COMPLETED`** to the **source user message** only when processing that **final** event—not when a standalone `context` message arrives mid-chain.
 
-`summarisedChatContext` is optional in contract shape, but current provisional strategy is to include it on all ML success responses.
+BE persistence semantics for ML outputs:
+- BE persists each ML output as a new message with a newly generated `messageId`. Bot-visible rows use `sender.type = "bot"`; `messageType: "context"` from ML may also use `sender.type: "bot"` (Part B §2 matrix).
+- BE applies the source user message’s terminal `messageState` from the **last** ML event in the chain for that `sourceMessageId` (see above).
 
 ---
 
@@ -487,7 +459,6 @@ message_type VARCHAR
 content JSONB
 source_message_id VARCHAR
 message_state VARCHAR
-summarised_chat_context JSONB
 response_required BOOLEAN
 sequence_number INT
 is_visible BOOLEAN
@@ -652,13 +623,18 @@ sequenceDiagram
 
 ---
 
-### 10.6 Context-Out Option 3 (Separate Context Message)
+### 10.6 Context-Out Option 3 (Separate ML `context` Message)
 
 **Interfaces used**
 - FE -> BE: `ChatEventFromUser`
 - BE -> ML: `ChatEventToML`
-- ML -> BE: `ChatEventFromML` (including standalone `messageType: "context"` on context change)
+- ML -> BE: `ChatEventFromML` (bot `text`/`markdown`/`template` and, when needed, `messageType: "context"` with same `content.data` as system context)
 - BE -> FE (`chat_event`): `ChatEventToUser`
+
+**Rules**  
+- Context is emitted **only when** ML detects user intent / search context changed such that FE should update client-side context—not on every reply.  
+- All parts for the turn share **`sourceMessageId`**. Use **`sequenceNumber`** for ordering.  
+- Intermediate events (including a mid-chain **`context`** row) use **`messageState: IN_PROGRESS`** on the ML envelope as appropriate; **`messageState: COMPLETED`** appears **only on the last** ML→BE event for that `sourceMessageId`. BE then marks the **source user message** `COMPLETED` and may emit **`connection_close`**.
 
 ```mermaid
 sequenceDiagram
@@ -670,13 +646,16 @@ sequenceDiagram
     BE-->>FE: SSE connection_ack {messageId, messageState:PENDING}
     BE->>ML: dispatch ChatEventToML
 
-    ML->>BE: bot content event (messageState=IN_PROGRESS, sourceMessageId=msg_u_1)
-    BE-->>FE: SSE chat_event (bot content)
+    ML->>BE: bot markdown (messageState=IN_PROGRESS, sourceMessageId=msg_u_1, sequenceNumber=0)
+    BE-->>FE: SSE chat_event
 
-    Note over ML: Context changed during generation
-    ML->>BE: context event (messageType=context, sourceMessageId=msg_u_1, messageState=COMPLETED)
-    BE->>BE: mark sourceMessageId msg_u_1 as COMPLETED
-    BE-->>FE: SSE chat_event (context message)
+    Note over ML: User intent / context changed — notify FE
+    ML->>BE: context (messageType=context, sender=bot, sourceMessageId=msg_u_1, sequenceNumber=1, messageState=IN_PROGRESS)
+    BE-->>FE: SSE chat_event (not rendered; same content.data schema as system context)
+
+    ML->>BE: bot template (messageState=COMPLETED, sourceMessageId=msg_u_1, sequenceNumber=2)
+    BE->>BE: mark source msg_u_1 COMPLETED (final event in chain)
+    BE-->>FE: SSE chat_event (final bot content)
     BE-->>FE: SSE connection_close (response_complete)
 ```
 
@@ -716,7 +695,10 @@ This section records how the **chat-demo** implementation diverges from or exten
 - Includes login auto-fill (phone/OTP), nested_qna option/text flows, brochure click, and location-permission pauses.
 - Debug tracing is available in browser console with `[demo]` log prefix.
 
----
+### A.8 Context-out (Option 3) in this app
+
+- Canonical rules are §5.2, Part B §2 matrix, §10.6. **`summarisedChatContext` is removed** from the TypeScript contract and mock ML payloads.
+- The **mock `ml-flow`** does not yet emit mid-turn `messageType: "context"` events; only FE/system context on chat open is used today.
 
 ---
 
@@ -736,7 +718,8 @@ This section records how the **chat-demo** implementation diverges from or exten
 - **`responseRequired`** on `user_action` and user `text`: tells ML whether to generate a response — always `true` for user text, conditional for user_action
 - **Templates are FE-owned** (custom rendering is allowed and expected)
 - **Templates MUST provide a `fallbackText`** *(Phase 2 — not rendered in Phase 1)*
-- **Context is never rendered.** **Analytics** messageType is **Phase 2** — not in Phase 1 scope.
+- **Context is never rendered** (including ML-originated `messageType: "context"` under Option 3). **Analytics** messageType is **Phase 2** — not in Phase 1 scope.
+- **Context-out (Option 3):** ML may append `messageType: "context"` with `sender.type: "bot"` in the `sourceMessageId` chain when intent changes; `content.data` matches system context (§4.1). No `summarisedChatContext` on bot payloads. Terminal **`COMPLETED`** only on the **last** ML event for the turn (§5.2, §10.6).
 - **All future changes must be additive (v1.x)**
 
 ---
@@ -818,10 +801,6 @@ This section records how the **chat-demo** implementation diverges from or exten
       ],
       "description": "BE-resolved request lifecycle state for this message/turn."
     },
-    "summarisedChatContext": {
-      "type": "object",
-      "description": "Optional ML response context snapshot. Provisional strategy: include in every ML response."
-    }
   },
 
   "allOf": [
@@ -861,7 +840,7 @@ This section records how the **chat-demo** implementation diverges from or exten
 
 | messageType | user | bot | system | responseRequired |
 |------------|------|-----|--------|-----------------|
-| context | ❌ | ❌ | ✅ | no |
+| context | ❌ | ✅ | ✅ | no |
 | text | ✅ | ✅ | ✅ | yes when FE expects reply (`responseRequired: true`) |
 | markdown | ❌ | ✅ | ❌ | NA |
 | template | ❌ | ✅ | ❌ | NA |
@@ -869,11 +848,9 @@ This section records how the **chat-demo** implementation diverges from or exten
 
 *Analytics is **Phase 2** — not in Phase 1.*
 
-**Context-out options note**
-- Current default keeps `context` row as-is (`system` only) and carries context via `summarisedChatContext` on ML responses.
-- If option 3 (separate ML `context` message) is adopted, this matrix changes to:
-  - `context | ❌ | ✅ | ✅ | no`
-  - and ML sends context in a standalone `context` message shaped like the existing user/system context schema.
+**Context-out (Option 3)**  
+- ML may emit `messageType: "context"` with `sender.type: "bot"` (matrix above). `content.data` matches the **same schema** as FE/system context (Part B §4.1). FE does not render `context` rows (§3 decision table).  
+- See §5.2 and §10.6 for ordering, `sequenceNumber`, and when `messageState: COMPLETED` closes the request.
 
 ---
 

@@ -82,8 +82,6 @@ export interface ChatEventFromML {
   messageType: MessageType;
   messageState: "IN_PROGRESS" | "COMPLETED" | "ERRORED_AT_ML";
   error?: { code: string; message: string };
-  /** Optional ML response context snapshot for downstream consumers. */
-  summarisedChatContext?: Record<string, unknown>;
   isVisible?: boolean;
   
   sequenceNumber: number;
@@ -98,8 +96,6 @@ export interface ChatEventToUser {
   sourceMessageId?: string; // not really required by FE in phase 1
   messageType: MessageType;
   messageState: MessageState;
-  /** Optional ML response context snapshot for downstream consumers. */
-  summarisedChatContext?: Record<string, unknown>;
   createdAt: string;
 
   responseRequired: boolean; // mandatory where sender === user

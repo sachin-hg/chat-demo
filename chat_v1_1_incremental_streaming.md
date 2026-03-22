@@ -123,7 +123,7 @@ Rules:
 
 ```txt
 event: message_done
-data: {"eventId":"evt_601","messageId":"msg_b_101","sourceMessageId":"msg_u_99","sequenceNumber":0,"messageType":"markdown","messageState":"IN_PROGRESS","fullText":"# Top picks\nHere are 2BHK options in Sector 32 Gurgaon.","summarisedChatContext":{"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]}}}
+data: {"eventId":"evt_601","messageId":"msg_b_101","sourceMessageId":"msg_u_99","sequenceNumber":0,"messageType":"markdown","messageState":"IN_PROGRESS","fullText":"# Top picks\nHere are 2BHK options in Sector 32 Gurgaon."}
 ```
 
 Rules:
@@ -227,7 +227,7 @@ data: {"eventId":"evt_u_11","messageState":"PENDING"}
 
 id: evt_b_21
 event: chat_event
-data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b_21","sourceMessageId":"msg_u_11","sequenceNumber":0,"messageState":"COMPLETED","messageType":"markdown","summarisedChatContext":{"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]}},"content":{"text":"Here are options for you."}}}
+data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b_21","sourceMessageId":"msg_u_11","sequenceNumber":0,"messageState":"COMPLETED","messageType":"markdown","content":{"text":"Here are options for you."}}}
 
 event: connection_close
 data: {"reason":"response_complete"}
@@ -258,11 +258,11 @@ event: message_delta
 data: {"messageId":"msg_b_31","chunkIndex":1,"deltaText":" in Sector 32 Gurgaon","isFinalChunk":false}
 
 event: message_done
-data: {"eventId":"evt_b_31","messageId":"msg_b_31","sourceMessageId":"msg_u_12","sequenceNumber":0,"messageType":"markdown","messageState":"IN_PROGRESS","fullText":"# Great options in Sector 32 Gurgaon","summarisedChatContext":{"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]}}}
+data: {"eventId":"evt_b_31","messageId":"msg_b_31","sourceMessageId":"msg_u_12","sequenceNumber":0,"messageType":"markdown","messageState":"IN_PROGRESS","fullText":"# Great options in Sector 32 Gurgaon"}
 
 id: evt_b_32
 event: chat_event
-data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b_32","sourceMessageId":"msg_u_12","sequenceNumber":1,"messageState":"COMPLETED","messageType":"template","summarisedChatContext":{"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]}},"content":{"templateId":"property_carousel","data":{"property_count":15,"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]},"properties":[{"id":"p1"},{"id":"p2"}]}}}}
+data: {"sender":{"type":"bot"},"payload":{"messageId":"msg_b_32","sourceMessageId":"msg_u_12","sequenceNumber":1,"messageState":"COMPLETED","messageType":"template","content":{"templateId":"property_carousel","data":{"property_count":15,"service":"buy","category":"residential","city":"526acdc6c33455e9e4e9","filters":{"poly":["dce9290ec3fe8834a293"]},"properties":[{"id":"p1"},{"id":"p2"}]}}}}
 
 event: connection_close
 data: {"reason":"response_complete"}
