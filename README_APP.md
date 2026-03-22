@@ -56,6 +56,7 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
 - **FE**:
   - uses `send-message-streamed` for `responseRequired=true` turns
   - uses `send-message` for `responseRequired=false` fire-and-forget turns
+  - **Ack-only `user_action`** (`responseRequired=false`, e.g. shortlist/contact after property API success) is **not blocked** by an in-flight streamed user turn: it appends its own optimistic row and calls `send-message` without stealing the stream’s pending/abort refs or flipping the global `sending` flag for that path.
   - keeps request-scoped streams (no long-lived SSE subscription)
 - **Mock**: In-memory event log and request state; mock “ML” in `lib/mock/ml-flow.ts` returns the next bot message(s) per contract examples.
 - **Data**: Mock properties/localities and derived markdown data in `lib/mock/data.ts`.
@@ -89,12 +90,20 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
 
 ## UI Notes
 
+- **Older messages (history pagination)** (`app/chat/page.tsx`):
+  - Uses `GET /api/chats/get-history` with `messages_before=<oldest visible messageId>` and `page_size` (see `LOAD_MORE_PAGE_SIZE`).
+  - **Auto-load (first 4 successful prepends per conversation):** an **Intersection Observer** watches a 1px sentinel at the top of the thread (inside the scroll container, with a top `rootMargin` prefetch). Each time the user scrolls that sentinel into view, older messages load **once** (edge-triggered), until four successful prepends have run (`AUTO_LOAD_OLDER_MAX`).
+  - **After 4 auto-loads:** only a **“View older messages”** button loads more (guards against accidental churn / BE abuse).
+  - While a page is loading, a **spinner** is shown in that slot (no button label).
+  - Auto-load budget resets when `conversationId` changes.
+- **Scroll to bottom:** a floating control appears when the user scrolls away from the bottom (threshold ~100px / 20% of viewport height); the scroll listener is attached after the main chat layout mounts (not on the initial loading screen).
 - Transient templates (`share_location`, `shortlist_property`, `contact_seller`, `nested_qna`) are rendered only for the latest bot message.
 - Property carousel title opens `inventory_canonical_url` in a new tab.
 - Property carousel shows a trailing **View all** card when `property_count > properties.length`; click opens `getSRPUrl(service, category, city, filters)` in a new tab.
 - Locality carousel locality name opens locality `url` in a new tab.
 - `context` and `analytics` messages are never rendered.
 - Input is hidden while sticky `nested_qna` is active.
+- **`NestedQna` template:** submitting the flow defers parent updates (`queueMicrotask`) so React does not update the chat page while `NestedQna` is rendering; hooks run unconditionally before any early return when `selections` is empty.
 - Reply timeout is 25s with Retry/Dismiss; FE then relies on polling (`get-history` with `messages_after`) until response arrives for that message.
 
 ## Implementation divergences

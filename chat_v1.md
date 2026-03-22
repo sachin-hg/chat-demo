@@ -692,6 +692,7 @@ This section records how the **chat-demo** implementation diverges from or exten
 ### A.1 get-history
 
 - Cursor behavior and soft-delete filtering are documented in canonical section §4.3.
+- **This app:** older messages are loaded via `messages_before` + `page_size`; see **Appendix A §A.1.1** (Intersection Observer auto-load, manual after 4 prepends, spinner).
 
 ### A.2 FE reply timeout and UI
 
@@ -2314,6 +2315,21 @@ This section documents current behavior in this repository where it differs from
 - FE reply timeout is 25s (`replyStatus: timeout`), with Retry and Dismiss; FE then relies on polling (`get-history` with `messages_after`) until response arrives for that message.
 - Canonical stream/cancel/runtime semantics are defined in §4.5 and examples in §4.2.
 
+#### A.1.1 History pagination — older messages (this app)
+
+- Initial transcript uses `GET /chats/get-history` with `page_size` (see `INITIAL_PAGE_SIZE` in `app/chat/page.tsx`).
+- Older pages use `messages_before=<messageId of current oldest row>` and `page_size` (`LOAD_MORE_PAGE_SIZE`).
+- **UX:** an **Intersection Observer** on a top **sentinel** inside the chat scroll container auto-loads the next older page when the user scrolls near the top (with a top `rootMargin` prefetch). Loads are **edge-triggered** (entering view) and **count only successful prepends** (new rows actually merged).
+- **Budget:** the first **`AUTO_LOAD_OLDER_MAX` (4)** successful auto-loads per **`conversationId`** are free; after that, the UI shows only **“View older messages”** (manual tap) to reduce accidental / abusive churn against BE.
+- While fetching older messages, a **spinner** is shown in that header area (no “View older messages” label during load).
+- The scroll listener for the **back-to-bottom** affordance attaches when the main chat layout is shown (after the initial full-screen loading state), so visibility tracks scroll correctly.
+
+#### A.1.2 `user_action` — ack-only turns vs in-flight streamed turns (this app)
+
+- **`responseRequired === false`** fire-and-forget `user_action` (e.g. shortlist / contact seller / brochure ack after FE/API success) **must not** be dropped just because a **streamed** user turn is in progress (`sending`).
+- Implementation: ack-only paths append their optimistic row and call **`POST /send-message`** without taking over **`currentPendingLocalMessageId`**, **`activeSendStreamAbortRef`**, or the global **`sending` / `replyStatus("sending")`** flags used by the streamed pipeline. Errors on ack-only turns must not overwrite **`replyStatus`** for an active streamed reply.
+- **`responseRequired === true`** `user_action` (e.g. learn more, nested QnA submit) still participates in the **single** active send pipeline and is blocked while another such turn is sending.
+
 ### A.2 Rendering behavior
 
 - `context` and `analytics` are never rendered.
@@ -2321,6 +2337,7 @@ This section documents current behavior in this repository where it differs from
 - Transient templates are rendered only for latest bot message:
   - `share_location`, `shortlist_property`, `contact_seller`, `nested_qna`.
 - Input composer is hidden while sticky `nested_qna` is active.
+- **`nested_qna`:** completion defers the parent `onUserAction` / chat state update (e.g. `queueMicrotask`) so the parent is not updated during the child’s render phase; hook order stays valid when `selections` is empty (no early return before hooks).
 
 ### A.3 Template/action behavior in current app
 
