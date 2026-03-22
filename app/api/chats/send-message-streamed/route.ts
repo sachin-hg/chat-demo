@@ -12,11 +12,25 @@ import {
 import { getNextBotEvents } from "@/lib/mock/ml-flow";
 import type { ChatEvent, ChatEventFromUser, ChatEventToML, CancelEventToML } from "@/lib/contract-types";
 
-const DELAYS_MS = [61000];
-function getMockDelayMs(): number {
-  const enabled = process.env.ENABLE_MOCK_ML_DELAYS === "true" || process.env.ENABLE_MOCK_ML_DELAYS === "1";
-  if (!enabled) return 0;
-  return DELAYS_MS[Math.floor(Math.random() * DELAYS_MS.length)];
+const MOCK_ML_INITIAL_DELAYS_MS = [6000];
+/** When `ENABLE_MOCK_ML_DELAYS` is set, wait this long between consecutive `chat_event` SSE lines. */
+const MOCK_ML_PER_CHAT_EVENT_MS = 5000;
+
+function mockMlDelaysEnabled(): boolean {
+  return process.env.ENABLE_MOCK_ML_DELAYS === "true" || process.env.ENABLE_MOCK_ML_DELAYS === "1";
+}
+
+function getMockInitialDelayMs(): number {
+  if (!mockMlDelaysEnabled()) return 0;
+  return MOCK_ML_INITIAL_DELAYS_MS[Math.floor(Math.random() * MOCK_ML_INITIAL_DELAYS_MS.length)];
+}
+
+function getMockPerChatEventDelayMs(): number {
+  return mockMlDelaysEnabled() ? MOCK_ML_PER_CHAT_EVENT_MS : 0;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function POST(request: NextRequest) {
@@ -52,8 +66,9 @@ export async function POST(request: NextRequest) {
   createRequest(stored.messageId!, event.conversationId);
   stored.messageState = "PENDING";
 
-  const mockDelay = getMockDelayMs();
-  const delayMs = mockDelay > 0 ? mockDelay : 100;
+  const mockInitialDelay = getMockInitialDelayMs();
+  const delayBeforeMlMs = mockInitialDelay > 0 ? mockInitialDelay : 100;
+  const perChatEventMs = getMockPerChatEventDelayMs();
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -116,63 +131,77 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      setTimeout(() => {
-        if (!isPending(stored.messageId!)) {
-          completeRequest(stored.messageId!);
-          close();
-          return;
-        }
+      void (async () => {
+        try {
+          await delay(delayBeforeMlMs);
+          if (closed || request.signal.aborted) return;
 
-        const loginAuthToken = request.headers.get("login_auth_token") ?? undefined;
-        const gaId = request.headers.get("_ga") ?? undefined;
-        const userId = loginAuthToken ? "authenticated_user" : undefined;
-
-        const eventToML: ChatEventToML = {
-          conversationId: event.conversationId,
-          messageId: stored.messageId!,
-          messageType: event.messageType,
-          messageState: "PENDING",
-          createdAt: stored.createdAt!,
-          sender: {
-            type: event.sender.type,
-            userId,
-            gaId,
-          },
-          content: event.content,
-          responseRequired: event.responseRequired ?? false,
-        };
-
-        const recentEvents = getAllEvents();
-        const botEvents = getNextBotEvents(eventToML, recentEvents as ChatEvent[]);
-
-        for (const ev of botEvents) {
-          const sourceState = getMessageStateByUserMessageId(ev.sourceMessageId);
-          if (sourceState !== "PENDING" && sourceState !== "IN_PROGRESS") {
-            continue;
-          }
-          updateMessageStateByUserMessageId(ev.sourceMessageId, ev.sourceMessageState);
-          const storedBot = appendEvent({
-            ...ev,
-            sender: { type: "bot" },
-            conversationId: event.conversationId,
-            // Each persisted bot **part** is a complete row; turn progress is `sourceMessageState`.
-            messageState: "COMPLETED",
-            sourceMessageState: ev.sourceMessageState,
-          });
-
-          writeSse({ event: "chat_event", id: storedBot.messageId, data: storedBot });
-
-          if (ev.sourceMessageState === "COMPLETED" || ev.sourceMessageState === "ERRORED_AT_ML") {
+          if (!isPending(stored.messageId!)) {
             completeRequest(stored.messageId!);
-            writeSse({ event: "connection_close", data: { reason: "response_complete" } });
             close();
             return;
           }
-        }
 
-        completeRequest(stored.messageId!);
-        close();
-      }, delayMs);
+          const loginAuthToken = request.headers.get("login_auth_token") ?? undefined;
+          const gaId = request.headers.get("_ga") ?? undefined;
+          const userId = loginAuthToken ? "authenticated_user" : undefined;
+
+          const eventToML: ChatEventToML = {
+            conversationId: event.conversationId,
+            messageId: stored.messageId!,
+            messageType: event.messageType,
+            messageState: "PENDING",
+            createdAt: stored.createdAt!,
+            sender: {
+              type: event.sender.type,
+              userId,
+              gaId,
+            },
+            content: event.content,
+            responseRequired: event.responseRequired ?? false,
+          };
+
+          const recentEvents = getAllEvents();
+          const botEvents = getNextBotEvents(eventToML, recentEvents as ChatEvent[]);
+
+          for (let i = 0; i < botEvents.length; i++) {
+            if (closed || request.signal.aborted) return;
+            if (i > 0 && perChatEventMs > 0) {
+              await delay(perChatEventMs);
+              if (closed || request.signal.aborted) return;
+            }
+
+            const ev = botEvents[i];
+            const sourceState = getMessageStateByUserMessageId(ev.sourceMessageId);
+            if (sourceState !== "PENDING" && sourceState !== "IN_PROGRESS") {
+              continue;
+            }
+            updateMessageStateByUserMessageId(ev.sourceMessageId, ev.sourceMessageState);
+            const storedBot = appendEvent({
+              ...ev,
+              sender: { type: "bot" },
+              conversationId: event.conversationId,
+              // Each persisted bot **part** is a complete row; turn progress is `sourceMessageState`.
+              messageState: "COMPLETED",
+              sourceMessageState: ev.sourceMessageState,
+            });
+
+            writeSse({ event: "chat_event", id: storedBot.messageId, data: storedBot });
+
+            if (ev.sourceMessageState === "COMPLETED" || ev.sourceMessageState === "ERRORED_AT_ML") {
+              completeRequest(stored.messageId!);
+              writeSse({ event: "connection_close", data: { reason: "response_complete" } });
+              close();
+              return;
+            }
+          }
+
+          completeRequest(stored.messageId!);
+          close();
+        } catch {
+          close();
+        }
+      })();
     },
   });
 

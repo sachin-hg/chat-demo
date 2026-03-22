@@ -10,6 +10,47 @@ interface Props {
   disabled?: boolean;
 }
 
+/** Reuse a successful fix across mounts / ShareLocation instances (session tab). */
+const SESSION_LOCATION_CACHE_MS = 5 * 60 * 1000;
+
+/** Non-zero so the OS/browser may return a recent cached position (reduces POSITION_UNAVAILABLE on repeat calls). */
+const GEOLOCATION_MAXIMUM_AGE_MS = 5 * 60 * 1000;
+
+let cachedGeolocation: { coords: [number, number]; receivedAt: number } | null = null;
+
+function getCoordsWithCache(): Promise<
+  { ok: true; coords: [number, number] } | { ok: false }
+> {
+  const now = Date.now();
+  if (
+    cachedGeolocation &&
+    now - cachedGeolocation.receivedAt < SESSION_LOCATION_CACHE_MS
+  ) {
+    return Promise.resolve({ ok: true, coords: cachedGeolocation.coords });
+  }
+
+  return new Promise((resolve) => {
+    if (typeof window === "undefined" || !("geolocation" in navigator)) {
+      resolve({ ok: false });
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const coords: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+        cachedGeolocation = { coords, receivedAt: Date.now() };
+        resolve({ ok: true, coords });
+      },
+      () => resolve({ ok: false }),
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: GEOLOCATION_MAXIMUM_AGE_MS,
+      }
+    );
+  });
+}
+
 export function ShareLocation({ data, onUserAction, disabled = false }: Props) {
   const [shouldRender, setShouldRender] = useState(true);
 
@@ -24,21 +65,21 @@ export function ShareLocation({ data, onUserAction, disabled = false }: Props) {
       try {
         const perms = (navigator as unknown as { permissions?: Permissions }).permissions;
         if (!perms?.query) return;
-
         const status = await perms.query({ name: "geolocation" as PermissionName });
         if (cancelled) return;
-
         if (status.state === "granted") {
           setShouldRender(false);
-          const result = await new Promise<{ ok: true; coords: [number, number] } | { ok: false }>((resolve) => {
-            navigator.geolocation.getCurrentPosition(
-              (pos) => resolve({ ok: true, coords: [pos.coords.latitude, pos.coords.longitude] }),
-              () => resolve({ ok: false }),
-              { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-            );
-          });
+          const result = await getCoordsWithCache();
           if (cancelled) return;
-          if (!result.ok) return;
+          if (!result.ok) {
+            onUserAction({
+              sender: { type: "system" },
+              messageType: "user_action",
+              responseRequired: true,
+              content: { data: { action: "location_not_available" } },
+            } as unknown as ChatEventFromUser);
+            return;
+          }
 
           // Send request to ML directly.
           onUserAction({
@@ -86,25 +127,19 @@ export function ShareLocation({ data, onUserAction, disabled = false }: Props) {
                 sender: { type: "system" },
                 messageType: "user_action",
                 responseRequired: true,
-                content: { data: { action: "location_denied" } },
+                content: { data: { action: "location_not_available" } },
               } as unknown as ChatEventFromUser);
               return;
             }
 
-            const result = await new Promise<{ ok: true; coords: [number, number] } | { ok: false }>((resolve) => {
-              navigator.geolocation.getCurrentPosition(
-                (pos) => resolve({ ok: true, coords: [pos.coords.latitude, pos.coords.longitude] }),
-                () => resolve({ ok: false }),
-                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-              );
-            });
+            const result = await getCoordsWithCache();
 
             if (!result.ok) {
               onUserAction({
                 sender: { type: "system" },
                 messageType: "user_action",
                 responseRequired: true,
-                content: { data: { action: "location_denied" } },
+                content: { data: { action: "location_not_available" } },
               } as unknown as ChatEventFromUser);
               return;
             }

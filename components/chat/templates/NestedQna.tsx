@@ -191,7 +191,7 @@ export function NestedQna({
   };
 
   return (
-    <div className="fixed bottom-0 left-1/2 -translate-x-1/2 z-40 w-full max-w-[430px] px-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))]" data-demo="nested-qna">
+    <div className="fixed bottom-0 left-1/2 -translate-x-1/2 z-40 w-full max-w-[800px] px-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))]" data-demo="nested-qna">
       <div className="bg-white rounded-2xl border border-[#E8E8E8] overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
         {/* Header */}
         <div className="px-4 pt-4 pb-2 flex items-center justify-between gap-3">

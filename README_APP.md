@@ -11,6 +11,17 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000), then **Open Chat** to go to `/chat`.
 
+### Mock ML delays (optional)
+
+Set `ENABLE_MOCK_ML_DELAYS=true` (or `1`) when starting the dev server to slow the mock ML stream:
+
+- **~6s** after `connection_ack` before the first bot `chat_event` (see `MOCK_ML_INITIAL_DELAYS_MS` in `app/api/chats/send-message-streamed/route.ts`).
+- **5s** between each subsequent `chat_event` in the same turn (`MOCK_ML_PER_CHAT_EVENT_MS`).
+
+When unset, the first bot chunk is delayed **100ms** and all `chat_event` lines are sent back-to-back.
+
+Canonical write-up: **`chat_v1.md` Appendix A §A.3.1**.
+
 ### Demo Mode
 
 Use `/chat?demo=true` to run an auto-played scripted demo.
@@ -46,8 +57,10 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
   - `price trend`, `rating reviews`, `transaction data` return markdown report templates.
 - **Near-me flow**:
   - `near me`/`3bhk properties near me` → always `share_location` from ML.
-  - `ShareLocation` FE auto-sends `location_shared` when permission already granted (template hidden).
-  - `location_denied` and `location_shared` are both handled by mock ML.
+  - `ShareLocation` (`components/chat/templates/ShareLocation.tsx`):
+    - Auto: if Permissions API says **`granted`**, calls `getCurrentPosition` (non-zero **`maximumAge`**, module-level coordinate cache) → **`location_shared`** or **`location_not_available`**.
+    - Button: same resolution; no Geolocation API or failed fix → **`location_not_available`** (same payload shape as deny).
+  - **`location_shared`** — coordinates present; **`location_not_available`** — no fix / API error / timeout; **`location_denied`** — explicit user deny (reserved for that UI path). Mock ML treats **`location_denied`** and **`location_not_available`** with the same fallback reply (see `chat_v1.md` §4.3.10.33, §4.3.11, §4.3.10.39a).
 
 ## Stack (Phase 1)
 
@@ -105,8 +118,13 @@ Use `/chat?demo=true` to run an auto-played scripted demo.
 - `context` and `analytics` messages are never rendered.
 - Input is hidden while sticky `nested_qna` is active.
 - **`NestedQna` template:** submitting the flow defers parent updates (`queueMicrotask`) so React does not update the chat page while `NestedQna` is rendering; hooks run unconditionally before any early return when `selections` is empty.
+- **Awaiting reply** (`replyStatus === "awaiting"`): inline copy rotates by elapsed second (`getAwaitingFeedbackMessage` in `app/chat/page.tsx`): *Running through the details…* → *Thinking…* → *Making sure I find best answers for you.* → *This seems to be taking longer than usual…* (then stays on the last line until the turn completes or times out).
 - Reply timeout is 25s with Retry/Dismiss; FE then relies on polling (`get-history` with `messages_after`) until response arrives for that message.
 
 ## Implementation divergences
 
-See **Appendix A** in `chat_v1.md` for implementation-specific behavior that diverges from frozen v1.0.
+See **Appendix A** in `chat_v1.md` for implementation-specific behavior. The file contains two “Appendix A” clusters (consolidated notes near the middle, and **Appendix A: Implementation Notes (chat-demo)** near the end). Highlights:
+
+- **End-of-doc Appendix A §A.0** — `sourceMessageState` vs per-part `messageState` (`getTurnOrMessageState`).
+- **Earlier Appendix A §A.2** — Staged awaiting copy (web + Android); **§A.3.1** — `ENABLE_MOCK_ML_DELAYS` / mock `send-message-streamed` pacing.
+- **End-of-doc Appendix A §A.4 (Location flow)** — `ShareLocation` cache / `maximumAge`, `location_not_available`, mock ML handling.

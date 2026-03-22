@@ -243,6 +243,10 @@ Maintain per-`messageId` transient state:
 - FE may continue history polling per existing v1 behavior.
 - FE clears awaiting / treats the turn as complete when `TIMED_OUT_BY_BE` is surfaced (same terminal semantics as bot `COMPLETED` / `ERRORED_AT_ML` on the stream per canonical `chat_v1.md` §4.5 / §6).
 
+### 6.5 Mock stream pacing (chat-demo `send-message-streamed` only)
+
+When testing the **v1** SSE path (full `chat_event` streaming, not incremental `message_*` deltas), the Next.js mock can slow multipart bot output: set **`ENABLE_MOCK_ML_DELAYS=true`** — see **`chat_v1.md` Appendix A §A.3.1** (initial delay ~6s, **5s** between each `chat_event`). Unrelated to v1.1 incremental token events but useful for observing staged awaiting copy (§4.7 / Appendix A §A.2).
+
 ---
 
 ## 7) Request/Response Examples

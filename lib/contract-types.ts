@@ -36,7 +36,10 @@ export interface SenderForML extends Sender {
 export interface ChatPayloadContent {
   text?: string;
   templateId?: string;
-  /** For user_action, data should include action-specific fields and may include replyToMessageId. */
+  /**
+   * For `user_action`, include action-specific fields and optionally `replyToMessageId`.
+   * Share-location actions: `location_shared` (with `coordinates`), `location_denied`, `location_not_available` — see `chat_v1.md` Part B §4.3.11.
+   */
   data?: Record<string, unknown>;
   /** Set by FE when sending user_action; displayed as user bubble when isVisible === true. */
   derivedLabel?: string;

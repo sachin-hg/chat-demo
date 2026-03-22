@@ -26,6 +26,17 @@ const LOAD_MORE_PAGE_SIZE = 6;
 const AUTO_LOAD_OLDER_MAX = 4;
 const REPLY_TIMEOUT_MS = 25000;
 
+/**
+ * Staged awaiting copy (1Hz `awaitingElapsedSec` from `startAwaitingReply`).
+ * t≈0–1s: intro → 1–3s: Thinking → 3–7s: reassurance → 7s+: long-wait.
+ */
+function getAwaitingFeedbackMessage(elapsedSec: number): string {
+  if (elapsedSec < 1) return "Running through the details...";
+  if (elapsedSec < 3) return "Thinking...";
+  if (elapsedSec < 7) return "Making sure I find best answers for you.";
+  return "This seems to be taking longer than usual...";
+}
+
 type ReplyStatus = "idle" | "sending" | "awaiting" | "timeout" | "error";
 
 /** Clears awaiting when the turn ends: bot COMPLETED/ERRORED_AT_ML, or BE timeout (TIMED_OUT_BY_BE on any surfaced row). */
@@ -1110,7 +1121,7 @@ function ChatPageContent() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-[#FAFAFA] max-w-[430px] mx-auto relative font-rubik">
+    <div className="flex flex-col h-screen bg-[#FAFAFA] max-w-[800px] mx-auto relative font-rubik">
       {/* Header – Houzy BETA left-aligned next to back; back = left chevron; logo = 4-point star per design */}
       <header className="flex-shrink-0 relative min-h-[56px] flex items-center pt-[env(safe-area-inset-top)] pb-2 px-3">
         <div className="absolute inset-0 bg-gradient-to-b from-white/80 to-white/10 pointer-events-none" />
@@ -1270,7 +1281,7 @@ function ChatPageContent() {
         {replyStatus === "awaiting" && (
           <div className="flex items-center gap-2 px-4 mb-3">
             <div className="w-4 h-4 rounded-full border-2 border-[#767676] border-t-transparent animate-spin flex-shrink-0" />
-            <span className="text-xs text-[#767676]">Running through the details...</span>
+            <span className="text-xs text-[#767676]">{getAwaitingFeedbackMessage(awaitingElapsedSec)}</span>
           </div>
         )}
 
@@ -1389,7 +1400,7 @@ function ChatPageContent() {
         <div className="fixed inset-0 z-50 flex items-end" onClick={() => setShowInfoModal(false)}>
           <div className="absolute inset-0 bg-black/40" />
           <div
-            className="relative w-full max-w-[430px] mx-auto bg-white rounded-t-2xl px-5 pt-5 pb-10"
+            className="relative w-full max-w-[800px] mx-auto bg-white rounded-t-2xl px-5 pt-5 pb-10"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="w-10 h-1 bg-[#e1e2e8] rounded-full mx-auto mb-5" />

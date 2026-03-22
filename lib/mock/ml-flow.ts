@@ -304,8 +304,11 @@ export function getNextBotEvents(
     ];
   }
 
-  // ————— Contract §4.28.1: location_denied —————
-  if (messageType === "user_action" && action === "location_denied") {
+  // ————— Contract §4.28.1: location_denied / location_not_available —————
+  if (
+    messageType === "user_action" &&
+    (action === "location_denied" || action === "location_not_available")
+  ) {
     return [
       botMessage(generateMessageId(), "text", {
         text: "No problem. You can search by area name or filters instead.",

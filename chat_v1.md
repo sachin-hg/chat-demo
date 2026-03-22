@@ -285,12 +285,14 @@ data: {"reason":"response_complete"}
 **Usage**
 - **Required** for user **`text`** (always) and for any turn with **`responseRequired === true`** (including `user_action` that expects an ML reply).
 - One request-scoped stream per turn; no long-lived `GET /chats/stream` connection.
+- **chat-demo only:** optional **`ENABLE_MOCK_ML_DELAYS`** pacing between **`chat_event`** lines for local testing — Appendix A §A.3.1.
 
 ### 4.7 FE Request UI Semantics (canonical)
 
 - **Awaiting indicator**: FE shows inline awaiting status only when:
   - outbound event has `responseRequired === true`, and
   - the turn has not yet reached a terminal outcome: the stream has not yet delivered a bot `chat_event` with **terminal** **`sourceMessageState: COMPLETED | ERRORED_AT_ML`** for this turn (Appendix A §A.0), and no surfaced `chat_event` with `messageState: TIMED_OUT_BY_BE` for this request (see §6 SSE).
+- **Awaiting copy (progressive feedback):** Implementations **should** update the awaiting line on a fixed cadence (e.g. once per elapsed second) so long ML turns feel responsive. The exact strings are product-specific; **chat-demo** uses four stages with thresholds at **1s** / **3s** / **7s** elapsed — see Appendix A §A.2 for the full list (web + Android).
 - **Timeout**: FE maintains a local reply timeout safeguard (current app value: `25s`); after timeout UI is shown, FE relies on polling (`get-history` with `messages_after`) until it receives the response for that message.
 - **Input/CTA behavior**:
   - while `sending`: composer submit disabled
@@ -311,6 +313,7 @@ data: {"reason":"response_complete"}
 - **Share location**:
   - ML always returns `share_location` for near-me prompts.
   - FE `ShareLocation` may auto-send `location_shared` when permission is already granted, and template may not be visibly rendered in that case.
+  - If permission is granted but **`getCurrentPosition`** fails (e.g. `POSITION_UNAVAILABLE`, timeout) or the Geolocation API is missing, FE sends **`user_action`** with **`action: "location_not_available"`** — same payload shape as **`location_denied`** (no coordinates). See Part B §4.3.10.33–§4.3.11.
 - **Auth gating**: shortlist/contact/brochure actions are FE-gated behind login; successful actions post hidden/shown `user_action` events back to BE/ML.
 
 ---
@@ -698,10 +701,24 @@ This section records how the **chat-demo** implementation diverges from or exten
 ### A.2 FE reply timeout and UI
 
 - Canonical FE request UI semantics are documented in §4.7.
+- **Staged awaiting copy (web + Android):** While `replyStatus` is awaiting a streamed reply, the visible status line updates **once per second** (`awaitingElapsedSec` / `0…25`). `getAwaitingFeedbackMessage` in `app/chat/page.tsx` maps elapsed seconds to:
+  - **`elapsedSec < 1`:** *Running through the details…*
+  - **`elapsedSec < 3`:** *Thinking…*
+  - **`elapsedSec < 7`:** *Making sure I find best answers for you.*
+  - **`elapsedSec ≥ 7`:** *This seems to be taking longer than usual…* (until the turn completes or timeout).
+- **Android:** same thresholds and strings in `ChatScreen.kt` (`getAwaitingMessageText`).
 
 ### A.3 SSE
 
 - Canonical SSE behavior is documented in §4.6 and §6.
+
+### A.3.1 Mock ML stream pacing (`send-message-streamed`, chat-demo only)
+
+- **Env:** `ENABLE_MOCK_ML_DELAYS=true` or `1` slows the mock SSE so multipart turns are visible in DevTools.
+- **Behavior** (`app/api/chats/send-message-streamed/route.ts`):
+  - When **enabled:** ~**6s** after `connection_ack` before the **first** bot `chat_event` (`MOCK_ML_INITIAL_DELAYS_MS`), then **5s** between each subsequent `chat_event` in the same turn (`MOCK_ML_PER_CHAT_EVENT_MS`).
+  - When **disabled:** **100ms** after ack, then all `chat_event` lines are sent back-to-back.
+- See also `README_APP.md` → **Mock ML delays (optional)**.
 
 ### A.4 Cancel
 
@@ -1836,6 +1853,18 @@ data: {"reason":"response_complete"}
   "content": { "data": { "action": "location_denied" } }
 }
 ```
+
+**`location_not_available`:** Same payload shape as `location_denied` (no extra fields). FE emits when the user did not explicitly deny permission but a position fix could not be obtained — e.g. `GeolocationPositionError` / missing API / timeout after **`getCurrentPosition`**.
+
+```json
+{
+  "sender": { "type": "system" },
+  "messageType": "user_action",
+  "responseRequired": true,
+  "content": { "data": { "action": "location_not_available" } }
+}
+```
+
 #### 4.3.10.34 User text: properties near me (retry)
 ```json
 {
@@ -1987,6 +2016,19 @@ data: {"reason":"response_complete"}
   "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } }
 }
 ```
+
+#### 4.3.10.39a FE auto-action: location_not_available without rendering share_location
+Emitted when the Permissions API reports **`granted`** but **`getCurrentPosition`** still fails (or geolocation is unavailable). Same shape as §4.3.10.33 `location_not_available` example.
+
+```json
+{
+  "sender": { "type": "system" },
+  "messageType": "user_action",
+  "responseRequired": true,
+  "content": { "data": { "action": "location_not_available" } }
+}
+```
+
 #### 4.3.10.40 Bot template: property_carousel
 ```json
 {
@@ -2098,12 +2140,25 @@ data: {"reason":"response_complete"}
 ```
 
 #### 4.3.11 Location actions from FE template
+
+- **`location_denied`** — user declined permission (explicit deny UI, when present).
+- **`location_not_available`** — permission may be granted or pending, but no position fix (API error, timeout, `POSITION_UNAVAILABLE`, no Geolocation API).
+- **`location_shared`** — success; includes **`coordinates`**.
+
 ```json
 {
   "sender": { "type": "system" },
   "messageType": "user_action",
   "responseRequired": true,
   "content": { "data": { "action": "location_denied" } }
+}
+```
+```json
+{
+  "sender": { "type": "system" },
+  "messageType": "user_action",
+  "responseRequired": true,
+  "content": { "data": { "action": "location_not_available" } }
 }
 ```
 ```json
@@ -2209,6 +2264,7 @@ When a guest chat (`_ga`) becomes authenticated mid-session:
 ### 4.5 FE runtime behavior notes
 
 - FE starts awaiting UI only when `responseRequired: true` and no final bot event has been received.
+- **Awaiting status text:** FE may rotate progressive copy while waiting (canonical §4.7); **chat-demo** lists exact strings in Appendix A §A.2.
 - FE stops loader/awaiting and marks response complete on first terminal outcome on the stream: bot row **`sourceMessageState: COMPLETED | ERRORED_AT_ML`** (use **`getTurnOrMessageState()`** in chat-demo), or any surfaced `messageState: TIMED_OUT_BY_BE` for the active request.
 - FE treats `connection_close` as stream completion for the turn.
 - FE keeps a local timeout safeguard (current app value: 25s). On timeout, FE shows Retry/Dismiss and then relies on polling (`get-history` with `messages_after`) until it receives the response for that message.
@@ -2235,6 +2291,7 @@ When a guest chat (`_ga`) becomes authenticated mid-session:
 - Share location behavior:
   - ML always returns `share_location` for near-me queries.
   - FE may auto-send `location_shared` when permission is already granted; template may not be visibly rendered in that case.
+  - FE sends **`location_not_available`** when a fix cannot be obtained (`getCurrentPosition` error / no API); **`location_denied`** when the user explicitly denies (see Part B §4.3.11).
 - Auth gating:
   - shortlist/contact/brochure actions are FE-gated behind login
   - successful action posts hidden/shown `user_action` to BE/ML.
@@ -2330,7 +2387,9 @@ This section documents current behavior in this repository where it differs from
   - `connection_ack` (immediate),
   - `chat_event` (0..N),
   - `connection_close` (`reason` in `response_complete | inactivity_15s`).
+- **Optional mock pacing (local dev):** `ENABLE_MOCK_ML_DELAYS` — see the **first** *Appendix A* block in this file (**§A.3.1**).
 - FE reply timeout is 25s (`replyStatus: timeout`), with Retry and Dismiss; FE then relies on polling (`get-history` with `messages_after`) until response arrives for that message.
+- **Awaiting UI:** staged status line while streaming (§4.7) — see first Appendix A **§A.2** (`getAwaitingFeedbackMessage` / `getAwaitingMessageText`).
 - Canonical stream/cancel/runtime semantics are defined in §4.5 and examples in §4.2.
 
 #### A.1.1 History pagination — older messages (this app)
@@ -2372,8 +2431,9 @@ This section documents current behavior in this repository where it differs from
 
 - ML always responds to near-me prompts with `templateId: "share_location"`.
 - FE `ShareLocation` checks permission state:
-  - if already granted, it auto-sends `user_action` `location_shared` and does not render CTA.
-  - otherwise user may send `location_shared` or `location_denied` via template interaction.
+  - if already granted, it calls `getCurrentPosition` (non-zero **`maximumAge`**, module-level coordinate cache in `ShareLocation.tsx`) and auto-sends **`location_shared`** or **`location_not_available`**; CTA may stay hidden on success or not-available paths per implementation.
+  - otherwise the user uses the CTA: same resolution → **`location_shared`** / **`location_not_available`**; **`location_denied`** is reserved for an explicit deny control when present.
+- Mock ML (`lib/mock/ml-flow.ts`) responds to **`location_shared`** with near-me carousel text; **`location_denied`** and **`location_not_available`** share the same fallback copy (Part B §4.3.10.33, §4.3.11).
 
 ### A.5 Current mock-trigger notes (`lib/mock/ml-flow.ts`)
 
