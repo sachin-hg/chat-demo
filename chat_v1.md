@@ -1996,20 +1996,22 @@ data: {"reason":"response_complete"}
       "data": {
         // structure should be similar to corresponding venus/casa APIs. this is just sample
         "property": {
-          "id": "p2",
-          "type": "rent",
-          "title": "3 BHK flat",
-          "short_address": [{ "display_name": "Sector 33" }, { "display_name": "Sohna" }, { "display_name": "Gurgaon" }],
-          "region_entities": [{ "name": "M3M Solitude Ralph Estate" }],
-          "is_rera_verified": false,
-          "is_verified": true,
-          "inventory_canonical_url": "https://example.com/property/p2",
+          "id": "p1",
+          "type": "project",
+          "title": "2, 3 BHK Apartments",
+          "name": "Godrej Air",
+          "short_address": [{ "display_name": "Sector 85" }, { "display_name": "Gurgaon" }],
+          "is_rera_verified": true,
+          "inventory_canonical_url": "https://example.com/property/p1",
           "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
-          "property_tags": [],
-          "formatted_price": "30,000",
+          "property_tags": ["Ready to move"],
+          "formatted_min_price": "3 Cr",
+          "formatted_max_price": "3.5 Cr",
           "unit_of_area": "sq.ft.",
           "display_area_type": "Built up area",
-          "inventory_configs": [{ "furnish_type_id": 2, "area_value_in_unit": 4750 }]
+          "min_selected_area_in_unit": 2500,
+          "max_selected_area_in_unit": 4750,
+          "inventory_configs": []
         }
       }
     }

@@ -639,7 +639,7 @@ export function getNextBotEvents(
 
   // ————— Contract §4.21 → §4.22: brochure —————
   if (matchText(text, "brochure", "show me the brochure", "brochure of this property")) {
-    const p = MOCK_PROPERTIES.find((x) => x.id === "p2") ?? MOCK_PROPERTIES[0];
+    const p = MOCK_PROPERTIES.find((x) => x.id === "p1") ?? MOCK_PROPERTIES[0];
     return [
       botMessage(generateMessageId(), "template", {
         templateId: "download_brochure",

@@ -326,18 +326,24 @@ function pushEventWithoutBroadcast(event: Parameters<typeof appendEvent>[0]) {
   events.push(stored);
 }
 
+/** Insert at front of `events` (older in timeline). Use for seeded history so `getHistory` slice(-N) still returns recent real messages. */
+function prependEventWithoutBroadcast(event: Parameters<typeof appendEvent>[0]) {
+  const generatedMessageId =
+    (event as { messageId?: string }).messageId ?? nextMessageId();
+  const stored = {
+    ...event,
+    messageId: generatedMessageId,
+    createdAt: (event as { createdAt?: string }).createdAt ?? now(),
+  } as StoredEvent;
+  events.unshift(stored);
+}
+
 function seedLoggedInConversationIfNeeded(conversationId: string) {
   if (loggedInSeeded) return;
   loggedInSeeded = true;
-  pushEventWithoutBroadcast({
-    conversationId,
-    sender: { type: "user" },
-    messageType: "text",
-    content: { text: "Show me 3 BHK in Gurgaon" },
-    responseRequired: false,
-    createdAt: "2026-01-06T10:00:00.000Z",
-  });
-  pushEventWithoutBroadcast({
+  // Prepend fake "earlier session" rows so they stay at the start of the array.
+  // Pushing them would make them the newest rows and evict the real carousel from getHistory(slice(-pageSize)).
+  prependEventWithoutBroadcast({
     conversationId,
     sender: { type: "bot" },
     messageType: "text",
@@ -348,6 +354,14 @@ function seedLoggedInConversationIfNeeded(conversationId: string) {
     createdAt: "2026-01-06T10:00:02.000Z",
     responseRequired: false,
   } as Parameters<typeof appendEvent>[0]);
+  prependEventWithoutBroadcast({
+    conversationId,
+    sender: { type: "user" },
+    messageType: "text",
+    content: { text: "Show me 3 BHK in Gurgaon" },
+    responseRequired: false,
+    createdAt: "2026-01-06T10:00:00.000Z",
+  });
 }
 
 export function migrateConversation(currentConversationId: string): { newConversationId: string; migrated: boolean } {

@@ -130,6 +130,31 @@ function waitForSelector(
   });
 }
 
+/** Wait until at least one node matches; returns the last match (newest carousel in chat). */
+function waitForLastMatch(
+  selector: string,
+  opts: { timeout?: number; within?: Element } = {}
+): Promise<Element> {
+  const { timeout = 10000, within = document.body } = opts;
+  const start = Date.now();
+  return new Promise((resolve, reject) => {
+    const run = () => {
+      const nodes = within.querySelectorAll(selector);
+      const last = nodes[nodes.length - 1];
+      if (last) {
+        resolve(last);
+        return;
+      }
+      if (Date.now() - start >= timeout) {
+        reject(new Error(`Demo: timeout waiting for ${selector}`));
+        return;
+      }
+      setTimeout(run, 80);
+    };
+    run();
+  });
+}
+
 async function fillLoginAndSubmit(): Promise<void> {
   await delay(DEMO_DOM_WAIT_MS);
   demoLog("login: sheet detected, attempting autofill");
@@ -215,9 +240,8 @@ async function runDemoClick(step: {
   demoLog("click_ui: start", step);
 
   if (step.target === "property_carousel_shortlist" || step.target === "property_carousel_contact" || step.target === "property_carousel_learn_more") {
-    const carousels = document.querySelectorAll('[data-demo="property-carousel"]');
-    const last = carousels[carousels.length - 1];
-    if (!last) throw new Error("Demo: no property carousel found");
+    demoLog("click_ui: waiting for property carousel");
+    const last = await waitForLastMatch('[data-demo="property-carousel"]', { timeout: 10000 });
     const idx = step.propertyIndex ?? 0;
     const card = last.querySelector(`[data-demo-property-index="${idx}"]`);
     if (!card) throw new Error(`Demo: property card ${idx} not found`);
@@ -232,9 +256,8 @@ async function runDemoClick(step: {
     btn.click();
     demoLog("click_ui: property carousel click", { index: idx, action });
   } else if (step.target === "locality_carousel_learn_more" || step.target === "locality_carousel_show_properties") {
-    const carousels = document.querySelectorAll('[data-demo="locality-carousel"]');
-    const last = carousels[carousels.length - 1];
-    if (!last) throw new Error("Demo: no locality carousel found");
+    demoLog("click_ui: waiting for locality carousel");
+    const last = await waitForLastMatch('[data-demo="locality-carousel"]', { timeout: 10000 });
     const idx = step.localityIndex ?? 0;
     const card = last.querySelector(`[data-demo-locality-index="${idx}"]`);
     if (!card) throw new Error(`Demo: locality card ${idx} not found`);
@@ -478,11 +501,10 @@ function ChatPageContent() {
         const newConversationId = res.newConversationId;
         if (!newConversationId || newConversationId === conversationId) return;
         setConversationId(newConversationId);
-        const hist = await getHistory(newConversationId, { page_size: INITIAL_PAGE_SIZE });
-        const list = hist.messages as StoredMessage[];
-        knownMessageIdsRef.current = new Set(list.map((m) => m.messageId).filter(Boolean));
-        setMessages(list);
-        setHasMoreOlder(hist.hasMore);
+        // Do not refetch history here (spec: optional after migrate). Keep current transcript; BE owns merged c2 state on next get-history.
+        setMessages((prev) =>
+          prev.map((m) => ({ ...m, conversationId: newConversationId }))
+        );
       } catch (e) {
         console.error("chat migration failed", e);
       }
