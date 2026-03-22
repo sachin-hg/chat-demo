@@ -155,8 +155,8 @@ export async function POST(request: NextRequest) {
             ...ev,
             sender: { type: "bot" },
             conversationId: event.conversationId,
-            // ML messages are persisted as completed user-visible messages.
-            messageState: "COMPLETED",
+            // Preserve ML messageState (e.g. IN_PROGRESS mid-chain context before final COMPLETED).
+            messageState: ev.messageState,
           });
 
           writeSse({ event: "chat_event", id: storedBot.messageId, data: storedBot });

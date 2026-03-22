@@ -22,7 +22,7 @@ function generateMessageId(): string {
 
 function botMessage(
   messageId: string,
-  messageType: "text" | "markdown" | "template",
+  messageType: "text" | "markdown" | "template" | "context",
   content: ChatPayloadContent,
   options: {
     sourceMessageId: string;
@@ -80,6 +80,28 @@ function matchWholeWord(text: string, ...words: string[]): boolean {
     if (t === ww) return true;
     return new RegExp(`(^|\\s)${ww}(\\s|$)`, "i").test(t);
   });
+}
+
+/** ML context-out (Option 3): same `content.data` shape as FE system context on open; encodes narrowed locality intent. */
+function mlContextDataForLocality(variant: "sector_32_gurgaon" | "sector_21_gurgaon"): Record<string, unknown> {
+  const poly =
+    variant === "sector_32_gurgaon"
+      ? ["dce9290ec3fe8834a293"]
+      : ["a1b2c3d4e5f6sector21gurgaonpoly"];
+  return {
+    page: "SRP",
+    service: "buy",
+    category: "residential",
+    city: "526acdc6c33455e9e4e9",
+    filters: {
+      apartment_type_id: [1, 2],
+      max_price: 4800000,
+      min_price: 100,
+      property_type_id: [1, 2],
+      type: "project",
+      poly,
+    },
+  };
 }
 
 function buildPropertyCarouselData(properties: typeof MOCK_PROPERTY_CAROUSEL_CARDS) {
@@ -393,6 +415,12 @@ export function getNextBotEvents(
     return [
       botMessage(
         generateMessageId(),
+        "context",
+        { data: mlContextDataForLocality("sector_32_gurgaon") },
+        { sourceMessageId, sequenceNumber: 0, messageState: "IN_PROGRESS" }
+      ),
+      botMessage(
+        generateMessageId(),
         "template",
         {
           templateId: "nested_qna",
@@ -407,13 +435,19 @@ export function getNextBotEvents(
             ],
           },
         },
-        { sourceMessageId, sequenceNumber: 0, messageState: "COMPLETED" }
+        { sourceMessageId, sequenceNumber: 1, messageState: "COMPLETED" }
       ),
     ];
   }
   // ————— Contract §4.13 → §4.13.1 + §4.14: sector 21 only — nested_qna —————
   if (text.includes("sector 21")) {
     return [
+      botMessage(
+        generateMessageId(),
+        "context",
+        { data: mlContextDataForLocality("sector_21_gurgaon") },
+        { sourceMessageId, sequenceNumber: 0, messageState: "IN_PROGRESS" }
+      ),
       botMessage(
         generateMessageId(),
         "template",

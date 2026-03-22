@@ -7,7 +7,7 @@ This file is the canonical consolidated reference for architecture, API contract
 
 1. Property carousel metadata: `property_count` vs `hasViewMore`.
 2. Chat migration behavior when a user logs in mid-session.
-3. **Context-out (closed — Option 3 adopted):** ML does **not** attach rolling context to every bot payload. When user intent / search context changes in a way FE must know, ML emits a standalone **`messageType: "context"`** in the same `sourceMessageId` chain, using the **same `content.data` schema** as FE/system context on chat open (Part B §4.1). Context messages are **optional and infrequent**. **`messageState: COMPLETED`** on the **last** ML→BE event for that turn (after any context + all visible response parts) ends the request; BE must not mark the source user message `COMPLETED` on an intermediate `context` event alone. See §5.2, Part B §2 matrix, §10.6.
+3. **Context-out (Option 3 — proposed, not closed):** Wider team alignment is still pending; **Option 3** is the **preferred** direction in this document. ML does **not** attach rolling context to every bot payload. When user intent / search context changes in a way FE must know, ML emits a standalone **`messageType: "context"`** in the same `sourceMessageId` chain, using the **same `content.data` schema** as FE/system context on chat open (Part B §4.1). Context messages are **optional and infrequent**. **`messageState: COMPLETED`** on the **last** ML→BE event for that turn (after any context + all visible response parts) ends the request; BE must not mark the source user message `COMPLETED` on an intermediate `context` event alone. See §5.2, Part B §2 matrix, §10.6.
 
 ---
 
@@ -337,7 +337,8 @@ data: {"reason":"response_complete"}
 }
 ```
 
-**Context-out (Option 3 — adopted)**  
+**Context-out (Option 3 — proposed)**  
+- **Not a closed org decision** — Option 3 is the **preferred** approach here; finalize with the larger team.  
 - There is **no** `summarisedChatContext` (or equivalent) on ML bot payloads. Rolling context updates are conveyed only via **`messageType: "context"`** when ML decides FE must be notified (e.g. filters, city, service changed). Those events use the **same `content.data` shape** as the context event FE sends on chat open (system) — see Part B §4.1.  
 - Context is **not** sent on every ML response—only when intent/context materially changes.  
 - Context and all user-visible bot parts for a turn share the same **`sourceMessageId`** and are ordered by **`sequenceNumber`**.  
@@ -634,7 +635,8 @@ sequenceDiagram
 **Rules**  
 - Context is emitted **only when** ML detects user intent / search context changed such that FE should update client-side context—not on every reply.  
 - All parts for the turn share **`sourceMessageId`**. Use **`sequenceNumber`** for ordering.  
-- Intermediate events (including a mid-chain **`context`** row) use **`messageState: IN_PROGRESS`** on the ML envelope as appropriate; **`messageState: COMPLETED`** appears **only on the last** ML→BE event for that `sourceMessageId`. BE then marks the **source user message** `COMPLETED` and may emit **`connection_close`**.
+- Intermediate events (including a mid-chain **`context`** row) use **`messageState: IN_PROGRESS`** on the ML envelope as appropriate; **`messageState: COMPLETED`** appears **only on the last** ML→BE event for that `sourceMessageId`. BE then marks the **source user message** `COMPLETED` and may emit **`connection_close`**.  
+- **Locality intent shift (example):** e.g. user pivots from **Sector 21 → Sector 32** (or the reverse). ML may emit **`context`** with updated **`filters.poly`** (or equivalent) before the visible template (e.g. `nested_qna`). Part B §4.1.1 shows a concrete envelope.
 
 ```mermaid
 sequenceDiagram
@@ -698,7 +700,7 @@ This section records how the **chat-demo** implementation diverges from or exten
 ### A.8 Context-out (Option 3) in this app
 
 - Canonical rules are §5.2, Part B §2 matrix, §10.6. **`summarisedChatContext` is removed** from the TypeScript contract and mock ML payloads.
-- The **mock `ml-flow`** does not yet emit mid-turn `messageType: "context"` events; only FE/system context on chat open is used today.
+- The **mock `ml-flow`** emits a mid-turn **`messageType: "context"`** (`messageState: IN_PROGRESS`, then `nested_qna` as `COMPLETED`) when the user message targets **only Sector 32** (“learn more / tell more about sector 32”, …) or **only Sector 21** (“tell more about sector 21”, …), with **`content.data`** matching the system-context shape (Part B §4.1) and **different `filters.poly`** per locality. The **`/chat?demo=true`** scripted steps for those phrases exercise this path. **`send-message-streamed`** persists ML **`messageState`** as-is (no forced `COMPLETED` on intermediate rows).
 
 ---
 
@@ -719,7 +721,7 @@ This section records how the **chat-demo** implementation diverges from or exten
 - **Templates are FE-owned** (custom rendering is allowed and expected)
 - **Templates MUST provide a `fallbackText`** *(Phase 2 — not rendered in Phase 1)*
 - **Context is never rendered** (including ML-originated `messageType: "context"` under Option 3). **Analytics** messageType is **Phase 2** — not in Phase 1 scope.
-- **Context-out (Option 3):** ML may append `messageType: "context"` with `sender.type: "bot"` in the `sourceMessageId` chain when intent changes; `content.data` matches system context (§4.1). No `summarisedChatContext` on bot payloads. Terminal **`COMPLETED`** only on the **last** ML event for the turn (§5.2, §10.6).
+- **Context-out (Option 3 — proposed, not closed):** ML may append `messageType: "context"` with `sender.type: "bot"` in the `sourceMessageId` chain when intent changes; `content.data` matches system context (§4.1). No `summarisedChatContext` on bot payloads. Terminal **`COMPLETED`** only on the **last** ML event for the turn (§5.2, §10.6).
 - **All future changes must be additive (v1.x)**
 
 ---
@@ -848,7 +850,7 @@ This section records how the **chat-demo** implementation diverges from or exten
 
 *Analytics is **Phase 2** — not in Phase 1.*
 
-**Context-out (Option 3)**  
+**Context-out (Option 3 — proposed)**  
 - ML may emit `messageType: "context"` with `sender.type: "bot"` (matrix above). `content.data` matches the **same schema** as FE/system context (Part B §4.1). FE does not render `context` rows (§3 decision table).  
 - See §5.2 and §10.6 for ordering, `sequenceNumber`, and when `messageState: COMPLETED` closes the request.
 
@@ -926,6 +928,40 @@ Property payload shape reference APIs (for template `data.property` / `data.prop
   }
 }
 ```
+
+### 4.1.1 ML context-out — locality intent shift (examples)
+
+**Scenario:** User shifts focus from one locality to another (e.g. **Sector 21 → Sector 32**). ML emits **`messageType: "context"`** first (same `content.data` schema as §4.1), then the visible reply (e.g. `nested_qna`). **`sequenceNumber`** orders the chain; **`messageState: IN_PROGRESS`** on the context row; **`COMPLETED`** only on the **last** ML event for that `sourceMessageId`. See §5.2, §10.6.
+
+**1) Intent narrowed to Sector 32, Gurgaon (abridged):**
+
+```json
+{
+  "sender": { "type": "bot" },
+  "messageType": "context",
+  "sourceMessageId": "msg_u_9",
+  "sequenceNumber": 0,
+  "messageState": "IN_PROGRESS",
+  "content": {
+    "data": {
+      "page": "SRP",
+      "service": "buy",
+      "category": "residential",
+      "city": "526acdc6c33455e9e4e9",
+      "filters": {
+        "type": "project",
+        "poly": ["dce9290ec3fe8834a293"],
+        "apartment_type_id": [1, 2],
+        "min_price": 100,
+        "max_price": 4800000,
+        "property_type_id": [1, 2]
+      }
+    }
+  }
+}
+```
+
+**2) Intent narrowed to Sector 21, Gurgaon (abridged):** same envelope; **`filters.poly`** differs (e.g. mock uses `["a1b2c3d4e5f6sector21gurgaonpoly"]` to distinguish from Sector 32). The next event in the chain is typically `nested_qna` with `sequenceNumber: 1`, `messageState: COMPLETED`.
 
 ---
 ### 4.2 Transport-level SSE examples
@@ -2189,6 +2225,7 @@ This section documents current behavior in this repository where it differs from
 ### A.5 Current mock-trigger notes (`lib/mock/ml-flow.ts`)
 
 - Greeting uses **whole-word** matching for `hi|hello|hey` (avoids false positives from words like `this`).
+- **Context-out (Option 3):** user messages that target **only Sector 32** or **only Sector 21** (e.g. “learn more about sector 32”, “tell more about sector 21”) receive a mid-turn **`messageType: "context"`** (IN_PROGRESS) before **`nested_qna`** (COMPLETED), with different **`filters.poly`** in `content.data` per locality (see Part B §4.1.1, first Appendix A.8).
 - `locality comparison` returns locality carousel unless text explicitly contains sector ambiguity (`sector 32` / `sector 21`), in which case nested QnA route handles it.
 - Additional text triggers supported in implementation include:
   - `show me properties according to my preference`,
