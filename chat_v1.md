@@ -294,6 +294,7 @@ data: {"reason":"response_complete"}
   - the turn has not yet reached a terminal outcome: the stream has not yet delivered a bot `chat_event` with **terminal** **`sourceMessageState: COMPLETED | ERRORED_AT_ML`** for this turn (Appendix A §A.0), and no surfaced `chat_event` with `messageState: TIMED_OUT_BY_BE` for this request (see §6 SSE).
 - **Awaiting copy (progressive feedback):** Implementations **should** update the awaiting line on a fixed cadence (e.g. once per elapsed second) so long ML turns feel responsive. The exact strings are product-specific; **chat-demo** uses four stages with thresholds at **1s** / **3s** / **7s** elapsed — see Appendix A §A.2 for the full list (web + Android).
 - **Timeout**: FE maintains a local reply timeout safeguard (current app value: `25s`); after timeout UI is shown, FE relies on polling (`get-history` with `messages_after`) until it receives the response for that message.
+- **Stream ends without `connection_close`**: If the HTTP/SSE body closes before a `connection_close` event (network drop, proxy reset, etc.), FE should reconcile from **`get-history`**. **chat-demo** polls **`GET /chats/get-history`** on a fixed interval until the turn shows a **terminal** outcome (last bot part for that user message has **`sourceMessageState: COMPLETED | ERRORED_AT_ML`**, or **`TIMED_OUT_BY_BE`** on the user row), or until a max wait — see **Appendix A §A.3.2** (`HISTORY_POLL_INTERVAL_MS` / `HISTORY_POLL_MAX_MS` in `app/chat/page.tsx`).
 - **Input/CTA behavior**:
   - while `sending`: composer submit disabled
   - while `awaiting`: template actions disabled, composer shows **Cancel**
@@ -598,6 +599,8 @@ sequenceDiagram
 - Stream payloads: `ChatEventToUser`
 - Recovery API response: `GetHistoryResponse` (`ChatEventToUser[]`)
 
+**chat-demo:** implementation details for polling until a terminal turn after an incomplete stream are in **Appendix A §A.3.2** (same constants as `HISTORY_POLL_*` in `app/chat/page.tsx`).
+
 ```mermaid
 sequenceDiagram
     participant FE
@@ -719,6 +722,10 @@ This section records how the **chat-demo** implementation diverges from or exten
   - When **enabled:** ~**6s** after `connection_ack` before the **first** bot `chat_event` (`MOCK_ML_INITIAL_DELAYS_MS`), then **5s** between each subsequent `chat_event` in the same turn (`MOCK_ML_PER_CHAT_EVENT_MS`).
   - When **disabled:** **100ms** after ack, then all `chat_event` lines are sent back-to-back.
 - See also `README_APP.md` → **Mock ML delays (optional)**.
+
+### A.3.2 SSE recovery — `get-history` polling (chat-demo)
+
+When **`sendMessageStream`** ends without a **`connection_close`** event (see `lib/api.ts` **`onStreamDisconnected`**), **`app/chat/page.tsx`** calls **`fetchHistoryAfterSseDisconnect`**, which polls **`GET /chats/get-history`** until **`isTurnTerminalInHistory()`** is satisfied for the acked user message id (**`lastRequestMessageIdRef`**), or until **`HISTORY_POLL_MAX_MS`** (default **90s**), with **`HISTORY_POLL_INTERVAL_MS`** between requests (default **1500ms**). Terminal semantics align with **`isTerminalSseChatEvent`** / **`getTurnOrMessageState`** (`sourceMessageState` **`COMPLETED`** / **`ERRORED_AT_ML`** on the last bot part for the turn, or **`TIMED_OUT_BY_BE`**). Polling is aborted if the user dismisses/cancels (**`sseHistoryPollAbortRef`**). Local testing of abrupt SSE close: **`README_APP.md`** → **Mock SSE abrupt disconnect** (`ENABLE_MOCK_SSE_RANDOM_DROP` / `MOCK_SSE_RANDOM_DROP_PROBABILITY`).
 
 ### A.4 Cancel
 
@@ -2388,6 +2395,7 @@ This section documents current behavior in this repository where it differs from
   - `chat_event` (0..N),
   - `connection_close` (`reason` in `response_complete | inactivity_15s`).
 - **Optional mock pacing (local dev):** `ENABLE_MOCK_ML_DELAYS` — see the **first** *Appendix A* block in this file (**§A.3.1**).
+- **Incomplete SSE (no `connection_close`):** interval **`get-history`** polling until terminal turn — **§A.3.2** (`HISTORY_POLL_*` in `app/chat/page.tsx`); optional mock abrupt close: **`README_APP.md`** (Mock SSE abrupt disconnect).
 - FE reply timeout is 25s (`replyStatus: timeout`), with Retry and Dismiss; FE then relies on polling (`get-history` with `messages_after`) until response arrives for that message.
 - **Awaiting UI:** staged status line while streaming (§4.7) — see first Appendix A **§A.2** (`getAwaitingFeedbackMessage` / `getAwaitingMessageText`).
 - Canonical stream/cancel/runtime semantics are defined in §4.5 and examples in §4.2.
