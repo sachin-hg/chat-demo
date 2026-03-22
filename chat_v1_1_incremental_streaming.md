@@ -72,6 +72,8 @@ v1.1 introduces 3 incremental message events:
 - `message_delta`
 - `message_done`
 
+`message_delta` may include **optional** `chunkId` and `chunkState` (and related rules) — see **§4.4.1**.
+
 Existing v1 events remain valid:
 - `connection_ack`
 - `chat_event`
@@ -119,6 +121,38 @@ Rules:
 - `chunkIndex` starts at `0` and increments by 1.
 - FE must ignore duplicate or out-of-order chunks (`chunkIndex <= lastAppliedIndex`).
 
+#### 4.4.1 Optional chunk identity and state (`chunkId`, `chunkState`)
+
+These fields are **optional** on each `message_delta`. Clients that ignore them remain fully compatible; **`chunkIndex`** stays **required** and **authoritative for ordering**.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `chunkIndex` | number | **Yes** | Monotonic sequence `0, 1, 2, …` within this `messageId`. |
+| `deltaText` | string | **Yes** | Append-only UTF-8 fragment (word / phrase / sentence). |
+| `chunkId` | string | No | Stable id per chunk (e.g. ULID/UUID). If the same `chunkId` is received twice (retries, reconnect), FE **must** apply **at most once** (idempotent dedup). |
+| `chunkState` | `"INTERMEDIATE"` \| `"FINAL"` | No | **INTERMEDIATE** (default): more deltas may follow for this message. **FINAL**: optional hint that this is the last **delta** payload before completion; FE **must still** process **`message_done`** for canonical `fullText`, `messageState`, and persistence alignment (see below). |
+| `isFinalChunk` | boolean | No | Optional hint; prefer **`message_done`** as the single completion boundary (see below). |
+
+**Recommended completion semantics (production):**
+
+- **Primary FINAL signal:** **`message_done`** — carries `fullText` (must equal concatenation of all **accepted** `deltaText` fragments in `chunkIndex` order), plus terminal `messageState` and correlation fields. FE clears transient streaming state here.
+- **Why optional `chunkState` / `chunkId`:** BE may normalize provider streams that emit chunk ids or “final token” markers; exposing them helps idempotency and observability without replacing **`message_done`**.
+- **Avoid ambiguity:** do not require FE to treat **`chunkState: "FINAL"`** alone as stream end; **`message_done`** remains required unless a future minor revision explicitly defines a “delta-only completion” profile (not recommended for v1.1).
+
+**FE handling summary:**
+
+1. If `chunkIndex` is not strictly `lastAppliedChunkIndex + 1`, apply §4.4 duplicate/out-of-order rules.
+2. If `chunkId` is present and already in `seenChunkIds`, skip (duplicate).
+3. Append `deltaText` to `bufferText` for accepted chunks.
+4. On **`message_done`**, verify `fullText` matches `bufferText` (or replace buffer with `fullText` if policy allows repair), then finalize.
+
+Optional example including identity fields:
+
+```txt
+event: message_delta
+data: {"messageId":"msg_b_101","chunkIndex":3,"chunkId":"01ARZ3NDEKTSV4RRFFQ69G2FAV","chunkState":"INTERMEDIATE","deltaText":" in Sector 32 Gurgaon"}
+```
+
 ### 4.5 `message_done`
 
 ```txt
@@ -127,7 +161,7 @@ data: {"eventId":"evt_601","messageId":"msg_b_101","sourceMessageId":"msg_u_99",
 ```
 
 Rules:
-- `fullText` must equal concatenation of all accepted deltas.
+- `fullText` must equal concatenation of all accepted deltas (after applying `chunkIndex` ordering and optional `chunkId` dedup per §4.4.1).
 - `messageState` follows existing response sequencing semantics.
 - `message_done` is idempotent; FE may receive duplicates and should upsert by `eventId` or `messageId`.
 
@@ -165,12 +199,13 @@ No change from v1 reasons:
 Maintain per-`messageId` transient state:
 - `bufferText: string`
 - `lastAppliedChunkIndex: number`
+- `seenChunkIds: Set<string>` (optional; only if BE emits `chunkId` on `message_delta`)
 - `sourceMessageId`, `sequenceNumber`, `messageType`
 - `startedAt`, `updatedAt`
 
 ### 5.3 Event handling
 - `message_start`: create transient message slot if missing.
-- `message_delta`: append `deltaText` if chunk index is next expected.
+- `message_delta`: append `deltaText` when `chunkIndex` is the next expected index; if `chunkId` is present, skip when already in `seenChunkIds` (§4.4.1). Ignore optional `chunkState` for completion — wait for `message_done`.
 - `message_done`: finalize/persist in UI list and clear transient state.
 - `chat_event` template: append directly (no transient buffer).
 
@@ -189,6 +224,7 @@ Maintain per-`messageId` transient state:
 ### 6.1 Provider normalization
 - BE adapts provider token stream into v1.1 normalized events.
 - FE never receives provider-native chunk format.
+- When upstream provides stable per-chunk ids or “final segment” hints, BE **may** emit optional `chunkId` / `chunkState` on `message_delta` (§4.4.1); **`chunkIndex`** remains the canonical ordering key.
 
 ### 6.2 Persistence strategy
 - Persist final bot message at `message_done` (or equivalent completion point).
