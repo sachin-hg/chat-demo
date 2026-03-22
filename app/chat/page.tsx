@@ -11,7 +11,12 @@ import {
   migrateChat,
 } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { getTurnOrMessageState, type ChatEventFromUser, type ChatEventToUser } from "@/lib/contract-types";
+import {
+  getTurnOrMessageState,
+  type ChatEventFromUser,
+  type ChatEventToUser,
+  type MessageDeltaEventToUser,
+} from "@/lib/contract-types";
 import { ChatMessage } from "@/components/chat/ChatMessage";
 import { useToast } from "@/components/ui/ToastProvider";
 
@@ -469,6 +474,8 @@ function ChatPageContent() {
   const knownMessageIdsRef = useRef<Set<string>>(new Set());
   /** After SSE `connection_ack`, true until `connection_close` or a terminal bot `chat_event` — drives get-history fallback on abrupt stream end. */
   const pendingSseHistoryFallbackRef = useRef(false);
+  /** Bot `messageId`s that are receiving v1.1 `message_delta` until the final `chat_event` replaces the row. */
+  const streamingMessageIdsRef = useRef<Set<string>>(new Set());
   const replyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const awaitingElapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSentEventRef = useRef<ChatEventFromUser | null>(null);
@@ -565,6 +572,66 @@ function ChatPageContent() {
       if (sseHistoryPollAbortRef.current === ac) sseHistoryPollAbortRef.current = null;
     }
   }, [conversationId, clearReplyWaiting]);
+
+  const applyMessageDelta = useCallback((delta: MessageDeltaEventToUser) => {
+    if (!conversationId) return;
+    const { messageId, chunkIndex, content, messageType, sequenceNumber, sourceMessageId } = delta;
+    if (!messageId || !content?.text) return;
+
+    if (chunkIndex === 0) {
+      streamingMessageIdsRef.current.add(messageId);
+      const mt: "text" | "markdown" = messageType === "markdown" ? "markdown" : "text";
+      const partial: StoredMessage = {
+        conversationId,
+        messageId,
+        sender: { type: "bot" },
+        messageType: mt,
+        messageState: "IN_PROGRESS",
+        sourceMessageState: "IN_PROGRESS",
+        sourceMessageId,
+        sequenceNumber,
+        content: { text: content.text },
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, partial]);
+      return;
+    }
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.messageId === messageId
+          ? { ...m, content: { ...m.content, text: (m.content?.text ?? "") + content.text } }
+          : m
+      )
+    );
+  }, [conversationId]);
+
+  const applySseChatEvent = useCallback(
+    (botEvent: ChatEventToUser & { messageId: string; createdAt?: string }) => {
+      if (!botEvent.messageId) return;
+      if (streamingMessageIdsRef.current.has(botEvent.messageId)) {
+        streamingMessageIdsRef.current.delete(botEvent.messageId);
+        knownMessageIdsRef.current.add(botEvent.messageId);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.messageId === botEvent.messageId ? ({ ...botEvent } as StoredMessage) : m
+          )
+        );
+        if (isTerminalSseChatEvent(botEvent)) {
+          pendingSseHistoryFallbackRef.current = false;
+          clearReplyWaiting();
+        }
+        return;
+      }
+      if (knownMessageIdsRef.current.has(botEvent.messageId)) return;
+      knownMessageIdsRef.current.add(botEvent.messageId);
+      setMessages((prev) => [...prev, botEvent]);
+      if (isTerminalSseChatEvent(botEvent)) {
+        pendingSseHistoryFallbackRef.current = false;
+        clearReplyWaiting();
+      }
+    },
+    [clearReplyWaiting]
+  );
 
   const cancelAndHideCurrentRequest = useCallback(async () => {
     sseHistoryPollAbortRef.current?.abort();
@@ -870,15 +937,8 @@ function ChatPageContent() {
               pendingSseHistoryFallbackRef.current = true;
               startAwaitingReply(ack.messageId);
             },
-            onChatEvent: (botEvent) => {
-              if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
-              knownMessageIdsRef.current.add(botEvent.messageId);
-              setMessages((prev) => [...prev, botEvent]);
-              if (isTerminalSseChatEvent(botEvent)) {
-                pendingSseHistoryFallbackRef.current = false;
-                clearReplyWaiting();
-              }
-            },
+            onChatEvent: applySseChatEvent,
+            onMessageDelta: applyMessageDelta,
             onConnectionClose: () => {
               pendingSseHistoryFallbackRef.current = false;
             },
@@ -896,7 +956,7 @@ function ChatPageContent() {
               }
             },
           },
-          { signal: abortController.signal }
+          { signal: abortController.signal, streamingEnabled: true }
         );
       } catch (e) {
         // Abort can happen on cancel/timeout; don't flip UI into "error".
@@ -917,6 +977,8 @@ function ChatPageContent() {
       startAwaitingReply,
       clearReplyWaiting,
       fetchHistoryAfterSseDisconnect,
+      applySseChatEvent,
+      applyMessageDelta,
     ]
   );
 
@@ -1021,15 +1083,8 @@ function ChatPageContent() {
                 pendingSseHistoryFallbackRef.current = true;
                 startAwaitingReply(ack.messageId);
               },
-              onChatEvent: (botEvent) => {
-                if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
-                knownMessageIdsRef.current.add(botEvent.messageId);
-                setMessages((prev) => [...prev, botEvent]);
-                if (isTerminalSseChatEvent(botEvent)) {
-                  pendingSseHistoryFallbackRef.current = false;
-                  clearReplyWaiting();
-                }
-              },
+              onChatEvent: applySseChatEvent,
+              onMessageDelta: applyMessageDelta,
               onConnectionClose: () => {
                 pendingSseHistoryFallbackRef.current = false;
               },
@@ -1047,7 +1102,7 @@ function ChatPageContent() {
                 }
               },
             },
-            { signal: abortController.signal }
+            { signal: abortController.signal, streamingEnabled: true }
           );
         }
       } catch (e) {
@@ -1072,6 +1127,8 @@ function ChatPageContent() {
       startAwaitingReply,
       clearReplyWaiting,
       fetchHistoryAfterSseDisconnect,
+      applySseChatEvent,
+      applyMessageDelta,
     ]
   );
 
@@ -1213,15 +1270,8 @@ function ChatPageContent() {
               setReplyStatus("idle");
             }
           },
-          onChatEvent: (botEvent) => {
-            if (!botEvent.messageId || knownMessageIdsRef.current.has(botEvent.messageId)) return;
-            knownMessageIdsRef.current.add(botEvent.messageId);
-            setMessages((prev) => [...prev, botEvent]);
-            if (isTerminalSseChatEvent(botEvent)) {
-              pendingSseHistoryFallbackRef.current = false;
-              clearReplyWaiting();
-            }
-          },
+          onChatEvent: applySseChatEvent,
+          onMessageDelta: applyMessageDelta,
           onConnectionClose: () => {
             pendingSseHistoryFallbackRef.current = false;
           },
@@ -1239,7 +1289,7 @@ function ChatPageContent() {
             }
           },
         },
-        { signal: abortController.signal }
+        { signal: abortController.signal, streamingEnabled: true }
       );
     } catch (e) {
       if (!abortController.signal.aborted) {
@@ -1259,6 +1309,8 @@ function ChatPageContent() {
     isOffline,
     fetchHistoryAfterSseDisconnect,
     clearReplyWaiting,
+    applySseChatEvent,
+    applyMessageDelta,
   ]);
 
   const handleCancel = useCallback(async () => {

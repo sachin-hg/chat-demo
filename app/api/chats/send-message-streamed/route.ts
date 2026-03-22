@@ -9,12 +9,27 @@ import {
   getMessageStateByUserMessageId,
   updateMessageStateByUserMessageId,
 } from "@/lib/store";
-import { getNextBotEvents } from "@/lib/mock/ml-flow";
-import type { ChatEvent, ChatEventFromUser, ChatEventToML, CancelEventToML } from "@/lib/contract-types";
+import { getNextBotEvents, splitTextIntoStreamPhrases } from "@/lib/mock/ml-flow";
+import type {
+  ChatEvent,
+  ChatEventFromUser,
+  ChatEventToML,
+  CancelEventToML,
+  MessageDeltaEventToUser,
+} from "@/lib/contract-types";
 
-const MOCK_ML_INITIAL_DELAYS_MS = [6000];
+const MOCK_ML_INITIAL_DELAYS_MS = [2500];
 /** When `ENABLE_MOCK_ML_DELAYS` is set, wait this long between consecutive `chat_event` SSE lines. */
-const MOCK_ML_PER_CHAT_EVENT_MS = 5000;
+const MOCK_ML_PER_CHAT_EVENT_MS = 2500;
+/** Delay between v1.1 `message_delta` phrases (mock streaming). */
+function getMockPerDeltaMs(): number {
+  const raw = process.env.MOCK_ML_PER_DELTA_MS;
+  if (raw != null && raw !== "") {
+    const n = Number(raw);
+    if (!Number.isNaN(n) && n >= 0) return n;
+  }
+  return 190;
+}
 
 function mockMlDelaysEnabled(): boolean {
   return process.env.ENABLE_MOCK_ML_DELAYS === "true" || process.env.ENABLE_MOCK_ML_DELAYS === "1";
@@ -89,6 +104,10 @@ export async function POST(request: NextRequest) {
   const mockInitialDelay = getMockInitialDelayMs();
   const delayBeforeMlMs = mockInitialDelay > 0 ? mockInitialDelay : 100;
   const perChatEventMs = getMockPerChatEventDelayMs();
+  const perDeltaMs = getMockPerDeltaMs();
+  const streamingEnabled =
+    request.nextUrl.searchParams.get("streamingEnabled") === "true" &&
+    process.env.ENABLE_INCREMENTAL_STREAMING !== "false";
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -197,6 +216,36 @@ export async function POST(request: NextRequest) {
               continue;
             }
             updateMessageStateByUserMessageId(ev.sourceMessageId, ev.sourceMessageState);
+
+            const isTextualPart =
+              (ev.messageType === "text" || ev.messageType === "markdown") &&
+              typeof ev.content?.text === "string" &&
+              ev.content.text.length > 0;
+
+            if (streamingEnabled && isTextualPart) {
+              const phrases = splitTextIntoStreamPhrases(ev.content!.text!).filter((p) => p.length > 0);
+              const streamMessageId = ev.messageId ?? `msg_stream_${Date.now()}`;
+              const seq = ev.sequenceNumber ?? 0;
+              const mt: "text" | "markdown" = ev.messageType === "markdown" ? "markdown" : "text";
+
+              for (let c = 0; c < phrases.length; c++) {
+                if (closed || request.signal.aborted) return;
+                if (c > 0 && perDeltaMs > 0) {
+                  await delay(perDeltaMs);
+                  if (closed || request.signal.aborted) return;
+                }
+                const delta: MessageDeltaEventToUser = {
+                  messageId: streamMessageId,
+                  sourceMessageId: ev.sourceMessageId,
+                  sequenceNumber: seq,
+                  messageType: c === 0 ? mt : undefined,
+                  chunkIndex: c,
+                  content: { text: phrases[c] },
+                };
+                writeSse({ event: "message_delta", data: delta });
+              }
+            }
+
             const storedBot = appendEvent({
               ...ev,
               sender: { type: "bot" },
