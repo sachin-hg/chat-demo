@@ -978,11 +978,7 @@ Property payload shape reference APIs (for template `data.property` / `data.prop
         "routing_range_type": "time",
         "min_price": 100,
         "property_type_id": [1, 2],
-        "type": "project", // project/resale
-        "region_entity_id": 31817,
-        "region_entity_type": "project",
-        "qv_resale_id": 1234,
-        "qv_rent_id": 12345
+        "type": "project" // project/resale
       }
     }
   }
@@ -1086,18 +1082,19 @@ data: {"reason":"response_complete"}
     "templateId": "property_carousel",
     "data": {
       // this is still under discussion, required to power "view all" button. discuss if this should be replaced with "hasViewMore"
-      "property_count": 15,
-      "service": "buy",
-      "category": "residential",
+      "user_intent": "SRP", // as of now: SRP, saved_properties
+      "property_count": 20,
+      "page": 1,
+
+      "service": "buy", // buy, rent, paying_guest
+      "category": "residential", // residental, commercial
       "city": "526acdc6c33455e9e4e9",
-      "filters": {
-        "poly": ["dce9290ec3fe8834a293"],
+      "poly": ["dce9290ec3fe8834a293"],
+      "uuid": [],
         "est": 194298,
-        "region_entity_id": 31817,
-        "region_entity_type": "project",
-        "uuid": [],
-        "qv_resale_id": 1234,
-        "qv_rent_id": 12345,
+        "properties": [{"id": 123, "type": "project"}], // type: project, rent, resale. for service/category buy/residential. type can be : resale/project. for service/category: rent/residential type can be: rent. for srevice/category: paying_guest/residential type can be: rent. for service/category: rent/commercial type can be: rent. for service/category: buy/commercial type can be: resale/project
+      "filters": {
+        
         "apartment_type_id": [1, 2],
         "contact_person_id": [1, 2],
         "facing": ["east", "west"],
@@ -1929,14 +1926,14 @@ data: {"reason":"response_complete"}
         "service": "buy",
         "category": "residential",
         "city": "526acdc6c33455e9e4e9",
-        "filters": {
-          "poly": ["dce9290ec3fe8834a293"],
+        "poly": ["dce9290ec3fe8834a293"],
+        "uuid": [],
           "est": 194298,
           "region_entity_id": 31817,
           "region_entity_type": "project",
-          "uuid": [],
-          "qv_resale_id": 1234,
-          "qv_rent_id": 12345,
+        "filters": {
+          
+          
           "apartment_type_id": [1, 2],
           "contact_person_id": [1, 2],
           "facing": ["east", "west"],
