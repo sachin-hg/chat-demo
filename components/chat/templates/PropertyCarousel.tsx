@@ -76,6 +76,7 @@ export function PropertyCarousel({
         const isShortlisted = shortlisted.has(p.id);
         const imgSrc = p.thumb_image_url?.replace("version", "large") ?? "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600";
         const propertyForMl = {
+          _id: p._id,
           id: p.id,
           type: p.type,
         };
@@ -100,7 +101,7 @@ export function PropertyCarousel({
 
         return (
           <div
-            key={p.id}
+            key={p._id}
             className="flex-shrink-0 w-[262px] rounded-[24px] bg-white border border-[#e1e2e8] overflow-hidden"
             style={{ scrollSnapAlign: "start" }}
             data-demo-property-index={idx}

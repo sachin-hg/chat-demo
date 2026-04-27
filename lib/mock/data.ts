@@ -54,6 +54,9 @@ export interface InventoryConfigLite {
 }
 
 export interface PropertyCarouselCard {
+  // Unique identifier for a specific card instance (multi-card experiment support).
+  // `id` remains the stable property identifier for downstream interactions.
+  _id: string;
   id: string;
   type: InventoryPropertyType;
 
@@ -87,8 +90,12 @@ export interface PropertyCarouselCard {
 export const MOCK_PROPERTY_CAROUSEL_CARDS: PropertyCarouselCard[] = [
   // Project (RERA)
   {
+    _id: "p1__card_1",
     id: "p1",
     type: "project",
+    price_on_request: false,
+    current_status: "Under Construction",
+    possession_date: "Jun, 2023",
     title: "2, 3 BHK Apartments",
     name: "Godrej Air",
     short_address: [{ display_name: "Sector 85" }, { display_name: "Gurgaon" }],
@@ -107,6 +114,7 @@ export const MOCK_PROPERTY_CAROUSEL_CARDS: PropertyCarouselCard[] = [
   },
   // Rent (Verified + furnish type)
   {
+    _id: "p2__card_1",
     id: "p2",
     type: "rent",
     title: "3 BHK flat",
@@ -116,7 +124,7 @@ export const MOCK_PROPERTY_CAROUSEL_CARDS: PropertyCarouselCard[] = [
       { display_name: "Gurgaon" },
     ],
     region_entities: [{ name: "M3M Solitude Ralph Estate" }],
-    is_rera_verified: false,
+    is_rera_verified: false, // project only
     is_verified: true,
     inventory_canonical_url: "https://example.com/property/p2",
     thumb_image_url: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
@@ -127,6 +135,7 @@ export const MOCK_PROPERTY_CAROUSEL_CARDS: PropertyCarouselCard[] = [
     inventory_configs: [{ furnish_type_id: 2, area_value_in_unit: 4750 }],
   },
   {
+    _id: "p4__card_1",
     id: "p4",
     type: "rent",
     title: "2 BHK independent floor",
@@ -147,6 +156,7 @@ export const MOCK_PROPERTY_CAROUSEL_CARDS: PropertyCarouselCard[] = [
   },
   // Resale (Verified + possession)
   {
+    _id: "p3__card_1",
     id: "p3",
     type: "resale",
     title: "3 BHK apartment",
@@ -155,7 +165,7 @@ export const MOCK_PROPERTY_CAROUSEL_CARDS: PropertyCarouselCard[] = [
       { display_name: "Sohna" },
       { display_name: "Gurgaon" },
     ],
-    is_rera_verified: false,
+    is_rera_verified: false, // project only
     is_verified: true,
     region_entities: [{ name: "M3M Solitude Ralph Estate" }],
     inventory_canonical_url: "https://example.com/property/p3",
@@ -167,6 +177,7 @@ export const MOCK_PROPERTY_CAROUSEL_CARDS: PropertyCarouselCard[] = [
     inventory_configs: [{ furnish_type_id: null, area_value_in_unit: 4750 }],
   },
   {
+    _id: "p5__card_1",
     id: "p5",
     type: "resale",
     title: "3 BHK apartment",

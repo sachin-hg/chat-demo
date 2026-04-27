@@ -80,109 +80,96 @@ CANCELLED_BY_USER
 - [`ChatEventFromML`](lib/contract-types.ts#L76): ML -> BE event shape (includes `sourceMessageId`, **`sourceMessageState`** (ML progress on the **user turn**, not the part row), `messageType`, `sequenceNumber`, `content`, optional `error`).
 - [`ChatEventToUser`](lib/contract-types.ts#L94): BE -> FE event shape for history and stream delivery.
 - [`SendMessageResponse`](lib/contract-types.ts#L123): ack shape for send-message/send-message-streamed (`messageId`, `messageState?`).
-- [`GetHistoryResponse`](lib/contract-types.ts#L128): history API shape (`conversationId`, `messages`: [`ChatEventToUser`](lib/contract-types.ts#L94)`[]`, `hasMore`).
-- [`GetConversationIdResponse`](lib/contract-types.ts#L134): conversation lookup shape (`conversationId`, `isNew`).
-- [`GetChatsResponse`](lib/contract-types.ts#L139): list shape for chat threads.
+- `GetConversationDetailsResponse`: consolidated conversation bootstrap + history page shape (`conversationId`, `tokenId`, `messages`: `ChatEventToUser[]`, `hasMore`, `isNew`).
 - [`ChatEvent`](lib/contract-types.ts#L116) (union): [`ChatEventFromUser`](lib/contract-types.ts#L38) | [`ChatEventToML`](lib/contract-types.ts#L51) | [`CancelEventToML`](lib/contract-types.ts#L65) | [`ChatEventFromML`](lib/contract-types.ts#L76) | [`ChatEventToUser`](lib/contract-types.ts#L94).
 
 ---
 
-### 4.1 `GET /chats/get-conversation-id`
+### 4.1 `GET /chats/get-conversation-details`
 
-Returns the active conversation ID for the caller.
-In Phase 1, this is a stable 1:1 mapping:
-- one `conversationId` per authenticated `userId`, or
-- one `conversationId` per anonymous `_ga`.
-So repeated calls for the same user/`_ga` return the same `conversationId`.
+This endpoint replaces both **`get-conversation-id`** and **`get-history`**.
+
+Behavior:
+- **Creates a new `conversationId`** if one does not exist for the caller.
+- Returns a **page of messages** for the active conversation with `hasMore`.
+- Returns a **`tokenId`** that uniquely identifies a **non-logged-in** user; FE stores it **forever** and sends it on all future requests.
+  - If `token_id` is sent in the request, the **same** token is returned.
+
+Pagination:
+- Default `pageSize` is **15**.
+- Supports **exclusive cursors**:
+  - `messagesBefore=<messageId>` (older messages)
+  - `messagesAfter=<messageId>` (newer messages)
+- `messagesBefore` and `messagesAfter` are **mutually exclusive**.
+- Returned `messages` are in **ascending** `createdAt` order.
 
 **Interfaces**
-- Response: `GetConversationIdResponse`
+- Response: `GetConversationDetailsResponse`
 
-**Response**
+**Headers (production)**
+- `login-auth-token` (optional; present only if logged in)
+- `token_id` (optional; if present, must be echoed back as-is)
+
+**Query params**
+- `pageSize` (optional, default `15`)
+- `messagesBefore` (optional, exclusive cursor)
+- `messagesAfter` (optional, exclusive cursor)
+
+**Response (example: existing conversation)**
 ```json
 {
-  "conversationId": "conv_1",
+  "conversationId": "conv_01KQ78BJY3Y0J02SRN6YDM3PYS",
+  "tokenId": "token_01KQ78BJY3Y0J02SRN6YDM3PYT",
+  "messages": [
+    { "messageId": "msg_01KQ78BZ378EA15Y78V75HE9TJ", "createdAt": "2026-04-27T16:09:40.659265+05:30", "messageType": "text", "content": { "text": "Show trending localities in my area" } }
+  ],
+  "hasMore": true,
   "isNew": false
 }
 ```
 
-`isNew` is a demo-app convenience flag and is not required in production contract responses.
-
----
-
-### 4.2 `GET /chats/get-chats`
-
-Returns all chats for the user.
-Ordering: **latest chat first** (descending by `lastActivityAt`).
-
-> Phase 1 note: this endpoint is not required for core flow because BE maintains exactly one conversation per user (`userId`/`_ga`), so clients can rely on `GET /chats/get-conversation-id`.
-
-**Interfaces**
-- Response: `GetChatsResponse`
-
-**Response**
+**Response (example: new chat created)**
 ```json
 {
-  "chats": [
-    {
-      "conversationId": "conv_2",
-      "createdAt": "2025-01-12T11:00:00.000Z",
-      "lastActivityAt": "2025-01-12T11:15:20.000Z"
-    },
-    {
-      "conversationId": "conv_1",
-      "createdAt": "2025-01-12T10:00:00.000Z",
-      "lastActivityAt": "2025-01-12T10:45:05.000Z"
-    }
-  ]
+  "conversationId": "conv_01KQ78BJY3Y0J02SRN6YDM3PYS",
+  "messages": [],
+  "hasMore": false,
+  "isNew": true,
+  "tokenId": "token_01KQ78BJY3Y0J02SRN6YDM3PYT"
 }
 ```
 
 ---
 
-### 4.3 `GET /chats/get-history`
+### 4.2 `GET /chats/get-chats` (removed)
 
-Query params:
-- `conversationId` (required)
-- `page_size` (optional, default `6`)
-- `messages_before` (optional, exclusive cursor)
-- `messages_after` (optional, exclusive cursor)
+This API has been removed. Clients should rely on `GET /chats/get-conversation-details`, which always returns the active conversation and its paginated messages.
+
+---
+
+### 4.3 History pagination (via `get-conversation-details`)
+
+History is paginated via `GET /chats/get-conversation-details` with:
+- `pageSize` (optional, default `15`)
+- `messagesBefore` (older messages, exclusive cursor)
+- `messagesAfter` (newer messages, exclusive cursor)
 
 Rules:
-- `messages_before` and `messages_after` are mutually exclusive.
-- Returned `messages` are in ascending creation order.
-- User request events whose request state is `CANCELLED_BY_USER` are excluded by BE in `get-history` response.
-- **Post-login migration (§4.4.1)**: After guest `c1` is migrated to authenticated `c2`, any `get-history` with `conversationId=c2` must return a **single logical thread** for that user: messages that existed on `c2` from **earlier authenticated sessions** (if any), **plus** messages **migrated from `c1`**, **plus** messages created on `c2` **after** migration in the current session. Cursor/pagination rules above apply to this merged ordering.
+- `messagesBefore` and `messagesAfter` are mutually exclusive.
+- Returned `messages` are in ascending `createdAt` order.
+- User request events whose request state is `CANCELLED_BY_USER` are excluded by BE in history responses.
+- **Post-login migration (§4.4.1)**: After guest `c1` is migrated to authenticated `c2`, any `get-conversation-details` call for `conversationId=c2` must return a **single logical thread** for that user: messages that existed on `c2` from **earlier authenticated sessions** (if any), **plus** messages **migrated from `c1`**, **plus** messages created on `c2` **after** migration in the current session. Cursor/pagination rules above apply to this merged ordering.
 
 
-Example (`messages_before`):
-`GET /chats/get-history?conversationId=conv_1&page_size=6&messages_before=msg_420`
+Example (`messagesBefore`):
+`GET /chats/get-conversation-details?pageSize=15&messagesBefore=msg_01KQ78N926CK91CVV4WA3X5B1D`
 
-Returns latest 6 messages before `msg_420`.
+Returns a page of messages older than the cursor message.
 
-Example (`messages_after`):
-`GET /chats/get-history?conversationId=conv_1&page_size=6&messages_after=msg_401`
+Example (`messagesAfter`):
+`GET /chats/get-conversation-details?pageSize=15&messagesAfter=msg_01KQ790JT1R6QCZ2APCW7PTPQZ`
 
-Returns latest 6 messages strictly after `msg_401` (e.g. `msg_402..msg_407`).
-
-**Interfaces**
-- Response: `GetHistoryResponse` (`messages` items are `ChatEventToUser`)
-
-**Response**
-```json
-{
-  "conversationId": "conv_1",
-  "messages": [
-    { "messageId": "msg_402", "messageType": "...", "content": {} },
-    { "messageId": "msg_403", "messageType": "...", "content": {} },
-    { "messageId": "msg_404", "messageType": "...", "content": {} },
-    { "messageId": "msg_405", "messageType": "...", "content": {} },
-    { "messageId": "msg_406", "messageType": "...", "content": {} },
-    { "messageId": "msg_407", "messageType": "...", "content": {} }
-  ],
-  "hasMore": true
-}
-```
+Returns messages strictly newer than the cursor message (typically used for polling/recovery after SSE disconnect).
 
 ---
 
@@ -191,6 +178,10 @@ Returns latest 6 messages strictly after `msg_401` (e.g. `msg_402..msg_407`).
 Use this endpoint **only** when the client sends a turn that **does not** expect an ML/bot reply in the same request cycle: **`responseRequired === false`**. Typical examples: hidden **`user_action`** signals (e.g. shortlist after FE/API success), or other non-text payloads that are fire-and-forget.
 
 **User `messageType: "text"` always expects a bot response** (implicitly or via `responseRequired: true`) and **must not** be sent here — use **`POST /chats/send-message-streamed`** for all user text.
+
+**Headers (production)**
+- `token_id` (required once issued by `get-conversation-details`; stored by FE forever)
+- `login-auth-token` (optional; present only if logged in)
 
 ```json
 {
@@ -203,7 +194,7 @@ Use this endpoint **only** when the client sends a turn that **does not** expect
     "data": {
       "action": "shortlist",
       "replyToMessageId": "msg_b_011",
-      "property": { "id": "p2", "type": "rent" }
+      "property": { "_id": "p2__card_1", "id": "p2", "type": "rent" }
     }
   }
 }
@@ -259,8 +250,12 @@ JSON only:
 
 Request body is a flattened `ChatEventFromUser` (no `event` envelope). This endpoint requires `Accept: text/event-stream`.
 
-Before dispatching to ML, BE authenticates with `login_auth_token` when present and forwards derived identity under `sender.userId` / `sender.gaId`.
+Before dispatching to ML, BE authenticates with `login-auth-token` when present and forwards derived identity under `sender.userId` / `sender.gaId`.
 `sender.userId` is BE-derived from auth/identity request headers.
+
+**Headers (production)**
+- `token_id` (required once issued by `get-conversation-details`; stored by FE forever)
+- `login-auth-token` (optional; present only if logged in)
 
 **Interfaces**
 - FE -> BE request body: `ChatEventFromUser`
@@ -293,8 +288,8 @@ data: {"reason":"response_complete"}
   - outbound event has `responseRequired === true`, and
   - the turn has not yet reached a terminal outcome: the stream has not yet delivered a bot `chat_event` with **terminal** **`sourceMessageState: COMPLETED | ERRORED_AT_ML`** for this turn (Appendix A §A.0), and no surfaced `chat_event` with `messageState: TIMED_OUT_BY_BE` for this request (see §6 SSE).
 - **Awaiting copy (progressive feedback):** Implementations **should** update the awaiting line on a fixed cadence (e.g. once per elapsed second) so long ML turns feel responsive. The exact strings are product-specific; **chat-demo** uses four stages with thresholds at **1s** / **3s** / **7s** elapsed — see Appendix A §A.2 for the full list (web + Android).
-- **Timeout**: FE maintains a local reply timeout safeguard (current app value: `25s`); after timeout UI is shown, FE relies on polling (`get-history` with `messages_after`) until it receives the response for that message.
-- **Stream ends without `connection_close`**: If the HTTP/SSE body closes before a `connection_close` event (network drop, proxy reset, etc.), FE should reconcile from **`get-history`**. **chat-demo** polls **`GET /chats/get-history`** on a fixed interval until the turn shows a **terminal** outcome (last bot part for that user message has **`sourceMessageState: COMPLETED | ERRORED_AT_ML`**, or **`TIMED_OUT_BY_BE`** on the user row), or until a max wait — see **Appendix A §A.3.2** (`HISTORY_POLL_INTERVAL_MS` / `HISTORY_POLL_MAX_MS` in `app/chat/page.tsx`).
+- **Timeout**: FE maintains a local reply timeout safeguard (current app value: `25s`); after timeout UI is shown, FE relies on polling (`get-conversation-details` with `messagesAfter`) until it receives the response for that message.
+- **Stream ends without `connection_close`**: If the HTTP/SSE body closes before a `connection_close` event (network drop, proxy reset, etc.), FE should reconcile from **`get-conversation-details`**. **chat-demo** polls **`GET /chats/get-conversation-details`** on a fixed interval (using `messagesAfter=<last_seen_messageId>`) until the turn shows a **terminal** outcome (last bot part for that user message has **`sourceMessageState: COMPLETED | ERRORED_AT_ML`**, or **`TIMED_OUT_BY_BE`** on the user row), or until a max wait — see **Appendix A §A.3.2** (`HISTORY_POLL_INTERVAL_MS` / `HISTORY_POLL_MAX_MS` in `app/chat/page.tsx`).
 - **Input/CTA behavior**:
   - while `sending`: composer submit disabled
   - while `awaiting`: template actions disabled, composer shows **Cancel**
@@ -316,6 +311,9 @@ data: {"reason":"response_complete"}
   - FE `ShareLocation` may auto-send `location_shared` when permission is already granted, and template may not be visibly rendered in that case.
   - If permission is granted but **`getCurrentPosition`** fails (e.g. `POSITION_UNAVAILABLE`, timeout) or the Geolocation API is missing, FE sends **`user_action`** with **`action: "location_not_available"`** — same payload shape as **`location_denied`** (no coordinates). See Part B §4.3.10.33–§4.3.11.
 - **Auth gating**: shortlist/contact/brochure actions are FE-gated behind login; successful actions post hidden/shown `user_action` events back to BE/ML.
+- **Property identifiers (`id` vs `_id`)**:
+  - **`_id`**: **card-unique identifier** (multi-card / multicard experiment support). Use this to uniquely identify a specific card instance when ML/BE splits one property into multiple cards.
+  - **`id`**: **stable property identifier** used for downstream interactions like **shortlist**, **contact seller**, and **download/view brochure**.
 
 ---
 
@@ -542,7 +540,7 @@ sequenceDiagram
 **Interfaces used**
 - FE -> BE: `ChatEventFromUser`
 - BE -> ML cancel advisory: `CancelEventToML`
-- FE polling response: `GetHistoryResponse` (`ChatEventToUser[]`)
+- FE polling response: `GetConversationDetailsResponse` (`ChatEventToUser[]`)
 
 ```mermaid
 sequenceDiagram
@@ -558,7 +556,7 @@ sequenceDiagram
     BE->>BE: mark TIMED_OUT_BY_BE
     BE->>ML: cancel_request (advisory)
     BE-->>FE: SSE connection_close (timeout path close)
-    FE->>BE: GET /chats/get-history?messages_after=<last_seen_messageId>
+    FE->>BE: GET /chats/get-conversation-details?messagesAfter=<last_seen_messageId>
     BE-->>FE: user event surfaced with messageState=TIMED_OUT_BY_BE
 
 ```
@@ -597,7 +595,7 @@ sequenceDiagram
 **Interfaces used**
 - Initial turn request: `ChatEventFromUser`
 - Stream payloads: `ChatEventToUser`
-- Recovery API response: `GetHistoryResponse` (`ChatEventToUser[]`)
+- Recovery API response: `GetConversationDetailsResponse` (`ChatEventToUser[]`)
 
 **chat-demo:** implementation details for polling until a terminal turn after an incomplete stream are in **Appendix A §A.3.2** (same constants as `HISTORY_POLL_*` in `app/chat/page.tsx`).
 
@@ -612,7 +610,7 @@ sequenceDiagram
 
     Note over FE: FE missed events for this turn
 
-    FE->>BE: GET /chats/get-history?messages_after=evt_401
+    FE->>BE: GET /chats/get-conversation-details?messagesAfter=msg_401
     BE-->>FE: missed messages
 
     FE->>BE: Next turn opens a fresh POST /chats/send-message-streamed stream
@@ -624,8 +622,7 @@ sequenceDiagram
 ### 10.5 Conversation Migration After Login
 
 **Interfaces used**
-- Conversation lookup: `GetConversationIdResponse`
-- Optional history refresh: `GetHistoryResponse` (`ChatEventToUser[]`) — FE may call anytime; **not required** immediately after migrate (see §4.3 / §4.4.1).
+- Conversation bootstrap + history: `GetConversationDetailsResponse`
 
 ```mermaid
 sequenceDiagram
@@ -633,17 +630,17 @@ sequenceDiagram
     participant BE
     participant DB
 
-    Note over FE: User starts chat while logged out (_ga identity)
-    FE->>BE: GET /chats/get-conversation-id
-    BE-->>FE: { conversationId: "c1" }
+    Note over FE: User starts chat while logged out (token identity)
+    FE->>BE: GET /chats/get-conversation-details
+    BE-->>FE: { conversationId: "c1", tokenId: "t1", messages: [...] }
     FE->>BE: POST /chats/send-message* (multiple turns on c1)
 
     Note over FE: User logs in from shortlist/contact/brochure flow
-    FE->>BE: POST /api/migrate-chat?currentConversationId=c1<br/>header: login_auth_token
+    FE->>BE: POST /api/v1/chat/migrate-chat<br/>headers: login-auth-token, token_id
     alt Migration strategy enabled
       BE->>DB: Move c1-tagged events/requests to c2
-      BE-->>FE: { newConversationId: "c2" }
-      Note over FE: FE switches active conversationId to c2<br/>All subsequent FE→BE calls use conversationId=c2<br/>(send-message, get-history, cancel, stream, …)
+      BE-->>FE: { data: { new_conversation_id: "c2" } }
+      Note over FE: FE switches active conversationId to c2<br/>All subsequent FE→BE calls use conversationId=c2<br/>(send-message, get-conversation-details, cancel, stream, …)
       Note over BE: BE must treat c2 as one logical thread:<br/>prior-session c2 history + migrated c1 + current-session c2<br/>(ordering/pagination per §4.3)
     else Migration strategy disabled
       BE-->>FE: {}
@@ -696,10 +693,10 @@ sequenceDiagram
 
 This section records how the **chat-demo** implementation diverges from or extends the frozen spec above. The spec remains canonical; these notes describe actual behaviour in this codebase.
 
-### A.1 get-history
+### A.1 get-conversation-details (history pagination)
 
-- Cursor behavior and soft-delete filtering are documented in canonical section §4.3.
-- **This app:** older messages are loaded via `messages_before` + `page_size`; see **Appendix A §A.1.1** (Intersection Observer auto-load, manual after 4 prepends, spinner).
+- Cursor behavior and soft-delete filtering are documented in canonical section §4.3 / §4.6.
+- **This app:** older messages are loaded via `messagesBefore` + `pageSize`; see **Appendix A §A.1.1** (Intersection Observer auto-load, manual after 4 prepends, spinner).
 
 ### A.2 FE reply timeout and UI
 
@@ -722,9 +719,9 @@ This section records how the **chat-demo** implementation diverges from or exten
   - When **enabled:** ~**6s** after `connection_ack` before the **first** bot `chat_event` (`MOCK_ML_INITIAL_DELAYS_MS`), then **5s** between each subsequent `chat_event` in the same turn (`MOCK_ML_PER_CHAT_EVENT_MS`).
   - When **disabled:** **100ms** after ack, then all `chat_event` lines are sent back-to-back.
 
-### A.3.2 SSE recovery — `get-history` polling (chat-demo)
+### A.3.2 SSE recovery — `get-conversation-details` polling (chat-demo)
 
-When **`sendMessageStream`** ends without a **`connection_close`** event (see `lib/api.ts` **`onStreamDisconnected`**), **`app/chat/page.tsx`** calls **`fetchHistoryAfterSseDisconnect`**, which polls **`GET /chats/get-history`** until **`isTurnTerminalInHistory()`** is satisfied for the acked user message id (**`lastRequestMessageIdRef`**), or until **`HISTORY_POLL_MAX_MS`** (default **90s**), with **`HISTORY_POLL_INTERVAL_MS`** between requests (default **1500ms**). Terminal semantics align with **`isTerminalSseChatEvent`** / **`getTurnOrMessageState`** (`sourceMessageState` **`COMPLETED`** / **`ERRORED_AT_ML`** on the last bot part for the turn, or **`TIMED_OUT_BY_BE`**). Polling is aborted if the user dismisses/cancels (**`sseHistoryPollAbortRef`**).
+When **`sendMessageStream`** ends without a **`connection_close`** event (see `lib/api.ts` **`onStreamDisconnected`**), **`app/chat/page.tsx`** calls **`fetchHistoryAfterSseDisconnect`**, which polls **`GET /chats/get-conversation-details`** (using `messagesAfter=<lastSeenMessageId>`) until **`isTurnTerminalInHistory()`** is satisfied for the acked user message id (**`lastRequestMessageIdRef`**), or until **`HISTORY_POLL_MAX_MS`** (default **90s**), with **`HISTORY_POLL_INTERVAL_MS`** between requests (default **1500ms**). Terminal semantics align with **`isTerminalSseChatEvent`** / **`getTurnOrMessageState`** (`sourceMessageState` **`COMPLETED`** / **`ERRORED_AT_ML`** on the last bot part for the turn, or **`TIMED_OUT_BY_BE`**). Polling is aborted if the user dismisses/cancels (**`sseHistoryPollAbortRef`**).
 
 **Mock SSE abrupt disconnect (local testing only):** set these **server** env vars when starting `npm run dev` to simulate the stream ending without `connection_close`. The mock still **persists** the first bot message; the client uses this §A.3.2 polling path to reconcile.
 
@@ -1010,7 +1007,7 @@ event: connection_close
 data: {"reason":"response_complete"}
 ```
 
-> **SSE `data` lines:** The `chat_event` payloads above are **abbreviated** for readability. Production **`chat_event`** / **`get-history`** rows use the full **`ChatEventToUser`** object (`conversationId`, `createdAt`, **`sourceMessageState`** on bot rows for turn progress, …; bot rows omit `responseRequired`) as in §4.3.
+> **SSE `data` lines:** The `chat_event` payloads above are **abbreviated** for readability. Production **`chat_event`** / **history** rows use the full **`ChatEventToUser`** object (`conversationId`, `createdAt`, **`sourceMessageState`** on bot rows for turn progress, …; bot rows omit `responseRequired`) as in §4.3.
 
 > **Important:** For **non-streaming** turns only (`responseRequired === false`, not user text), FE uses `POST /chats/send-message` and receives JSON `{ messageId, messageState: "COMPLETED" }`. User **text** always uses **`send-message-streamed`**.
 
@@ -1117,6 +1114,7 @@ data: {"reason":"response_complete"}
       // structure should be similar to corresponding venus/casa APIs. this is just sample
       "properties": [
         {
+          "_id": "p1__card_1",
           "id": "p1",
           "type": "project",
           "title": "2, 3 BHK Apartments",
@@ -1135,6 +1133,7 @@ data: {"reason":"response_complete"}
           "inventory_configs": []
         },
         {
+          "_id": "p2__card_1",
           "id": "p2",
           "type": "rent",
           "title": "3 BHK flat",
@@ -1151,6 +1150,7 @@ data: {"reason":"response_complete"}
           "inventory_configs": [{ "furnish_type_id": 2, "area_value_in_unit": 4750 }]
         },
         {
+          "_id": "p3__card_1",
           "id": "p3",
           "type": "resale",
           "title": "3 BHK apartment",
@@ -1183,7 +1183,7 @@ data: {"reason":"response_complete"}
     "data": {
       "action": "shortlist",
       "replyToMessageId": "msg_b_011",
-      "property": { "id": "p2", "type": "rent" }
+      "property": { "_id": "p2__card_1", "id": "p2", "type": "rent" }
     }
   }
 }
@@ -1200,7 +1200,7 @@ data: {"reason":"response_complete"}
     "data": {
       "action": "crf_submitted",
       "replyToMessageId": "msg_b_011",
-      "property": { "id": "p2", "type": "rent" }
+      "property": { "_id": "p2__card_1", "id": "p2", "type": "rent" }
     },
     "derivedLabel": "The seller has been contacted, someone will reach out to you soon!"
   }
@@ -1218,7 +1218,7 @@ data: {"reason":"response_complete"}
     "data": {
       "action": "learn_more_about_property",
       "replyToMessageId": "msg_b_011",
-      "property": { "id": "p1", "type": "project" }
+      "property": { "_id": "p1__card_1", "id": "p1", "type": "project" }
     },
     "derivedLabel": "Tell me more about Godrej Air"
   }
@@ -2238,7 +2238,7 @@ Emitted when the Permissions API reports **`granted`** but **`getCurrentPosition
     "data": {
       "action": "brochure_downloaded",
       "replyToMessageId": "msg_b_050",
-      "property": { "id": "p2", "type": "rent" }
+      "property": { "_id": "p2__card_1", "id": "p2", "type": "rent" }
     }
   }
 }
@@ -2246,29 +2246,28 @@ Emitted when the Permissions API reports **`granted`** but **`getCurrentPosition
 
 ### 4.4 Auth and identity headers
 
-Apps should send identity via cookie headers:
+Identity is carried via request headers:
 
-- `login_auth_token` (when available/authenticated),
-- otherwise `_ga` as unique identifier:
-  - app clients: device identifier in `_ga`,
-  - web FE: Google Analytics user identifier in `_ga`.
+- `token_id`: stable identifier for the **non-logged-in** user. Returned by `get-conversation-details` and stored by FE **forever**.
+- `login-auth-token`: optional; present only when the user is logged in.
 
-### 4.4.1 Chat migration after login (mock contract)
+`get-conversation-details` returns `tokenId` on every call; if `token_id` is sent, the same token is echoed back.
 
-When a guest chat (`_ga`) becomes authenticated mid-session:
+### 4.4.1 Chat migration after login
+
+When a guest chat (identified by `token_id`) becomes authenticated mid-session:
 
 1. FE has active `currentConversationId` (example: `c1`).
 2. FE calls:
-   - `POST /api/migrate-chat?currentConversationId=c1`
-   - header: `login_auth_token`
+   - `POST /api/v1/chat/migrate-chat`
+   - headers: `login-auth-token` **and** `token_id` (**both mandatory**, otherwise `400`)
 3. BE behavior:
-   - if migration strategy is enabled, BE returns `{ "newConversationId": "c2" }` and updates stored rows from `c1` to `c2`.
-   - if disabled, BE may return `{}` (no switch).
-   - **Merge responsibility**: for every subsequent API that uses `conversationId=c2` (`get-history`, `send-message*`, `cancel`, stream URLs, etc.), BE must treat the conversation as **one logical thread**: prior-session `c2` history (if any), migrated `c1` content, and new `c2` messages in this session—so FE does **not** need to merge IDs client-side.
+   - returns the authenticated conversation id under `data.new_conversation_id`.
+   - **Merge responsibility**: for every subsequent API that uses the authenticated `conversationId` (`get-conversation-details`, `send-message*`, `cancel`, stream URLs, etc.), BE must treat the conversation as **one logical thread**: prior-session authenticated history (if any), migrated guest content, and new messages in this session—so FE does **not** need to merge IDs client-side.
 4. FE behavior after successful migration:
-   - switch active conversation to `c2` and use `c2` on **all** later BE calls (same as any other conversation id).
-   - **Optional**: FE may call `get-history` on `c2` (with/without cursors) to refresh the UI; **not required** immediately after migrate (e.g. in-memory transcript can continue until the next natural history load).
-   - include `login_auth_token` on subsequent calls.
+   - switch active conversation to `new_conversation_id` and use it on **all** later BE calls.
+   - **Optional**: FE may call `get-conversation-details` to refresh the UI; **not required** immediately after migrate (e.g. in-memory transcript can continue until the next natural history load).
+   - include `login-auth-token` on subsequent calls.
 
 **Known edge case:** migration should be done when no in-flight turn is pending; otherwise late events can be split across pre/post migration boundaries.
 
@@ -2280,7 +2279,7 @@ When a guest chat (`_ga`) becomes authenticated mid-session:
 - **Awaiting status text:** FE may rotate progressive copy while waiting (canonical §4.7); **chat-demo** lists exact strings in Appendix A §A.2.
 - FE stops loader/awaiting and marks response complete on first terminal outcome on the stream: bot row **`sourceMessageState: COMPLETED | ERRORED_AT_ML`** (use **`getTurnOrMessageState()`** in chat-demo), or any surfaced `messageState: TIMED_OUT_BY_BE` for the active request.
 - FE treats `connection_close` as stream completion for the turn.
-- FE keeps a local timeout safeguard (current app value: 25s). On timeout, FE shows Retry/Dismiss and then relies on polling (`get-history` with `messages_after`) until it receives the response for that message.
+- FE keeps a local timeout safeguard (current app value: 25s). On timeout, FE shows Retry/Dismiss and then relies on polling (`get-conversation-details` with `messagesAfter`) until it receives the response for that message.
 - Input/CTA behavior:
   - while sending: input submit disabled
   - while awaiting: template actions disabled and Cancel shown in composer
@@ -2313,19 +2312,18 @@ When a guest chat (`_ga`) becomes authenticated mid-session:
   - cancellation is advisory to ML; BE ignores late updates for cancelled/non-pending requests.
 
 ---
-### 4.6 `GET /chats/get-history` cursor contract
+### 4.6 `GET /chats/get-conversation-details` cursor contract
 
 - Supported query params:
-  - `conversationId` (required)
-  - `page_size` (optional, default `6`)
-  - `messages_before` (optional, exclusive cursor)
-  - `messages_after` (optional, exclusive cursor)
-- `messages_before` and `messages_after` are mutually exclusive in one request.
-- Returned `messages` are always in ascending `created_at` order.
+  - `pageSize` (optional, default `15`)
+  - `messagesBefore` (optional, exclusive cursor)
+  - `messagesAfter` (optional, exclusive cursor)
+- `messagesBefore` and `messagesAfter` are mutually exclusive in one request.
+- Returned `messages` are always in ascending `createdAt` order.
 - Behavior:
-  - no cursor: latest `page_size` messages (default latest 6)
-  - `messages_before=evt_x`: latest `page_size` messages before `evt_x`
-  - `messages_after=evt_x`: all messages after `evt_x`
+  - no cursor: latest `pageSize` messages (default latest 15)
+  - `messagesBefore=msg_x`: older messages before `msg_x`
+  - `messagesAfter=msg_x`: newer messages after `msg_x`
 - `hasMore` remains required for FE pagination controls.
 - BE applies soft-delete filtering in this API: user request events with `messageState = CANCELLED_BY_USER` are excluded; no other event types are filtered.
 
@@ -2401,15 +2399,15 @@ This section documents current behavior in this repository where it differs from
   - `chat_event` (0..N),
   - `connection_close` (`reason` in `response_complete | inactivity_15s`).
 - **Optional mock pacing (local dev):** `ENABLE_MOCK_ML_DELAYS` — see the **first** *Appendix A* block in this file (**§A.3.1**).
-- **Incomplete SSE (no `connection_close`):** interval **`get-history`** polling until terminal turn — **first Appendix A §A.3.2** (`HISTORY_POLL_*` in `app/chat/page.tsx`); optional mock abrupt close: same §A.3.2 table (`ENABLE_MOCK_SSE_RANDOM_DROP` / `MOCK_SSE_RANDOM_DROP_PROBABILITY`).
-- FE reply timeout is 25s (`replyStatus: timeout`), with Retry and Dismiss; FE then relies on polling (`get-history` with `messages_after`) until response arrives for that message.
+- **Incomplete SSE (no `connection_close`):** interval **`get-conversation-details`** polling until terminal turn — **first Appendix A §A.3.2** (`HISTORY_POLL_*` in `app/chat/page.tsx`); optional mock abrupt close: same §A.3.2 table (`ENABLE_MOCK_SSE_RANDOM_DROP` / `MOCK_SSE_RANDOM_DROP_PROBABILITY`).
+- FE reply timeout is 25s (`replyStatus: timeout`), with Retry and Dismiss; FE then relies on polling (`get-conversation-details` with `messagesAfter`) until response arrives for that message.
 - **Awaiting UI:** staged status line while streaming (§4.7) — see first Appendix A **§A.2** (`getAwaitingFeedbackMessage` / `getAwaitingMessageText`).
 - Canonical stream/cancel/runtime semantics are defined in §4.5 and examples in §4.2.
 
 #### A.1.1 History pagination — older messages (this app)
 
-- Initial transcript uses `GET /chats/get-history` with `page_size` (see `INITIAL_PAGE_SIZE` in `app/chat/page.tsx`).
-- Older pages use `messages_before=<messageId of current oldest row>` and `page_size` (`LOAD_MORE_PAGE_SIZE`).
+- Initial transcript uses `GET /chats/get-conversation-details` with `pageSize` (see `INITIAL_PAGE_SIZE` in `app/chat/page.tsx`).
+- Older pages use `messagesBefore=<messageId of current oldest row>` and `pageSize` (`LOAD_MORE_PAGE_SIZE`).
 - **UX:** an **Intersection Observer** on a top **sentinel** inside the chat scroll container auto-loads the next older page when the user scrolls near the top (with a top `rootMargin` prefetch). Loads are **edge-triggered** (entering view) and **count only successful prepends** (new rows actually merged).
 - **Budget:** the first **`AUTO_LOAD_OLDER_MAX` (4)** successful auto-loads per **`conversationId`** are free; after that, the UI shows only **“View older messages”** (manual tap) to reduce accidental / abusive churn against BE.
 - While fetching older messages, a **spinner** is shown in that header area (no “View older messages” label during load).
@@ -2542,7 +2540,7 @@ Open [http://localhost:3000](http://localhost:3000), then **Open Chat** to go to
 #### Stack (Phase 1)
 
 - **BE/ML:** Co-located in the same service (method calls; **no Kafka** in Phase 1).
-- **BE:** Next.js API routes under `/api/chats/*`: `get-conversation-id`, `get-chats`, `get-history`, **`send-message` (JSON)**, **`send-message-streamed` (SSE)**, `cancel`.
+- **BE:** Next.js API routes under `/api/chats/*`: `get-conversation-details`, **`send-message` (JSON)**, **`send-message-streamed` (SSE)**, `cancel`.
 - **FE:**
   - Uses `send-message-streamed` for `responseRequired=true` turns.
   - Uses `send-message` for `responseRequired=false` fire-and-forget turns.
@@ -2559,9 +2557,9 @@ Open [http://localhost:3000](http://localhost:3000), then **Open Chat** to go to
 
 #### HTTP API (paths as implemented under `/api`)
 
-- `GET /api/chats/get-conversation-id` → `{ conversationId, isNew }` (`isNew` is demo-app convenience; not required for production clients).
-- Phase 1 identity mapping: BE keeps a stable 1:1 `conversationId` per `userId` (or per `_ga` for anonymous users), so the same user consistently gets the same conversation.
-- `GET /api/chats/get-history?conversationId=...` with optional `page_size` (default 6), and optional cursor `messages_before` or `messages_after`.
+- `GET /api/chats/get-conversation-details` → `{ conversationId, tokenId, messages, hasMore, isNew }`
+  - default `pageSize=15`
+  - optional cursor `messagesBefore` or `messagesAfter`
 - `POST /api/chats/send-message` body `{ event: ChatEventFromUser }` (JSON-only)
   - `event.conversationId` is required in payload (not query param).
   - Used for `responseRequired=false` turns.
@@ -2569,7 +2567,7 @@ Open [http://localhost:3000](http://localhost:3000), then **Open Chat** to go to
 - `POST /api/chats/send-message-streamed` body `{ event: ChatEventFromUser }` with `Accept: text/event-stream`
   - `event.conversationId` is required in payload (not query param).
   - Used for `responseRequired=true` turns.
-  - If `login_auth_token` is present, BE authenticates first and forwards derived identifiers (`userId`, `gaId`) in `ChatEventToML.sender`.
+  - If `login-auth-token` is present, BE authenticates first and forwards derived identifiers (`userId`, `gaId`) in `ChatEventToML.sender`.
   - `ChatEventToML.sender.userId` is derived by BE from auth/identity request headers.
   - SSE events:
     - **`event: connection_ack`** — immediate ack: `data: { "messageId": "...", "messageState": "PENDING" }`
@@ -2578,25 +2576,25 @@ Open [http://localhost:3000](http://localhost:3000), then **Open Chat** to go to
 - ML response handling:
   - Each ML output is stored by BE as a new bot message with **`messageState: "COMPLETED"`** (per **part** row) and **`sourceMessageState`** echoing ML’s turn progress.
   - **`sourceMessageState`** from each ML event is mapped onto the **source user message** row’s **`messageState`** (see **§A.0**).
-- `POST /api/migrate-chat?currentConversationId=c1` with `login_auth_token` header
-  - When migration strategy is enabled, BE returns `{ newConversationId: "c2" }` and merges/moves c1-tagged history to c2 in mock DB.
-  - FE switches to `c2` for all subsequent API calls; an immediate `get-history` refresh is **optional** (BE merges prior c2 + migrated c1 + new c2 on any `get-history` call with `conversationId=c2`).
+- `POST /api/v1/chat/migrate-chat` with headers `login-auth-token` + `token_id` (**both mandatory**)
+  - When migration strategy is enabled, BE returns `{ data: { new_conversation_id: "c2" } }` and merges/moves guest history into the authenticated thread.
+  - FE switches to `c2` for all subsequent API calls; an immediate `get-conversation-details` refresh is **optional**.
 
 #### UI notes (complements §A.1.1, §A.2, §A.3)
 
 - **Scroll to bottom:** a floating control appears when the user scrolls away from the bottom (threshold ~100px / ~20% of viewport height); the scroll listener attaches after the main chat layout mounts (not on the initial loading screen).
-- **Older messages:** `GET /api/chats/get-history` with `messages_before` + `page_size` (`LOAD_MORE_PAGE_SIZE`); auto-load via Intersection Observer for the first **`AUTO_LOAD_OLDER_MAX`** successful prepends, then **“View older messages”** — full rules in **§A.1.1**.
+- **Older messages:** `GET /api/chats/get-conversation-details` with `messagesBefore` + `pageSize` (`LOAD_MORE_PAGE_SIZE`); auto-load via Intersection Observer for the first **`AUTO_LOAD_OLDER_MAX`** successful prepends, then **“View older messages”** — full rules in **§A.1.1**.
 - Transient templates (`share_location`, `shortlist_property`, `contact_seller`, `nested_qna`) render only for the **latest** bot message.
 - Property carousel **title** opens `inventory_canonical_url` in a new tab; trailing **View all** when `property_count > properties.length` opens `getSRPUrl(service, category, city, filters)`.
 - Locality carousel **locality name** opens locality `url` in a new tab.
 - `context` and `analytics` messages are never rendered; input is hidden while sticky `nested_qna` is active.
 - **`NestedQna`:** submitting defers parent updates (`queueMicrotask`) so React does not update the chat page while `NestedQna` is rendering; hooks run unconditionally before any early return when `selections` is empty (**§A.2**).
 - **Awaiting reply** (`replyStatus === "awaiting"`): copy rotates by elapsed second — exact strings in **first Appendix A §A.2** (`getAwaitingFeedbackMessage` in `app/chat/page.tsx`).
-- Reply **timeout** is **25s** with Retry/Dismiss; FE then relies on polling (`get-history` with `messages_after`) until the response arrives (**§A.1**).
+- Reply **timeout** is **25s** with Retry/Dismiss; FE then relies on polling (`get-conversation-details` with `messagesAfter`) until the response arrives (**§A.1**).
 
 #### Where the two “Appendix A” clusters point
 
-- **Earlier in this document** (before Part B): **get-history** UX, **awaiting copy**, **mock SSE pacing** (**§A.3.1**), **SSE recovery polling** (**§A.3.2**), **demo mode** (**§A.6**), **context-out** (**§A.8**).
+- **Earlier in this document** (before Part B): **get-conversation-details** UX, **awaiting copy**, **mock SSE pacing** (**§A.3.1**), **SSE recovery polling** (**§A.3.2**), **demo mode** (**§A.6**), **context-out** (**§A.8**).
 - **This appendix** (end): **§A.0**–**§A.7** and **§A.9** — turn/part state, transport, pagination, `user_action` vs stream, templates, location, mock triggers, demo, feedback row, and this run/API snapshot.
 
 ---
