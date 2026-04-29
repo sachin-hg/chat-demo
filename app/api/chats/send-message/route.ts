@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     event.messageType === "text" || event.responseRequired === true;
   if (shouldExpectResponse) {
     return NextResponse.json(
-      { error: "Use POST /api/chats/send-message-streamed for responseRequired=true turns" },
+      { error: "Use POST /api/v1/chat/send-message-streamed for responseRequired=true turns" },
       { status: 400 }
     );
   }
@@ -29,7 +29,11 @@ export async function POST(request: NextRequest) {
   stored.messageState = "COMPLETED";
 
   return NextResponse.json({
-    messageId: stored.messageId,
-    messageState: getMessageStateByUserMessageId(stored.messageId!) ?? "COMPLETED",
+    statusCode: "2XX",
+    responseCode: "SUCCESS",
+    data: {
+      messageId: stored.messageId,
+      messageState: getMessageStateByUserMessageId(stored.messageId!) ?? "COMPLETED",
+    },
   });
 }

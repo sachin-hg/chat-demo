@@ -27,5 +27,9 @@ export async function POST(request: NextRequest) {
   void cancelEventToML;
 
   cancelRequestByUserMessageId(messageId);
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    statusCode: "2XX",
+    responseCode: "SUCCESS",
+    data: { ok: true },
+  });
 }

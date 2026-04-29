@@ -4,12 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:https": "concurrently -n NEXT,HTTPS -c blue,green \"next dev -p 3000\" \"USE_HTTPS=true node server/dev-https-proxy.cjs\"",
+    "setup:https": "bash ./scripts/setup-https.sh",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
     "dompurify": "^3.2.2",
+    "http-proxy": "^1.18.1",
     "marked": "^15.0.7",
     "next": "^15.0.7",
     "react": "^18.3.1",
@@ -21,6 +24,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^9.2.0",
     "eslint": "^9.16.0",
     "eslint-config-next": "^15.0.7",
     "postcss": "^8.4.49",

@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
     event.messageType === "text" || event.responseRequired === true;
   if (!shouldExpectResponse) {
     return NextResponse.json(
-      { error: "Use POST /api/chats/send-message for responseRequired=false turns" },
+      { error: "Use POST /api/v1/chat/send-message for responseRequired=false turns" },
       { status: 400 }
     );
   }
@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
             return;
           }
 
-          const loginAuthToken = request.headers.get("login_auth_token") ?? undefined;
+          const loginAuthToken = request.headers.get("login-auth-token") ?? undefined;
           const gaId = request.headers.get("_ga") ?? undefined;
           const userId = loginAuthToken ? "authenticated_user" : undefined;
 

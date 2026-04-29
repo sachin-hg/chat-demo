@@ -4,6 +4,7 @@ const DEFAULT_CONV_ID = "c1";
 const MIGRATED_CONV_ID = "c2";
 let activeAnonConversationId = DEFAULT_CONV_ID;
 let activeLoggedInConversationId: string | null = null;
+let activeTokenId: string | null = null;
 let loggedInSeeded = false;
 
 export type MessageState =
@@ -51,6 +52,57 @@ export function getConversationId(): { conversationId: string; isNew: boolean } 
   const conversationId = activeLoggedInConversationId ?? activeAnonConversationId;
   const isNew = events.filter((e) => e.conversationId === conversationId).length === 0;
   return { conversationId, isNew };
+}
+
+export function getConversationDetails(options?: {
+  pageSize?: number;
+  messagesAfter?: string;
+  messagesBefore?: string;
+  tokenIdFromRequest?: string | null;
+  loginAuthTokenFromRequest?: string | null;
+}): {
+  conversationId: string;
+  tokenId: string;
+  messages: StoredEvent[];
+  hasMore: boolean;
+  isNew: boolean;
+} {
+  const tokenIdFromRequest = options?.tokenIdFromRequest?.trim() || null;
+  const loginAuthTokenFromRequest = options?.loginAuthTokenFromRequest?.trim() || null;
+
+  // Token minting rules (prod-aligned):
+  // - If neither login-auth-token nor token_id is provided, mint a fresh token.
+  // - If token_id is provided, echo/use it.
+  // - If login-auth-token is provided but token_id is missing, keep using the last known token for this runtime;
+  //   if none exists yet, mint one so FE can persist and send both on subsequent calls.
+  if (tokenIdFromRequest) {
+    activeTokenId = tokenIdFromRequest;
+  } else if (!loginAuthTokenFromRequest) {
+    activeTokenId = `token_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
+  } else if (!activeTokenId) {
+    activeTokenId = `token_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
+  }
+
+  // Conversation selection/mapping (demo simplification):
+  // - Logged-in users use activeLoggedInConversationId (create if missing).
+  // - Guests use activeAnonConversationId.
+  if (loginAuthTokenFromRequest) {
+    if (!activeLoggedInConversationId) activeLoggedInConversationId = MIGRATED_CONV_ID;
+  }
+
+  const { conversationId, isNew } = getConversationId();
+  const history = getHistory(conversationId, {
+    pageSize: options?.pageSize,
+    messagesAfter: options?.messagesAfter,
+    messagesBefore: options?.messagesBefore,
+  });
+  return {
+    conversationId,
+    tokenId: activeTokenId!,
+    messages: history.messages,
+    hasMore: history.hasMore,
+    isNew,
+  };
 }
 
 export function getChats() {
@@ -277,6 +329,7 @@ export function resetStore() {
   requests.length = 0;
   activeAnonConversationId = DEFAULT_CONV_ID;
   activeLoggedInConversationId = null;
+  activeTokenId = null;
   loggedInSeeded = false;
 }
 

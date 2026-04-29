@@ -14,7 +14,11 @@ export interface Seller {
 export interface LocalityData {
   id: string;
   name: string;
-  city: string;
+  displayName?: string;
+  address?: string;
+  cityName?: string;
+  localityName?: string;
+  cityUuid?: string;
   image: string;
   description: string;
   highlights: string[];
@@ -22,8 +26,9 @@ export interface LocalityData {
   cons: string[];
   url?: string; // link to locality details page
   link?: string; // backward compatibility
-  priceTrend: number; // % change in last 1 year, e.g. 26.7 = +26.7%
+  priceTrend: number; // avg price per sqft
   rating: number;     // 1-5
+  percentGrowth?: number; // % change in last 1 year
 }
 
 export interface SelectionItem {
@@ -62,6 +67,11 @@ export interface PropertyCarouselCard {
 
   title: string; // e.g. "3 BHK flat"
   name?: string | null | undefined; // project name
+
+  // Optional fields that may appear in real payloads / demo cards.
+  price_on_request?: boolean | null | undefined;
+  current_status?: string | null | undefined;
+  possession_date?: string | null | undefined;
 
   short_address: ShortAddressLite[]; // address = short_address.map(x => x.display_name)
   region_entities?: RegionEntityLite[] | null | undefined;
@@ -215,22 +225,29 @@ export const SECTOR_21_OPTIONS: SelectionItem[] = [
 
 // Contract §4.18 — Sector 21 locality sample (for locality_info after nested_qna / "buy")
 export const MOCK_LOCALITY_SECTOR_32_GURGAON = {
-  id: "l1",
-  name: "Sector 32",
-  city: "Gurgaon",
-  url: "https://example.com/locality/sector-32-gurgaon",
-  image: "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=1200&auto=format&fit=crop&q=80",
-  priceTrend: 26.7,
-  rating: 4,
+  id: "f745c4c0226869fa87b8",
+  name: "Sector 37D",
+  displayName: "Sector 37D, Gurgaon",
+  address: "Dwarka Expressway, Gurgaon, Gurgaon District",
+  cityName: "Gurgaon",
+  localityName: "",
+  cityUuid: "3c69d8421a77f8f8b611",
+  rating: 4.5,
+  priceTrend: 11040,
+  image: "https://is1-3.housingcdn.com/d89cff98/149789bd050d77e9b9b05e730b1e7141/v0/version.jpg",
+  percentGrowth: 5.62,
 };
 export const MOCK_LOCALITY_SECTOR_21_GURGAON = {
-  id: "l3",
-  name: "Sector 21",
-  city: "Gurgaon",
-  url: "https://example.com/locality/sector-21-gurgaon",
-  image: "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1200&auto=format&fit=crop&q=80",
-  priceTrend: 22,
-  rating: 4,
+  id: "1864ac472c1a7739556b",
+  name: "Sector 36",
+  displayName: "Sector 36, Sohna, Gurgaon",
+  address: "Sohna, Gurgaon, Gurgaon District",
+  cityName: "Gurgaon",
+  localityName: "",
+  cityUuid: "3c69d8421a77f8f8b611",
+  rating: 4.5,
+  priceTrend: 9740,
+  percentGrowth: -0.96,
 };
 
 

@@ -79,9 +79,10 @@ export function ChatMessage({
     );
   }
 
-  // user_action: only render if isVisible === true and derivedLabel set
+  // user_action: persisted history rows (as in production / sample_conversation.json) often omit `isVisible`.
+  // Treat non-empty derivedLabel as the signal that the action is user-visible.
   if (messageType === "user_action") {
-    if (event.isVisible === true && content.derivedLabel) {
+    if (content.derivedLabel) {
       // System/bot "user_action" should be rendered like bot text (not as a user bubble).
       if (sender.type === "system" || sender.type === "bot") {
         return (
@@ -167,6 +168,12 @@ export function ChatMessage({
               messageId={event.messageId ?? ""}
               onUserAction={onUserAction}
               propertyCount={typeof (data as any).property_count === "number" ? (data as any).property_count : undefined}
+              pagination={
+                typeof (data as any).pagination === "object" && (data as any).pagination !== null
+                  ? ((data as any).pagination as any)
+                  : undefined
+              }
+              userIntent={typeof (data as any).user_intent === "string" ? (data as any).user_intent : undefined}
               service={typeof (data as any).service === "string" ? (data as any).service : undefined}
               category={typeof (data as any).category === "string" ? (data as any).category : undefined}
               city={typeof (data as any).city === "string" ? (data as any).city : undefined}

@@ -37,7 +37,16 @@ async function postAck(path: string, body: unknown): Promise<{ success: true }> 
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  const payload = await res.json();
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "data" in payload &&
+    ("statusCode" in payload || "responseCode" in payload)
+  ) {
+    return payload.data as { success: true };
+  }
+  return payload as { success: true };
 }
 
 export function ShortlistProperty({ data, messageId, onUserAction, disabled = false }: Props) {
@@ -76,7 +85,7 @@ export function ShortlistProperty({ data, messageId, onUserAction, disabled = fa
         responseRequired: false,
         content: {
           data: {
-            action: "shortlist",
+            action: "shortlisted_property",
             replyToMessageId: messageId,
             property: { id: propertyId, type } as PropertyMeta,
           },

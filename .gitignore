@@ -1,3 +1,14 @@
 ./node_modules/
 .next/
 node_modules/*
+.DS_Store
+
+# Local HTTPS certs (generated via mkcert)
+certs/*.pem
+certs/*.key
+certs/*.crt
+certs/*.cert
+android-app/*
+scout-bot/*
+certs/*
+scout-bot/*

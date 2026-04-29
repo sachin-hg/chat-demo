@@ -74,6 +74,7 @@ CANCELLED_BY_USER
 - [`Sender`](lib/contract-types.ts#L19): base sender shape (`type`).
 - [`SenderForML`](lib/contract-types.ts#L23) extends [`Sender`](lib/contract-types.ts#L19): sender plus optional `userId`/`gaId` derived by BE from headers.
 - [`ChatPayloadContent`](lib/contract-types.ts#L29): content envelope (`text`, `templateId`, `data`, `derivedLabel`).
+  - Note: In `sample_conversation.json`, `content.data` may also appear on `messageType: "text"` as optional metadata (e.g. safety-guard info).
 - [`ChatEventFromUser`](lib/contract-types.ts#L38): FE -> BE event shape for send-message APIs.
 - [`ChatEventToML`](lib/contract-types.ts#L51): BE -> ML event shape for user turn dispatch.
 - [`CancelEventToML`](lib/contract-types.ts#L65): BE -> ML cancellation signal shape.
@@ -85,15 +86,17 @@ CANCELLED_BY_USER
 
 ---
 
-### 4.1 `GET /chats/get-conversation-details`
+### 4.1 `GET /v1/chat/get-conversation-details`
 
 This endpoint replaces both **`get-conversation-id`** and **`get-history`**.
 
 Behavior:
 - **Creates a new `conversationId`** if one does not exist for the caller.
 - Returns a **page of messages** for the active conversation with `hasMore`.
-- Returns a **`tokenId`** that uniquely identifies a **non-logged-in** user; FE stores it **forever** and sends it on all future requests.
+- Returns a **`tokenId`** used to uniquely identify a **non-logged-in** user; FE stores it **permanently** (cookie) and sends it on all future requests.
+  - If the request does **not** include either `login-auth-token` or `token_id`, BE **generates a new `tokenId`** and returns it.
   - If `token_id` is sent in the request, the **same** token is returned.
+  - After the first successful call, FE includes **both** `token_id` and `login-auth-token` (when logged in) on all subsequent requests (send, cancel, migrate, history polling).
 
 Pagination:
 - Default `pageSize` is **15**.
@@ -143,13 +146,13 @@ Pagination:
 
 ### 4.2 `GET /chats/get-chats` (removed)
 
-This API has been removed. Clients should rely on `GET /chats/get-conversation-details`, which always returns the active conversation and its paginated messages.
+This API has been removed. Clients should rely on `GET /v1/chat/get-conversation-details`, which always returns the active conversation and its paginated messages.
 
 ---
 
 ### 4.3 History pagination (via `get-conversation-details`)
 
-History is paginated via `GET /chats/get-conversation-details` with:
+History is paginated via `GET /v1/chat/get-conversation-details` with:
 - `pageSize` (optional, default `15`)
 - `messagesBefore` (older messages, exclusive cursor)
 - `messagesAfter` (newer messages, exclusive cursor)
@@ -162,22 +165,22 @@ Rules:
 
 
 Example (`messagesBefore`):
-`GET /chats/get-conversation-details?pageSize=15&messagesBefore=msg_01KQ78N926CK91CVV4WA3X5B1D`
+`GET /v1/chat/get-conversation-details?pageSize=15&messagesBefore=msg_01KQ78N926CK91CVV4WA3X5B1D`
 
 Returns a page of messages older than the cursor message.
 
 Example (`messagesAfter`):
-`GET /chats/get-conversation-details?pageSize=15&messagesAfter=msg_01KQ790JT1R6QCZ2APCW7PTPQZ`
+`GET /v1/chat/get-conversation-details?pageSize=15&messagesAfter=msg_01KQ790JT1R6QCZ2APCW7PTPQZ`
 
 Returns messages strictly newer than the cursor message (typically used for polling/recovery after SSE disconnect).
 
 ---
 
-### 4.4 `POST /chats/send-message` (non-streaming)
+### 4.4 `POST /v1/chat/send-message` (non-streaming)
 
 Use this endpoint **only** when the client sends a turn that **does not** expect an ML/bot reply in the same request cycle: **`responseRequired === false`**. Typical examples: hidden **`user_action`** signals (e.g. shortlist after FE/API success), or other non-text payloads that are fire-and-forget.
 
-**User `messageType: "text"` always expects a bot response** (implicitly or via `responseRequired: true`) and **must not** be sent here — use **`POST /chats/send-message-streamed`** for all user text.
+**User `messageType: "text"` always expects a bot response** (implicitly or via `responseRequired: true`) and **must not** be sent here — use **`POST /v1/chat/send-message-streamed`** for all user text.
 
 **Headers (production)**
 - `token_id` (required once issued by `get-conversation-details`; stored by FE forever)
@@ -192,7 +195,7 @@ Use this endpoint **only** when the client sends a turn that **does not** expect
   "isVisible": false,
   "content": {
     "data": {
-      "action": "shortlist",
+      "action": "shortlisted_property",
       "replyToMessageId": "msg_b_011",
       "property": { "_id": "p2__card_1", "id": "p2", "type": "rent" }
     }
@@ -232,7 +235,7 @@ JSON only:
 
 ---
 
-### 4.5 `POST /chats/cancel`
+### 4.5 `POST /v1/chat/cancel`
 
 ```json
 { "messageId": "msg_301", "conversationId": "conv_1" }
@@ -246,7 +249,7 @@ JSON only:
 
 ---
 
-### 4.6 `POST /chats/send-message-streamed` (SSE)
+### 4.6 `POST /v1/chat/send-message-streamed` (SSE)
 
 Request body is a flattened `ChatEventFromUser` (no `event` envelope). This endpoint requires `Accept: text/event-stream`.
 
@@ -279,8 +282,9 @@ data: {"reason":"response_complete"}
 
 **Usage**
 - **Required** for user **`text`** (always) and for any turn with **`responseRequired === true`** (including `user_action` that expects an ML reply).
-- One request-scoped stream per turn; no long-lived `GET /chats/stream` connection.
+- One request-scoped stream per turn; no long-lived `GET /v1/chat/stream` connection.
 - **chat-demo only:** optional **`ENABLE_MOCK_ML_DELAYS`** pacing between **`chat_event`** lines for local testing — Appendix A §A.3.1.
+- **chat-demo env switch:** when `process.env.NEXT_PUBLIC_PROD === "true"` (or `process.env.PROD === "true"`), the FE points `/api/v1/chat/*` requests to `https://platform-chatbot.housing.com`; otherwise it uses the local mock-backed routes.
 
 ### 4.7 FE Request UI Semantics (canonical)
 
@@ -289,7 +293,7 @@ data: {"reason":"response_complete"}
   - the turn has not yet reached a terminal outcome: the stream has not yet delivered a bot `chat_event` with **terminal** **`sourceMessageState: COMPLETED | ERRORED_AT_ML`** for this turn (Appendix A §A.0), and no surfaced `chat_event` with `messageState: TIMED_OUT_BY_BE` for this request (see §6 SSE).
 - **Awaiting copy (progressive feedback):** Implementations **should** update the awaiting line on a fixed cadence (e.g. once per elapsed second) so long ML turns feel responsive. The exact strings are product-specific; **chat-demo** uses four stages with thresholds at **1s** / **3s** / **7s** elapsed — see Appendix A §A.2 for the full list (web + Android).
 - **Timeout**: FE maintains a local reply timeout safeguard (current app value: `25s`); after timeout UI is shown, FE relies on polling (`get-conversation-details` with `messagesAfter`) until it receives the response for that message.
-- **Stream ends without `connection_close`**: If the HTTP/SSE body closes before a `connection_close` event (network drop, proxy reset, etc.), FE should reconcile from **`get-conversation-details`**. **chat-demo** polls **`GET /chats/get-conversation-details`** on a fixed interval (using `messagesAfter=<last_seen_messageId>`) until the turn shows a **terminal** outcome (last bot part for that user message has **`sourceMessageState: COMPLETED | ERRORED_AT_ML`**, or **`TIMED_OUT_BY_BE`** on the user row), or until a max wait — see **Appendix A §A.3.2** (`HISTORY_POLL_INTERVAL_MS` / `HISTORY_POLL_MAX_MS` in `app/chat/page.tsx`).
+- **Stream ends without `connection_close`**: If the HTTP/SSE body closes before a `connection_close` event (network drop, proxy reset, etc.), FE should reconcile from **`get-conversation-details`**. **chat-demo** polls **`GET /v1/chat/get-conversation-details`** on a fixed interval (using `messagesAfter=<last_seen_messageId>`) until the turn shows a **terminal** outcome (last bot part for that user message has **`sourceMessageState: COMPLETED | ERRORED_AT_ML`**, or **`TIMED_OUT_BY_BE`** on the user row), or until a max wait — see **Appendix A §A.3.2** (`HISTORY_POLL_INTERVAL_MS` / `HISTORY_POLL_MAX_MS` in `app/chat/page.tsx`).
 - **Input/CTA behavior**:
   - while `sending`: composer submit disabled
   - while `awaiting`: template actions disabled, composer shows **Cancel**
@@ -323,11 +327,11 @@ data: {"reason":"response_complete"}
 
 ```json
 {
-  "conversationId": "conv_1",
-  "messageId": "msg_u_456",
+  "conversationId": "conv_01KQ78BJY3Y0J02SRN6YDM3PYS",
+  "messageId": "msg_01KQ78EXZYSB56G458J9M4KXD6",
   "messageType": "text",
   "messageState": "PENDING",
-  "createdAt": "2026-03-16T10:00:00.000Z",
+  "createdAt": "2026-04-27T16:11:17.822468+05:30",
   "sender": { "type": "user", "userId": "usr_123", "gaId": "GA1.2.12345.67890" },
   "content": { "text": "show me properties" },
   "responseRequired": true
@@ -342,9 +346,9 @@ data: {"reason":"response_complete"}
 
 ```json
 {
-  "conversationId": "conv_1",
+  "conversationId": "conv_01KQ78BJY3Y0J02SRN6YDM3PYS",
   "sender": { "type": "bot" },
-  "sourceMessageId": "msg_u_456",
+  "sourceMessageId": "msg_01KQ78EXZYSB56G458J9M4KXD6",
   "sequenceNumber": 1,
   "sourceMessageState": "COMPLETED",
   "messageType": "template",
@@ -376,15 +380,15 @@ ML emits **`sourceMessageState: "ERRORED_AT_ML"`** on `ChatEventFromML` (no per-
 
 ```json
 {
-  "conversationId": "conv_1",
-  "messageId": "msg_b_458",
+  "conversationId": "conv_01KQ78BJY3Y0J02SRN6YDM3PYS",
+  "messageId": "msg_example_error_bot_1",
   "sender": { "type": "bot" },
-  "sourceMessageId": "msg_u_456",
+  "sourceMessageId": "msg_example_user_1",
   "sequenceNumber": 0,
   "messageState": "COMPLETED",
   "sourceMessageState": "ERRORED_AT_ML",
   "messageType": "text",
-  "createdAt": "2025-03-16T12:00:00.000Z",
+  "createdAt": "2026-04-27T16:00:00.000Z",
   "error": {
     "code": "500",
     "message": "Cannot process request"
@@ -406,8 +410,8 @@ ML emits **`sourceMessageState: "ERRORED_AT_ML"`** on `ChatEventFromML` (no per-
     "userId": "usr_123",
     "gaId": "GA1.2.12345.67890"
   },
-  "conversationId": "conv_1",
-  "messageIdToCancel": "msg_u_456",
+  "conversationId": "conv_01KQ78BJY3Y0J02SRN6YDM3PYS",
+  "messageIdToCancel": "msg_example_user_1",
   "cancelReason": "TIMED_OUT_BY_BE"
 }
 ```
@@ -419,7 +423,8 @@ ML emits **`sourceMessageState: "ERRORED_AT_ML"`** on `ChatEventFromML` (no per-
 - SSE is **BE → FE only**
 - `id` always equals `messageId` for chat events
 - Ordering strictly by creation time
-- Analytics & context events are **never sent**
+- Analytics events are **never sent** (Phase 2).
+- `messageType: "context"` is **supported by contract** but is **not present** in the provided `sample_conversation.json`. If/when present, FE must not render it.
 - FE uses history APIs for replay
 
 ### 6.1 SSE event types
@@ -523,7 +528,7 @@ sequenceDiagram
     participant BE as Chat BE
     participant ML as ML Engine
 
-    FE->>BE: POST /chats/send-message-streamed (Accept: text/event-stream)
+    FE->>BE: POST /v1/chat/send-message-streamed (Accept: text/event-stream)<br/>headers: token_id (+ login-auth-token when logged in)
     BE->>BE: persist user event (PENDING)
     BE-->>FE: SSE connection_ack {messageId, messageState:PENDING}
     BE->>ML: invoke ML (method call)
@@ -548,7 +553,7 @@ sequenceDiagram
     participant BE
     participant ML
 
-    FE->>BE: POST /chats/send-message-streamed (Accept: text/event-stream)
+    FE->>BE: POST /v1/chat/send-message-streamed (Accept: text/event-stream)<br/>headers: token_id (+ login-auth-token when logged in)
     BE-->>FE: SSE connection_ack {messageId, messageState:PENDING}
     BE->>ML: enqueue request
 
@@ -556,7 +561,7 @@ sequenceDiagram
     BE->>BE: mark TIMED_OUT_BY_BE
     BE->>ML: cancel_request (advisory)
     BE-->>FE: SSE connection_close (timeout path close)
-    FE->>BE: GET /chats/get-conversation-details?messagesAfter=<last_seen_messageId>
+    FE->>BE: GET /v1/chat/get-conversation-details?messagesAfter=<last_seen_messageId>&pageSize=15<br/>headers: token_id (+ login-auth-token when logged in)
     BE-->>FE: user event surfaced with messageState=TIMED_OUT_BY_BE
 
 ```
@@ -575,11 +580,11 @@ sequenceDiagram
     participant BE
     participant ML
 
-    FE->>BE: POST /chats/send-message-streamed (Accept: text/event-stream)
+    FE->>BE: POST /v1/chat/send-message-streamed (Accept: text/event-stream)<br/>headers: token_id (+ login-auth-token when logged in)
     BE-->>FE: SSE connection_ack {messageId, messageState:PENDING}
     BE->>ML: enqueue request
 
-    FE->>BE: POST /chats/cancel {messageId}
+    FE->>BE: POST /v1/chat/cancel {messageId}
     BE->>BE: mark CANCELLED_BY_USER
     BE->>ML: cancel_request
 
@@ -604,16 +609,16 @@ sequenceDiagram
     participant FE
     participant BE
 
-    FE->>BE: POST /chats/send-message-streamed (Accept: text/event-stream)
+    FE->>BE: POST /v1/chat/send-message-streamed (Accept: text/event-stream)<br/>headers: token_id (+ login-auth-token when logged in)
     BE-->>FE: SSE connection_ack + chat_event(s)
     BE-->>FE: SSE connection_close (request-scoped stream ends)
 
     Note over FE: FE missed events for this turn
 
-    FE->>BE: GET /chats/get-conversation-details?messagesAfter=msg_401
+    FE->>BE: GET /v1/chat/get-conversation-details?messagesAfter=msg_401&pageSize=15<br/>headers: token_id (+ login-auth-token when logged in)
     BE-->>FE: missed messages
 
-    FE->>BE: Next turn opens a fresh POST /chats/send-message-streamed stream
+    FE->>BE: Next turn opens a fresh POST /v1/chat/send-message-streamed stream
 
 ```
 
@@ -631,15 +636,15 @@ sequenceDiagram
     participant DB
 
     Note over FE: User starts chat while logged out (token identity)
-    FE->>BE: GET /chats/get-conversation-details
-    BE-->>FE: { conversationId: "c1", tokenId: "t1", messages: [...] }
-    FE->>BE: POST /chats/send-message* (multiple turns on c1)
+    FE->>BE: GET /v1/chat/get-conversation-details<br/>headers: (no token_id on first call)
+    BE-->>FE: { statusCode: "2XX", responseCode: "SUCCESS", data: { conversationId: "c1", tokenId: "t1", messages: [...] } }
+    FE->>BE: POST /v1/chat/send-message* (multiple turns on c1)
 
     Note over FE: User logs in from shortlist/contact/brochure flow
-    FE->>BE: POST /api/v1/chat/migrate-chat<br/>headers: login-auth-token, token_id
+    FE->>BE: POST /api/v1/chat/migrate-chat<br/>headers: login-auth-token, token_id (both mandatory)
     alt Migration strategy enabled
       BE->>DB: Move c1-tagged events/requests to c2
-      BE-->>FE: { data: { new_conversation_id: "c2" } }
+      BE-->>FE: { statusCode: "2XX", responseCode: "SUCCESS", data: { new_conversation_id: "c2" } }
       Note over FE: FE switches active conversationId to c2<br/>All subsequent FE→BE calls use conversationId=c2<br/>(send-message, get-conversation-details, cancel, stream, …)
       Note over BE: BE must treat c2 as one logical thread:<br/>prior-session c2 history + migrated c1 + current-session c2<br/>(ordering/pagination per §4.3)
     else Migration strategy disabled
@@ -715,13 +720,13 @@ This section records how the **chat-demo** implementation diverges from or exten
 ### A.3.1 Mock ML stream pacing (`send-message-streamed`, chat-demo only)
 
 - **Env:** `ENABLE_MOCK_ML_DELAYS=true` or `1` slows the mock SSE so multipart turns are visible in DevTools.
-- **Behavior** (`app/api/chats/send-message-streamed/route.ts`):
+- **Behavior** (`app/api/v1/chat/send-message-streamed/route.ts`):
   - When **enabled:** ~**6s** after `connection_ack` before the **first** bot `chat_event` (`MOCK_ML_INITIAL_DELAYS_MS`), then **5s** between each subsequent `chat_event` in the same turn (`MOCK_ML_PER_CHAT_EVENT_MS`).
   - When **disabled:** **100ms** after ack, then all `chat_event` lines are sent back-to-back.
 
 ### A.3.2 SSE recovery — `get-conversation-details` polling (chat-demo)
 
-When **`sendMessageStream`** ends without a **`connection_close`** event (see `lib/api.ts` **`onStreamDisconnected`**), **`app/chat/page.tsx`** calls **`fetchHistoryAfterSseDisconnect`**, which polls **`GET /chats/get-conversation-details`** (using `messagesAfter=<lastSeenMessageId>`) until **`isTurnTerminalInHistory()`** is satisfied for the acked user message id (**`lastRequestMessageIdRef`**), or until **`HISTORY_POLL_MAX_MS`** (default **90s**), with **`HISTORY_POLL_INTERVAL_MS`** between requests (default **1500ms**). Terminal semantics align with **`isTerminalSseChatEvent`** / **`getTurnOrMessageState`** (`sourceMessageState` **`COMPLETED`** / **`ERRORED_AT_ML`** on the last bot part for the turn, or **`TIMED_OUT_BY_BE`**). Polling is aborted if the user dismisses/cancels (**`sseHistoryPollAbortRef`**).
+When **`sendMessageStream`** ends without a **`connection_close`** event (see `lib/api.ts` **`onStreamDisconnected`**), **`app/chat/page.tsx`** calls **`fetchHistoryAfterSseDisconnect`**, which polls **`GET /v1/chat/get-conversation-details`** (using `messagesAfter=<lastSeenMessageId>`) until **`isTurnTerminalInHistory()`** is satisfied for the acked user message id (**`lastRequestMessageIdRef`**), or until **`HISTORY_POLL_MAX_MS`** (default **90s**), with **`HISTORY_POLL_INTERVAL_MS`** between requests (default **1500ms**). Terminal semantics align with **`isTerminalSseChatEvent`** / **`getTurnOrMessageState`** (`sourceMessageState` **`COMPLETED`** / **`ERRORED_AT_ML`** on the last bot part for the turn, or **`TIMED_OUT_BY_BE`**). Polling is aborted if the user dismisses/cancels (**`sseHistoryPollAbortRef`**).
 
 **Mock SSE abrupt disconnect (local testing only):** set these **server** env vars when starting `npm run dev` to simulate the stream ending without `connection_close`. The mock still **persists** the first bot message; the client uses this §A.3.2 polling path to reconcile.
 
@@ -760,18 +765,22 @@ When **`sendMessageStream`** ends without a **`connection_close`** event (see `l
 
 ## 0. Core Principles (v1.0)
 
-- **One primary enum**: `messageType`: `context | text | template | user_action | markdown` *(analytics — Phase 2)*
+- **One primary enum**: `messageType`: `context | text | template | user_action | markdown` *(analytics — Phase 2)*  
+  Note: `sample_conversation.json` contains `text | markdown | template | user_action` only (no `context` rows in this sample).
 - **Message origin**: `system` and `user` messages are generated by the **client app**; `bot` messages are generated by **ML** and relayed via BE.  
   **Rendering rule:** `system` and `bot` messages are rendered as bot-side messages, while only `sender.type = user` is rendered in user bubbles.
 - **Message IDs**: `messageId` is generated by **BE** (not FE/ML) for all persisted messages. Every message delivered to FE must include `messageId`.
 - **Every bot message MUST have `messageId`, `sourceMessageId`, `sequenceNumber`, `messageState`, `conversationId`, and `createdAt`** on the persisted **`ChatEventToUser`** shape delivered to FE. **Turn progress** from ML is carried in **`sourceMessageState`** (see Appendix A §A.0); **`messageState`** on bot rows in **chat-demo** is **`COMPLETED`** for each stored part. **`responseRequired`** applies to **user/system-originated** events only; **do not** set it on bot rows (see §4.3 examples).
 - **`sourceMessageId`** ties all bot response messages back to the user message that triggered them
 - In FE-facing events, `sourceMessageId` is optional and generally not required for rendering logic.
-- **`user_action` visibility**: hidden by default — only rendered when `isVisible === true` and `derivedLabel` is set
+- **`user_action` visibility**:
+  - In persisted history (`ChatEventToUser` as seen in `sample_conversation.json`), `isVisible` is typically **absent**.
+  - Treat `content.derivedLabel` (when present and non-empty) as the signal that a `user_action` is user-visible and should be rendered.
 - **For `user_action` replies to prior bot/template messages, use `content.data.replyToMessageId`** (instead of `messageId` inside `data`)
 - **`responseRequired`** on `user_action` and user `text`: tells ML whether to generate a response — always `true` for user text, conditional for user_action
+- **Persisted history rows** (as in `sample_conversation.json`) do **not** include request-only fields like `responseRequired` / `isVisible`. Those are part of FE → BE request payloads only.
 - **Templates are FE-owned** (custom rendering is allowed and expected)
-- **Templates MUST provide a `fallbackText`** *(Phase 2 — not rendered in Phase 1)*
+- **Templates may provide a `fallbackText`** *(Phase 2 — not rendered in Phase 1; not present in `sample_conversation.json`)*
 - **Context is never rendered** (including ML-originated `messageType: "context"` under Option 3). **Analytics** messageType is **Phase 2** — not in Phase 1 scope.
 - **Context-out (Option 3 — proposed, not closed):** ML may append `messageType: "context"` with `sender.type: "bot"` in the `sourceMessageId` chain when intent changes; `content.data` matches system context (§4.1). No `summarisedChatContext` on bot payloads. Terminal **`COMPLETED`** only on the **last** ML event for the turn (§5.2, §10.6).
 - **All future changes must be additive (v1.x)**
@@ -783,42 +792,39 @@ When **`sendMessageStream`** ends without a **`connection_close`** event (see `l
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "ChatEvent",
-  "type": "object",
-  "required": ["sender", "messageType", "content"],
-  "properties": {
-    "messageId": {
-      "type": "string",
-      "description": "Unique ID for this message. Always generated by BE. FE and ML must not generate messageId."
+  "title": "ChatEvent (request vs persisted)",
+  "description": "This schema models both FE→BE request events and BE→FE persisted history events. The provided sample_conversation.json contains only persisted history rows (ChatEventToUser).",
+  "definitions": {
+    "Sender": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "enum": ["user", "bot", "system"] }
+      },
+      "additionalProperties": true
     },
-    "sourceMessageId": {
-      "type": "string",
-      "description": "BE sends user messageId to ML; ML echoes it back on all response messages for turn correlation. Required when sender.type = bot."
-    },
-    "sequenceNumber": {
-      "type": "integer",
-      "minimum": 0,
-      "description": "0-based position within the response sequence for a single user turn. Required when sender.type = bot."
-    },
-    "responseRequired": {
-      "type": "boolean",
-      "description": "FE-controlled on user/system outbound requests. true = expect ML reply; false = fire-and-forget. Omitted on bot (BE→FE) rows."
-    },
-    "messageType": {
+    "MessageType": {
       "type": "string",
       "enum": ["context", "text", "template", "user_action", "markdown"],
       "description": "analytics is Phase 2 — not in Phase 1 schema."
     },
-    "isVisible": {
-      "type": "boolean",
-      "description": "Only meaningful for messageType = user_action."
+    "MessageState": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "IN_PROGRESS",
+        "COMPLETED",
+        "ERRORED_AT_ML",
+        "TIMED_OUT_BY_BE",
+        "CANCELLED_BY_USER"
+      ]
     },
-    "content": {
+    "Content": {
       "type": "object",
       "properties": {
         "text": {
           "type": "string",
-          "description": "Plain text or Markdown depending on messageType"
+          "description": "Plain text or Markdown depending on messageType. Note: sample_conversation.json also includes optional content.data on messageType=text as metadata."
         },
         "templateId": { "type": "string" },
         "data": { "type": "object" },
@@ -828,63 +834,70 @@ When **`sendMessageStream`** ends without a **`connection_close`** event (see `l
         },
         "derivedLabel": {
           "type": "string",
-          "description": "FE-authored display text for user_action. Persisted by BE so history can render the same shown action text."
+          "description": "Display text for user_action when present. In sample_conversation.json, derivedLabel may be absent or an empty string."
         }
       },
       "additionalProperties": false
     },
-    "conversationId": { "type": "string" },
 
-    "sender": {
+    "ChatEventToUser": {
       "type": "object",
-      "required": ["type"],
+      "description": "Persisted BE→FE history/stream row. Matches sample_conversation.json.",
+      "required": ["conversationId", "messageId", "messageType", "messageState", "createdAt", "sender", "content"],
       "properties": {
-        "type": { "type": "string", "enum": ["user", "bot", "system"] }
-      }
+        "conversationId": { "type": "string" },
+        "messageId": {
+          "type": "string",
+          "description": "Unique ID for this message. Generated by BE."
+        },
+        "messageType": { "$ref": "#/definitions/MessageType" },
+        "messageState": { "$ref": "#/definitions/MessageState" },
+        "createdAt": { "type": "string", "description": "ISO-8601 timestamp string." },
+        "sender": { "$ref": "#/definitions/Sender" },
+        "content": { "$ref": "#/definitions/Content" },
+
+        "sourceMessageId": { "type": "string" },
+        "sourceMessageState": { "$ref": "#/definitions/MessageState" },
+        "sequenceNumber": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": { "properties": { "sender": { "properties": { "type": { "const": "bot" } } } } },
+          "then": { "required": ["sourceMessageId", "sourceMessageState", "sequenceNumber"] }
+        },
+        {
+          "if": { "properties": { "messageType": { "const": "user_action" } } },
+          "then": { "properties": { "content": { "required": ["data"] } } }
+        }
+      ]
     },
 
-    "messageState": {
-      "type": "string",
-      "enum": [
-        "PENDING",
-        "IN_PROGRESS",
-        "COMPLETED",
-        "ERRORED_AT_ML",
-        "TIMED_OUT_BY_BE",
-        "CANCELLED_BY_USER"
-      ],
-      "description": "BE-resolved request lifecycle state for this message/turn."
-    },
+    "ChatEventFromUser": {
+      "type": "object",
+      "description": "FE→BE request event. Request-only fields (responseRequired, isVisible) appear here and are not present on persisted history rows.",
+      "required": ["conversationId", "sender", "messageType", "content", "responseRequired"],
+      "properties": {
+        "conversationId": { "type": "string" },
+        "sender": { "$ref": "#/definitions/Sender" },
+        "messageType": { "$ref": "#/definitions/MessageType" },
+        "content": { "$ref": "#/definitions/Content" },
+        "responseRequired": { "type": "boolean" },
+        "isVisible": { "type": "boolean" }
+      },
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": { "properties": { "messageType": { "const": "user_action" } } },
+          "then": { "properties": { "content": { "required": ["data"] } } }
+        }
+      ]
+    }
   },
 
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "sender": { "properties": { "type": { "const": "bot" } } }
-        }
-      },
-      "then": {
-        "properties": {
-          "messageId": { "type": "string" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "messageType": { "const": "user_action" }
-        }
-      },
-      "then": {
-        "properties": {
-          "content": {
-            // content.data is required; derivedLabel is required only when isVisible = true
-            "required": ["data"]
-          }
-        }
-      }
-    }
+  "oneOf": [
+    { "$ref": "#/definitions/ChatEventToUser" },
+    { "$ref": "#/definitions/ChatEventFromUser" }
   ]
 }
 ```
@@ -898,7 +911,7 @@ When **`sendMessageStream`** ends without a **`connection_close`** event (see `l
 | text | ✅ | ✅ | ✅ | yes when FE expects reply (`responseRequired: true`); **user text always streamed** |
 | markdown | ❌ | ✅ | ❌ | — (omitted on bot BE → FE) |
 | template | ❌ | ✅ | ❌ | — (omitted on bot BE → FE) |
-| user_action | ✅ | ❌ | ✅ | yes/no per turn; hidden signals often `false` → `POST /chats/send-message` |
+| user_action | ✅ | ❌ | ✅ | yes/no per turn; hidden signals often `false` → `POST /v1/chat/send-message` |
 
 *Analytics is **Phase 2** — not in Phase 1. **`responseRequired` is not present on persisted bot messages.**
 
@@ -928,7 +941,7 @@ When **`sendMessageStream`** ends without a **`connection_close`** event (see `l
 
 ## 4. Examples
 
-Property payload shape reference APIs (for template `data.property` / `data.properties[]`):
+Property payload shape reference APIs (for template payloads that carry a property object, e.g. `data.property`, top-level `data`, or `data.properties[]`):
 
 - Venus project details: [PROJECT_DEDICATED_DETAILS](https://venus.housing.com/api/v9/new-projects/288866/android?fixed_images_hash=true&include_derived_floor_plan=true&api_name=PROJECT_DEDICATED_DETAILS&source=android)
 - Casa resale details: [RESALE_DEDICATED_DETAILS](https://casa.housing.com/api/v2/flat/18151449/resale/details?api_name=RESALE_DEDICATED_DETAILS&source=android)
@@ -941,26 +954,24 @@ Property payload shape reference APIs (for template `data.property` / `data.prop
 **Semantics (system & bot `messageType: "context"`):** `content.data` uses one shape for **both** `sender.type: "system"` and `sender.type: "bot"`.
 
 - **`user_intent`:** **System** messages (Phase 1): `home`, `SRP`, `details`. **Bot** messages: `SRP`, `details`, `localityReviewDedicated`, `localityOverview`, `PRICE_TRENDS`, … — as of Phase 1 the FE only consumes **`SRP`** for navigation/update behavior.
-- **SRP routing hints (top-level, driven by ML / launch context):** when **`user_intent === "SRP"`**, FE may use **`poly`**, **`est`**, **`uuid`**, **`properties`** (e.g. `type === "project"`) to open the relevant SRP. **`poly`** — polygon UUIDs for polygon SRP (today). Future **`user_intent`** values (e.g. `localityOverview`) may reuse these fields for other flows.
-- **`filters`:** Search filters (see `filterMap.js`). Do **not** duplicate **`poly`** / **`est`** / **`uuid`** / **`properties`** inside `filters`; those live at the top level of **`data`** above.
+- **SRP routing hints (top-level, driven by ML / launch context):** when **`user_intent === "SRP"`**, FE may use **`entities`** and **`properties`** (e.g. `type === "project"`) to open the relevant SRP. `entities` is the preferred field moving forward.
+- **Backward compatibility:** FE should still accept legacy **`poly`** on existing payloads. During the migration, treat `entities` as primary and `poly` as a fallback alias for the same SRP-routing concept.
+- **`filters`:** Search filters (see `filterMap.js`). Do **not** duplicate **`entities`** / legacy **`poly`** / **`properties`** inside `filters`; those live at the top level of **`data`** above.
 
 ```json
 {
   "sender": { "type": "system" },
   "messageType": "context",
-  "createdAt": "2025-03-16T12:00:00.000Z",
+  "createdAt": "2026-04-27T16:00:00.000Z",
   "content": {
     "data": {
       "user_intent": "SRP",
       "service": "buy",
       "category": "residential",
       "city": "526acdc6c33455e9e4e9",
-      "poly": ["dce9290ec3fe8834a293"],
-      "est": 194298,
+      "entities": [{ "id": "dce9290ec3fe8834a293", "type": "locality" }],
       "properties": [{ "id": 123, "type": "project" }],
-      "uuid": [], // builder uuid when searching for properties posted by a builder - builder SRP page
       "filters": {
-        // below are sample filters. for complete list of available filers see filterMap.js
         "apartment_type_id": [1, 2],
         "contact_person_id": [1, 2],
         "facing": ["east", "west"],
@@ -975,7 +986,7 @@ Property payload shape reference APIs (for template `data.property` / `data.prop
         "routing_range_type": "time",
         "min_price": 100,
         "property_type_id": [1, 2],
-        "type": "project", // project/resale
+        "type": "project",
         "region_entity_id": 31817,
         "region_entity_type": "project",
         "qv_resale_id": 1234,
@@ -986,10 +997,111 @@ Property payload shape reference APIs (for template `data.property` / `data.prop
 }
 ```
 
+Resale property sample (same `property_carousel` list item shape):
+```json
+{
+  "id": "19568766",
+  "type": "resale",
+  "title": "3 BHK Flat",
+  "short_address": [
+    { "polygon_uuid": "f745c4c0226869fa87b8", "display_name": "Sector 37D" },
+    { "polygon_uuid": "3c69d8421a77f8f8b611", "display_name": "Gurgaon" }
+  ],
+  "thumb_image_url": "https://is1-2.housingcdn.com/01c16c28/fbdcc0e03ea8412c8f7affa5d4ecd5f9/v0/version/3_bhk_apartment-for-sale-sector_37d-Gurgaon-bedroom_one.jpg",
+  "inventory_canonical_url": "/in/buy/resale/page/19568766-3-bhk-apartment-in-sector-37d-for-rs-14000000",
+  "property_tags": ["Possession: Apr 2026", "Resale", "semi furnished", "Ready to Move"],
+  "is_rera_verified": true,
+  "is_verified": true,
+  "formatted_min_price": "1.4 Cr",
+  "formatted_max_price": "1.4 Cr",
+  "formatted_price": "1.4 Cr",
+  "unit_of_area": "sq.ft.",
+  "display_area_type": "Builtup Area",
+  "inventory_configs": [
+    {
+      "seller": [1],
+      "area_in_sq_ft": 1485,
+      "formatted_per_unit_rate": "9.43k",
+      "is_parking_chargeable": null,
+      "is_painting_chargeable": null,
+      "is_rent_maintenance_chargeable": null,
+      "open_parking_count": 1,
+      "is_security_deposit_chargeable": true,
+      "area_value_in_unit": 1485,
+      "property_type_id": 1,
+      "property_category_id": 1,
+      "flat_config_id": 19568766,
+      "furnish_type_id": 2,
+      "lock_in_period": null,
+      "price": 14000000,
+      "formatted_per_sqft_rate": "9.43k",
+      "is_brokerage_chargeable": true,
+      "parking_charges": null,
+      "id": 19568766,
+      "area": 1485,
+      "is_brokerage_negotiable": false,
+      "brokerage": 140000,
+      "number_of_bedrooms": 3,
+      "derived_per_sqft_rate": 9427,
+      "maintenance_charges_rent": null,
+      "apartment_type_id": 4,
+      "parking_count": 2,
+      "derived_price": 14000000,
+      "apartment_type": "3 BHK",
+      "seat_count": null,
+      "per_sqft_rate": 9427,
+      "cabin_count": null,
+      "formatted_price": "1.4 Cr",
+      "formatted_per_sq_unit_area_rate": "9.43k",
+      "per_unit_rate": 9427,
+      "facing": "north-east",
+      "actual_property_type_id": 1,
+      "property_category": "residential",
+      "property_category_type_mapping_id": "1",
+      "property_type": "Apartment",
+      "price_on_request": false,
+      "covered_parking_count": 1,
+      "number_of_toilets": 3,
+      "security_deposit": 0,
+      "is_lock_in_period_chargeable": null,
+      "maintenance_charges_buy": 5000,
+      "is_available": true,
+      "carpet_area": 1385,
+      "total_balcony_count": 3,
+      "completion_date": 1461664225,
+      "per_sq_unit_area_rate": 9427,
+      "painting_charges": null
+    }
+  ],
+  "region_entities": [
+    {
+      "inventory_canonical_url": "/in/buy/projects/page/103934-ramprastha-the-view-by-ramprastha-promoters-developers-private-ltd-in-sector-37d",
+      "is_rera_verified": true,
+      "duplicate_project_id": "null",
+      "latitude": 28.447289,
+      "initiation_date": 1243794600,
+      "type": "project",
+      "has_transaction": false,
+      "review_rating": 3.8,
+      "entity_url": "/in/buy/projects/page/103934-ramprastha-the-view-by-ramprastha-promoters-developers-private-ltd-in-sector-37d",
+      "is_post_rera": true,
+      "name": "Ramprastha The View",
+      "paid": false,
+      "show_project_name": true,
+      "completion_date": 1446336000,
+      "id": "103934",
+      "status": "ACTIVE",
+      "longitude": 76.970375
+    }
+  ],
+  "price_on_request": false
+}
+```
+
 ---
 ### 4.2 Transport-level SSE examples
 
-`POST /chats/send-message-streamed` with `Accept: text/event-stream`:
+`POST /v1/chat/send-message-streamed` with `Accept: text/event-stream`:
 
 ```txt
 event: connection_ack
@@ -1009,7 +1121,7 @@ data: {"reason":"response_complete"}
 
 > **SSE `data` lines:** The `chat_event` payloads above are **abbreviated** for readability. Production **`chat_event`** / **history** rows use the full **`ChatEventToUser`** object (`conversationId`, `createdAt`, **`sourceMessageState`** on bot rows for turn progress, …; bot rows omit `responseRequired`) as in §4.3.
 
-> **Important:** For **non-streaming** turns only (`responseRequired === false`, not user text), FE uses `POST /chats/send-message` and receives JSON `{ messageId, messageState: "COMPLETED" }`. User **text** always uses **`send-message-streamed`**.
+> **Important:** For **non-streaming** turns only (`responseRequired === false`, not user text), FE uses `POST /v1/chat/send-message` and receives `{ statusCode: "2XX", responseCode: "SUCCESS", data: { messageId, messageState: "COMPLETED" } }`. User **text** always uses **`send-message-streamed`**.
 
 ---
 
@@ -1030,16 +1142,19 @@ data: {"reason":"response_complete"}
 #### 4.3.2 Bot text fallback
 ```json
 {
-  "conversationId": "conv_1",
-  "messageId": "msg_b_001",
+  "conversationId": "conv_01KQ78BJY3Y0J02SRN6YDM3PYS",
+  "messageId": "msg_01KQ78TMQVTNRB8PKVH665974E",
   "sender": { "type": "bot" },
-  "sourceMessageId": "msg_u_001",
+  "sourceMessageId": "msg_01KQ78TKQJA22G6Z8QRS3S5HN4",
   "sequenceNumber": 0,
   "messageState": "COMPLETED",
   "sourceMessageState": "COMPLETED",
   "messageType": "text",
-  "createdAt": "2025-03-16T12:00:00.000Z",
-  "content": { "text": "Hey! I'm still learning. Wont be able to help you with this. Anything else?" }
+  "createdAt": "2026-04-27T16:17:41.569311+05:30",
+  "content": {
+    "text": "That's a bit outside my lane 😅\nI'm here to help with home search and locality insights.",
+    "data": { "guard_blocked_by": "llm", "guard_category": "out_of_scope" }
+  }
 }
 ```
 
@@ -1056,118 +1171,80 @@ data: {"reason":"response_complete"}
 #### 4.3.4 Bot multipart: intro text + property carousel
 ```json
 {
-  "conversationId": "conv_1",
-  "messageId": "msg_b_010",
+  "conversationId": "conv_01KQ78BJY3Y0J02SRN6YDM3PYS",
+  "messageId": "msg_01KQ78F0HZ4PGQFKAMPV71QSTT",
   "sender": { "type": "bot" },
-  "sourceMessageId": "msg_u_010",
+  "sourceMessageId": "msg_01KQ78EXZYSB56G458J9M4KXD6",
   "sequenceNumber": 0,
   "messageState": "COMPLETED",
   "sourceMessageState": "IN_PROGRESS",
   "messageType": "text",
-  "createdAt": "2025-03-16T12:00:00.000Z",
-  "content": { "text": "Here are 2bhk properties in sector 32 gurgaon" }
+  "createdAt": "2026-04-27T16:11:20.462403+05:30",
+  "content": { "text": "Got it, searching for properties to buy in Gurgaon near Sector 37D! 🏠🔍" }
 }
 ```
 ```json
 {
-  "conversationId": "conv_1",
-  "messageId": "msg_b_011",
+  "conversationId": "conv_01KQ78BJY3Y0J02SRN6YDM3PYS",
+  "messageId": "msg_01KQ78F0PM3CGR8KR7X1RKVQMC",
   "sender": { "type": "bot" },
-  "sourceMessageId": "msg_u_010",
+  "sourceMessageId": "msg_01KQ78EXZYSB56G458J9M4KXD6",
   "sequenceNumber": 1,
   "messageState": "COMPLETED",
-  "sourceMessageState": "COMPLETED",
+  "sourceMessageState": "IN_PROGRESS",
   "messageType": "template",
-  "createdAt": "2025-03-16T12:00:00.000Z",
+  "createdAt": "2026-04-27T16:11:20.603525+05:30",
   "content": {
     "templateId": "property_carousel",
     "data": {
-      // this is still under discussion, required to power "view all" button. discuss if this should be replaced with "hasViewMore"
-      "property_count": 15,
+      "user_intent": "SRP",
       "service": "buy",
       "category": "residential",
-      "city": "526acdc6c33455e9e4e9",
-      "filters": {
-        "poly": ["dce9290ec3fe8834a293"],
-        "est": 194298,
-        "region_entity_id": 31817,
-        "region_entity_type": "project",
-        "uuid": [],
-        "qv_resale_id": 1234,
-        "qv_rent_id": 12345,
-        "apartment_type_id": [1, 2],
-        "contact_person_id": [1, 2],
-        "facing": ["east", "west"],
-        "has_lift": true,
-        "is_gated_community": true,
-        "is_verified": true,
-        "max_area": 4000,
-        "max_poss": 0,
-        "max_price": 4800000,
-        "radius": 3000,
-        "routing_range": 10,
-        "routing_range_type": "time",
-        "min_price": 100,
-        "property_type_id": [1, 2],
-        "type": "project"
-      },
-      // structure should be similar to corresponding venus/casa APIs. this is just sample
+      "city": { "city_name": "Gurgaon", "display_name": "Gurgaon", "city_uuid": "3c69d8421a77f8f8b611", "bbx_uuid": "526acdc6c33455e9e4e9", "id": "526acdc6c33455e9e4e9" },
+      "entities": [{ "id": "f745c4c0226869fa87b8", "display_name": "Sector 37D, Gurgaon", "uuid": "f745c4c0226869fa87b8", "city": "Gurgaon", "type": "locality" }],
+      "pagination": { "p": 2, "results_per_page": 10, "is_last_page": false, "cursor": "-1977752683", "resale_total_count": 394, "np_total_count": 35 },
+      "filters": { "apartment_type_id": [], "contact_person_id": [], "furnish_type_id": [], "property_type_id": [], "amenities": [], "facing": [] },
       "properties": [
         {
-          "_id": "p1__card_1",
-          "id": "p1",
+          "id": "107997",
           "type": "project",
-          "title": "2, 3 BHK Apartments",
-          "name": "Godrej Air",
-          "short_address": [{ "display_name": "Sector 85" }, { "display_name": "Gurgaon" }],
+          "title": "3 BHK Flat",
+          "name": "Ramprastha Skyz",
+          "short_address": [
+            { "polygon_uuid": "f745c4c0226869fa87b8", "display_name": "Sector 37D" },
+            { "polygon_uuid": "3c69d8421a77f8f8b611", "display_name": "Gurgaon" }
+          ],
+          "thumb_image_url": "https://is1-3.housingcdn.com/4f2250e8/e4d1147af944a8bb439b19a95e78eea8/v0/version/ramprastha_skyz-sector_37d-gurgaon-ramprastha_promoters_%26_developers_private_ltd.jpeg",
+          "inventory_canonical_url": "/in/buy/projects/page/107997-ramprastha-skyz-by-ramprastha-promoters-developers-private-ltd-in-sector-37d",
+          "property_tags": ["Ready to Move", "Project", "RERA Approved"],
           "is_rera_verified": true,
-          "inventory_canonical_url": "https://example.com/property/p1",
-          "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
-          "property_tags": ["Ready to move"],
-          "formatted_min_price": "3 Cr",
-          "formatted_max_price": "3.5 Cr",
+          "formatted_min_price": "1.29 Cr",
+          "formatted_max_price": "1.52 Cr",
+          "formatted_price": "1.29 Cr",
           "unit_of_area": "sq.ft.",
-          "display_area_type": "Built up area",
-          "min_selected_area_in_unit": 2500,
-          "max_selected_area_in_unit": 4750,
-          "inventory_configs": []
-        },
-        {
-          "_id": "p2__card_1",
-          "id": "p2",
-          "type": "rent",
-          "title": "3 BHK flat",
-          "short_address": [{ "display_name": "Sector 33" }, { "display_name": "Sohna" }, { "display_name": "Gurgaon" }],
-          "region_entities": [{ "name": "M3M Solitude Ralph Estate" }],
-          "is_rera_verified": false,
-          "is_verified": true,
-          "inventory_canonical_url": "https://example.com/property/p2",
-          "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
-          "property_tags": [],
-          "formatted_price": "30,000",
-          "unit_of_area": "sq.ft.",
-          "display_area_type": "Built up area",
-          "inventory_configs": [{ "furnish_type_id": 2, "area_value_in_unit": 4750 }]
-        },
-        {
-          "_id": "p3__card_1",
-          "id": "p3",
-          "type": "resale",
-          "title": "3 BHK apartment",
-          "short_address": [{ "display_name": "Sector 33" }, { "display_name": "Sohna" }, { "display_name": "Gurgaon" }],
-          "region_entities": [{ "name": "M3M Solitude Ralph Estate" }],
-          "is_rera_verified": false,
-          "is_verified": true,
-          "inventory_canonical_url": "https://example.com/property/p3",
-          "thumb_image_url": "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=600",
-          "property_tags": ["Possession by March, 2026"],
-          "formatted_min_price": "3 Cr",
-          "unit_of_area": "sq.ft.",
-          "display_area_type": "Built up area",
-          "inventory_configs": [{ "furnish_type_id": null, "area_value_in_unit": 4750 }]
+          "display_area_type": "Super Builtup Area",
+          "min_selected_area_in_unit": 1725,
+          "max_selected_area_in_unit": 2025,
+          "inventory_configs": [{ "formatted_price": "1.29 Cr", "per_unit_rate": 7500, "price_on_request": false, "number_of_bedrooms": 3 }]
         }
       ]
     }
+  }
+}
+```
+```json
+{
+  "conversationId": "conv_01KQ78BJY3Y0J02SRN6YDM3PYS",
+  "messageId": "msg_01KQ78F0PNQMCB7Y16XYHR7VTH",
+  "sender": { "type": "bot" },
+  "sourceMessageId": "msg_01KQ78EXZYSB56G458J9M4KXD6",
+  "sequenceNumber": 2,
+  "messageState": "COMPLETED",
+  "sourceMessageState": "COMPLETED",
+  "messageType": "markdown",
+  "createdAt": "2026-04-27T16:11:20.618227+05:30",
+  "content": {
+    "text": "Tap **Learn more** to dig deeper or ask anything about a property.\nYou can filter based on budget, furnishing construction status and more…."
   }
 }
 ```
@@ -1181,7 +1258,7 @@ data: {"reason":"response_complete"}
   "isVisible": false,
   "content": {
     "data": {
-      "action": "shortlist",
+      "action": "shortlisted_property",
       "replyToMessageId": "msg_b_011",
       "property": { "_id": "p2__card_1", "id": "p2", "type": "rent" }
     }
@@ -1198,7 +1275,7 @@ data: {"reason":"response_complete"}
   "isVisible": true,
   "content": {
     "data": {
-      "action": "crf_submitted",
+      "action": "contacted_seller",
       "replyToMessageId": "msg_b_011",
       "property": { "_id": "p2__card_1", "id": "p2", "type": "rent" }
     },
@@ -1249,33 +1326,32 @@ data: {"reason":"response_complete"}
 ```
 ```json
 {
-  "conversationId": "conv_1",
-  "messageId": "msg_b_020",
+  "conversationId": "conv_01KQ78BJY3Y0J02SRN6YDM3PYS",
+  "messageId": "msg_01KQ78QPVV5QR7E676XH14ZVC7",
   "sender": { "type": "bot" },
-  "sourceMessageId": "msg_u_020",
-  "sequenceNumber": 0,
+  "sourceMessageId": "msg_01KQ78QJ4F0Y7DJHRTETGRC6ED",
+  "sequenceNumber": 1,
   "messageState": "COMPLETED",
+  "sourceMessageState": "COMPLETED",
   "messageType": "template",
-  "createdAt": "2025-03-16T12:00:00.000Z",
+  "createdAt": "2026-04-27T16:16:05.441350+05:30",
   "content": {
     "templateId": "shortlist_property",
     "data": {
-      // structure should be similar to corresponding venus/casa APIs. this is just sample
       "property": {
-        "id": "p2",
-        "type": "rent",
-        "title": "3 BHK flat",
-        "short_address": [{ "display_name": "Sector 33" }, { "display_name": "Sohna" }, { "display_name": "Gurgaon" }],
-        "region_entities": [{ "name": "M3M Solitude Ralph Estate" }],
-        "is_rera_verified": false,
+        "id": "19688193",
+        "type": "resale",
+        "title": "3 BHK Independent Builder Floor",
+        "short_address": [
+          { "display_name": "Sector 88", "polygon_uuid": "1b82980658e1ccb0fcc5" },
+          { "display_name": "Faridabad", "polygon_uuid": "83ad92bd0696e4e5975b" }
+        ],
+        "thumb_image_url": "https://is1-2.housingcdn.com/01c16c28/0158e4b7bc4099e37a8e8080936a0948/v0/version/3_bhk_independent_builder_floor-for-sale-sector_88_faridabad-Faridabad-living_room.jpg",
+        "inventory_canonical_url": "/in/buy/resale/page/19688193-3-bhk-independent-floor-in-sector-88-for-rs-11600000",
+        "property_tags": ["New Construction", "Resale", "unfurnished", "Ready to Move"],
         "is_verified": true,
-        "inventory_canonical_url": "https://example.com/property/p2",
-        "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
-        "property_tags": [],
-        "formatted_price": "30,000",
         "unit_of_area": "sq.ft.",
-        "display_area_type": "Built up area",
-        "inventory_configs": [{ "furnish_type_id": 2, "area_value_in_unit": 4750 }]
+        "inventory_configs": [{ "formatted_price": "1.16 Cr", "facing": "East" }]
       }
     }
   }
@@ -1283,33 +1359,36 @@ data: {"reason":"response_complete"}
 ```
 ```json
 {
-  "conversationId": "conv_1",
-  "messageId": "msg_b_021",
+  "conversationId": "conv_01KQ78BJY3Y0J02SRN6YDM3PYS",
+  "messageId": "msg_01KQ78SH7BKFMTNKXJZE11VAV8",
   "sender": { "type": "bot" },
-  "sourceMessageId": "msg_u_021",
-  "sequenceNumber": 0,
+  "sourceMessageId": "msg_01KQ78SDC8E2X4ATS7E8A4MJ43",
+  "sequenceNumber": 1,
   "messageState": "COMPLETED",
+  "sourceMessageState": "COMPLETED",
   "messageType": "template",
-  "createdAt": "2025-03-16T12:00:00.000Z",
+  "createdAt": "2026-04-27T16:17:05.209594+05:30",
   "content": {
     "templateId": "contact_seller",
     "data": {
-      // structure should be similar to corresponding venus/casa APIs. this is just sample
       "property": {
-        "id": "p2",
-        "type": "rent",
-        "title": "3 BHK flat",
-        "short_address": [{ "display_name": "Sector 33" }, { "display_name": "Sohna" }, { "display_name": "Gurgaon" }],
-        "region_entities": [{ "name": "M3M Solitude Ralph Estate" }],
+        "id": "794",
+        "type": "project",
+        "title": "2, 2.5, 3, 4 BHK Apartments",
+        "name": "RPS Savana",
+        "short_address": [
+          { "display_name": "Sector 88", "polygon_uuid": "1b82980658e1ccb0fcc5" },
+          { "display_name": "Faridabad", "polygon_uuid": "83ad92bd0696e4e5975b" }
+        ],
+        "inventory_canonical_url": "/in/buy/projects/page/794-rps-savana-by-rps-infrastructure-ltd-in-sector-88",
+        "property_tags": ["Ready to Move", "Project"],
         "is_rera_verified": false,
-        "is_verified": true,
-        "inventory_canonical_url": "https://example.com/property/p2",
-        "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
-        "property_tags": [],
-        "formatted_price": "30,000",
+        "formatted_min_price": "90.0 L",
+        "formatted_max_price": "2.5 Cr",
         "unit_of_area": "sq.ft.",
-        "display_area_type": "Built up area",
-        "inventory_configs": [{ "furnish_type_id": 2, "area_value_in_unit": 4750 }]
+        "min_selected_area_in_unit": 1250,
+        "max_selected_area_in_unit": 2360,
+        "inventory_configs": [{ "title": "2 BHK Apartment", "possession_date": "Mar, 2016", "price_on_request": false }]
       }
     }
   }
@@ -1328,35 +1407,43 @@ data: {"reason":"response_complete"}
 #### Locality carousel sample (ML response)
 ```json
 {
-  "conversationId": "conv_1",
-  "messageId": "msg_b_025",
+  "conversationId": "conv_01KQ78BJY3Y0J02SRN6YDM3PYS",
+  "messageId": "msg_01KQ78C2TQETB61SA888FVJT4Z",
   "sender": { "type": "bot" },
-  "sourceMessageId": "msg_u_025",
-  "sequenceNumber": 0,
+  "sourceMessageId": "msg_01KQ78BZ378EA15Y78V75HE9TJ",
+  "sequenceNumber": 1,
   "messageState": "COMPLETED",
   "messageType": "template",
-  "createdAt": "2025-03-16T12:00:00.000Z",
+  "sourceMessageState": "IN_PROGRESS",
+  "createdAt": "2026-04-27T16:09:44.477434+05:30",
   "content": {
     "templateId": "locality_carousel",
     "data": {
       "localities": [
         {
-          "id": "l1",
-          "name": "Sector 32",
-          "city": "Gurgaon",
-          "url": "https://example.com/locality/sector-32-gurgaon",
-          "image": "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=1200&auto=format&fit=crop&q=80",
-          "priceTrend": 26.7,
-          "rating": 4
+          "id": "f745c4c0226869fa87b8",
+          "name": "Sector 37D",
+          "displayName": "Sector 37D, Gurgaon",
+          "address": "Dwarka Expressway, Gurgaon, Gurgaon District",
+          "cityName": "Gurgaon",
+          "localityName": "",
+          "cityUuid": "3c69d8421a77f8f8b611",
+          "rating": 4.5,
+          "priceTrend": 11040,
+          "image": "https://is1-3.housingcdn.com/d89cff98/149789bd050d77e9b9b05e730b1e7141/v0/version.jpg",
+          "percentGrowth": 5.62
         },
         {
-          "id": "l3",
-          "name": "Sector 21",
-          "city": "Gurgaon",
-          "url": "https://example.com/locality/sector-21-gurgaon",
-          "image": "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1200&auto=format&fit=crop&q=80",
-          "priceTrend": 22,
-          "rating": 4
+          "id": "1864ac472c1a7739556b",
+          "name": "Sector 36",
+          "displayName": "Sector 36, Sohna, Gurgaon",
+          "address": "Sohna, Gurgaon, Gurgaon District",
+          "cityName": "Gurgaon",
+          "localityName": "",
+          "cityUuid": "3c69d8421a77f8f8b611",
+          "rating": 4.5,
+          "priceTrend": 9740,
+          "percentGrowth": -0.96
         }
       ]
     }
@@ -1386,14 +1473,15 @@ data: {"reason":"response_complete"}
   "content": {
     "templateId": "nested_qna",
     "data": {
+      "_comment": "Prefer `attributes[]` for option metadata. `type`/`city` are deprecated but should still be supported for now.",
       "selections": [
         {
           "questionId": "sub_intent_1",
           "title": "Which sector 32 are you referring to?",
           "type": "locality_single_select",
           "options": [
-            { "id": "uuid1", "title": "Sector 32", "city": "Gurgaon", "type": "Locality" },
-            { "id": "uuid2", "title": "Sector 32", "city": "Faridabad", "type": "Locality" }
+            { "id": "uuid1", "title": "Sector 32", "attributes": ["Locality", "Gurgaon"], "attributes": ["Locality", "Faridabad"] }, // type/city is deprecated. we'll move to attributes array
+            { "id": "uuid2", "title": "Sector 32", "attributes": ["Locality", "Faridabad"], "city": "Faridabad", "type": "Locality" }
           ]
         },
         {
@@ -1402,8 +1490,8 @@ data: {"reason":"response_complete"}
           "type": "locality_single_select",
           "entity": "sector 21",
           "options": [
-            { "id": "uuid3", "title": "Sector 21", "city": "Gurgaon", "type": "Locality" },
-            { "id": "uuid4", "title": "Sector 21", "city": "Faridabad", "type": "Locality" }
+            { "id": "uuid3", "title": "Sector 21", "attributes": ["Locality", "Gurgaon"], "city": "Gurgaon", "type": "Locality" },
+            { "id": "uuid4", "title": "Sector 21", "attributes": ["Locality", "Faridabad"], "city": "Faridabad", "type": "Locality" }
           ]
         }
       ]
@@ -1472,20 +1560,44 @@ data: {"reason":"response_complete"}
 ```
 ```json
 {
-  "conversationId": "conv_1",
-  "messageId": "msg_b_033",
+  "conversationId": "conv_01KQ78BJY3Y0J02SRN6YDM3PYS",
+  "messageId": "msg_01KQ78C2TQETB61SA888FVJT4Z",
   "sender": { "type": "bot" },
-  "sourceMessageId": "msg_u_033",
-  "sequenceNumber": 0,
+  "sourceMessageId": "msg_01KQ78BZ378EA15Y78V75HE9TJ",
+  "sequenceNumber": 1,
   "messageState": "COMPLETED",
   "messageType": "template",
-  "createdAt": "2025-03-16T12:00:00.000Z",
+  "sourceMessageState": "COMPLETED",
+  "createdAt": "2026-04-27T16:09:44.477434+05:30",
   "content": {
     "templateId": "locality_carousel",
     "data": {
       "localities": [
-        { "id": "l1", "name": "Sector 32", "city": "Gurgaon", "url": "https://example.com/locality/sector-32-gurgaon", "priceTrend": 26.7, "rating": 4 },
-        { "id": "l3", "name": "Sector 21", "city": "Gurgaon", "url": "https://example.com/locality/sector-21-gurgaon", "priceTrend": 22, "rating": 4 }
+        {
+          "id": "f745c4c0226869fa87b8",
+          "name": "Sector 37D",
+          "displayName": "Sector 37D, Gurgaon",
+          "address": "Dwarka Expressway, Gurgaon, Gurgaon District",
+          "cityName": "Gurgaon",
+          "localityName": "",
+          "cityUuid": "3c69d8421a77f8f8b611",
+          "rating": 4.5,
+          "priceTrend": 11040,
+          "image": "https://is1-3.housingcdn.com/d89cff98/149789bd050d77e9b9b05e730b1e7141/v0/version.jpg",
+          "percentGrowth": 5.62
+        },
+        {
+          "id": "1864ac472c1a7739556b",
+          "name": "Sector 36",
+          "displayName": "Sector 36, Sohna, Gurgaon",
+          "address": "Sohna, Gurgaon, Gurgaon District",
+          "cityName": "Gurgaon",
+          "localityName": "",
+          "cityUuid": "3c69d8421a77f8f8b611",
+          "rating": 4.5,
+          "priceTrend": 9740,
+          "percentGrowth": -0.96
+        }
       ]
     }
   }
@@ -1584,256 +1696,13 @@ data: {"reason":"response_complete"}
 }
 ```
 
-#### 4.3.10.18 User text: tell more about sector 21
-```json
-{
-  "sender": { "type": "user" },
-  "messageType": "text",
-  "responseRequired": true,
-  "content": { "text": "tell more about sector 21" }
-}
-```
-#### 4.3.10.19 Bot template: nested_qna for sector 21
-```json
-{
-  "conversationId": "conv_1",
-  "messageId": "msg_b_10_19",
-  "sender": { "type": "bot" },
-  "sourceMessageId": "msg_u_10_18",
-  "sequenceNumber": 1,
-  "messageState": "COMPLETED",
-  "messageType": "template",
-  "createdAt": "2025-03-16T12:00:00.000Z",
-  "content": {
-    "templateId": "nested_qna",
-    "data": {
-      "selections": [
-        {
-          "questionId": "sub_intent_2",
-          "title": "Which sector 21 are you referring to?",
-          "type": "locality_single_select",
-          "options": [
-            { "id": "uuid3", "title": "Sector 21", "city": "Gurgaon", "type": "Locality" },
-            { "id": "uuid4", "title": "Sector 21", "city": "Faridabad", "type": "Locality" }
-          ]
-        }
-      ]
-    }
-  }
-}
-```
-#### 4.3.10.20 User action: selects first sector 21 option
-```json
-{
-  "sender": { "type": "user" },
-  "messageType": "user_action",
-  "responseRequired": true,
-  "isVisible": true,
-  "content": {
-    "data": {
-      "action": "nested_qna_selection",
-      "selections": [{ "questionId": "sub_intent_2", "selection": "uuid3" }]
-    },
-    "derivedLabel": "Q. Which sector 21 are you referring to?\nA. Sector 21, Gurgaon"
-  }
-}
-```
-#### 4.3.10.21 ML context-out — locality intent shift (examples)
+#### 4.3.10.18–4.3.10.30 Locality intent narrowing + nested_qna + learn-more (production)
 
-**Scenario:** User shifts focus from one locality to another (e.g. **Sector 21 → Sector 32**). ML emits **`messageType: "context"`** first (same `content.data` schema as §4.1), then the visible reply (e.g. `nested_qna`). **`sequenceNumber`** orders the chain; **`sourceMessageState: IN_PROGRESS`** on non-final parts; **`sourceMessageState: COMPLETED`** only on the **last** ML event for that `sourceMessageId` (each persisted part still has **`messageState: "COMPLETED"`** in chat-demo — Appendix A §A.0). See §5.2, §10.6.
+These flows exist in production and are exercised in `sample_conversation.json`, but the exact payloads are already shown earlier in this document for:
+- `templateId: "nested_qna"` (ambiguity resolution)
+- `messageType: "markdown"` (learn more)
 
-**1) Intent narrowed to Sector 32, Gurgaon (abridged):**
-
-```json
-{
-  "conversationId": "conv_1",
-  "messageId": "msg_b_10_21_ctx",
-  "sender": { "type": "bot" },
-  "sourceMessageId": "msg_u_10_23",
-  "sequenceNumber": 0,
-  "messageState": "COMPLETED",
-  "sourceMessageState": "IN_PROGRESS",
-  "messageType": "context",
-  "createdAt": "2025-03-16T12:00:00.000Z",
-  "content": {
-    "data": {
-      "user_intent": "SRP",
-      "service": "buy",
-      "category": "residential",
-      "city": "526acdc6c33455e9e4e9",
-      "poly": ["dce9290ec3fe8834a293"],
-      "est": 194298,
-      "properties": [{ "id": 123, "type": "project" }],
-      "uuid": [], // builder uuid when searching for properties posted by a builder - builder SRP page
-      "filters": {
-        // below are sample filters. for complete list of available filers see filterMap.js
-        "type": "project",
-        "apartment_type_id": [1, 2],
-        "min_price": 100,
-        "max_price": 4800000,
-        "property_type_id": [1, 2]
-      }
-    }
-  }
-}
-```
-
-**2) Intent narrowed to Sector 21, Gurgaon (abridged):** same envelope; top-level **`poly`** differs (e.g. mock uses `["a1b2c3d4e5f6sector21gurgaonpoly"]` to distinguish from Sector 32). The next event in the chain is typically `nested_qna` with `sequenceNumber: 1`, `messageState: "COMPLETED"`, `sourceMessageState: "COMPLETED"`.
-
-#### 4.3.10.22 Bot markdown: learn more sector 21
-```json
-{
-  "conversationId": "conv_1",
-  "messageId": "msg_b_10_22",
-  "sender": { "type": "bot" },
-  "sourceMessageId": "msg_u_10_20",
-  "sequenceNumber": 0,
-  "messageState": "COMPLETED",
-  "sourceMessageState": "COMPLETED",
-  "messageType": "markdown",
-  "createdAt": "2025-03-16T12:00:00.000Z",
-  "content": {
-    "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?"
-  }
-}
-```
-#### 4.3.10.23 User text: to learn more about sector 32
-```json
-{
-  "sender": { "type": "user" },
-  "messageType": "text",
-  "responseRequired": true,
-  "content": { "text": "to learn more about sector 32" }
-}
-```
-#### 4.3.10.24 Bot template: nested_qna for sector 32
-```json
-{
-  "conversationId": "conv_1",
-  "messageId": "msg_b_10_24",
-  "sender": { "type": "bot" },
-  "sourceMessageId": "msg_u_10_23",
-  "sequenceNumber": 1,
-  "messageState": "COMPLETED",
-  "sourceMessageState": "COMPLETED",
-  "messageType": "template",
-  "createdAt": "2025-03-16T12:00:00.000Z",
-  "content": {
-    "templateId": "nested_qna",
-    "data": {
-      "selections": [
-        {
-          "questionId": "sub_intent_1",
-          "title": "Which sector 32 are you referring to?",
-          "type": "locality_single_select",
-          "options": [
-            { "id": "uuid1", "title": "Sector 32", "city": "Gurgaon", "type": "Locality" },
-            { "id": "uuid2", "title": "Sector 32", "city": "Faridabad", "type": "Locality" }
-          ]
-        }
-      ]
-    }
-  }
-}
-```
-#### 4.3.10.25 User action: types sector 32 faridabad
-```json
-{
-  "sender": { "type": "user" },
-  "messageType": "user_action",
-  "responseRequired": true,
-  "isVisible": true,
-  "content": {
-    "data": {
-      "action": "nested_qna_selection",
-      "selections": [{ "questionId": "sub_intent_1", "text": "sector 32 faridabad" }]
-    },
-    "derivedLabel": "Q. Which sector 32 are you referring to?\nA. sector 32 faridabad"
-  }
-}
-```
-#### 4.3.10.26 Bot markdown: learn more sector 32
-```json
-{
-  "conversationId": "conv_1",
-  "messageId": "msg_b_10_26",
-  "sender": { "type": "bot" },
-  "sourceMessageId": "msg_u_10_25",
-  "sequenceNumber": 0,
-  "messageState": "COMPLETED",
-  "messageType": "markdown",
-  "createdAt": "2025-03-16T12:00:00.000Z",
-  "content": {
-    "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?"
-  }
-}
-```
-#### 4.3.10.27 User text: locality comparison of sector 32, sector 21
-```json
-{
-  "sender": { "type": "user" },
-  "messageType": "text",
-  "responseRequired": true,
-  "content": { "text": "locality comparison of sector 32, sector 21" }
-}
-```
-#### 4.3.10.28 Bot template: nested_qna for sector 32 + sector 21
-```json
-{
-  "conversationId": "conv_1",
-  "messageId": "msg_b_10_28",
-  "sender": { "type": "bot" },
-  "sourceMessageId": "msg_u_10_27",
-  "sequenceNumber": 0,
-  "messageState": "COMPLETED",
-  "messageType": "template",
-  "createdAt": "2025-03-16T12:00:00.000Z",
-  "content": {
-    "templateId": "nested_qna",
-    "data": {
-      "selections": [
-        { "questionId": "sub_intent_1", "title": "Which sector 32 are you referring to?" },
-        { "questionId": "sub_intent_2", "title": "Which sector 21 are you referring to?" }
-      ]
-    }
-  }
-}
-```
-#### 4.3.10.29 User action: sector 32 gurgaon + skip sector 21
-```json
-{
-  "sender": { "type": "user" },
-  "messageType": "user_action",
-  "responseRequired": true,
-  "isVisible": true,
-  "content": {
-    "data": {
-      "action": "nested_qna_selection",
-      "selections": [
-        { "questionId": "sub_intent_1", "text": "sector 32 gurgaon" },
-        { "questionId": "sub_intent_2", "skipped": true }
-      ]
-    },
-    "derivedLabel": "Q. Which sector 32 are you referring to?\nA. sector 32 gurgaon\n\nQ. Which sector 21 are you referring to?\nA. Skipped"
-  }
-}
-```
-#### 4.3.10.30 Bot markdown: learn more sector 32 gurgaon
-```json
-{
-  "conversationId": "conv_1",
-  "messageId": "msg_b_10_30",
-  "sender": { "type": "bot" },
-  "sourceMessageId": "msg_u_10_29",
-  "sequenceNumber": 0,
-  "messageState": "COMPLETED",
-  "messageType": "markdown",
-  "createdAt": "2025-03-16T12:00:00.000Z",
-  "content": {
-    "text": "# Sector 46, Gurgaon: Peaceful Living with Great Connectivity\n\n---\n\n**Summary: Why Sector 46 is a Great Choice**\n- Mid-range residential locality with apartments, builder floors, and independent houses\n- Well connected: 10 km from Gurgaon railway, 20 km from IGI Airport, near NH-8 and metro\n- Ample amenities: 9 schools, 10 hospitals, 67 restaurants, plus shopping centers nearby\n- Notable places include Manav Rachna International School and Amity International School\n- Real estate demand supported by proposed metro expansion and local commercial hubs\n\n---\n\nWould you like me to show available properties in Sector 46, Gurgaon or compare it with nearby areas?"
-  }
-}
-```
+Note: `sample_conversation.json` does **not** include any ML `messageType: "context"` rows, so the previously mock-only context-out JSON blocks have been removed here to keep examples sample-aligned.
 #### 4.3.10.31 User text: show properties near me
 ```json
 {
@@ -1846,14 +1715,15 @@ data: {"reason":"response_complete"}
 #### 4.3.10.32 Bot template: share_location
 ```json
 {
-  "conversationId": "conv_1",
-  "messageId": "msg_b_10_32",
+  "conversationId": "conv_01KQ78BJY3Y0J02SRN6YDM3PYS",
+  "messageId": "msg_01KQ78HDHPAXC3D0WQM938T2W1",
   "sender": { "type": "bot" },
-  "sourceMessageId": "msg_u_10_31",
+  "sourceMessageId": "msg_01KQ78HC080SJDADHZFHG73QB7",
   "sequenceNumber": 0,
   "messageState": "COMPLETED",
+  "sourceMessageState": "COMPLETED",
   "messageType": "template",
-  "createdAt": "2025-03-16T12:00:00.000Z",
+  "createdAt": "2026-04-27T16:12:39.292724+05:30",
   "content": { "templateId": "share_location", "data": {} }
 }
 ```
@@ -1904,108 +1774,69 @@ data: {"reason":"response_complete"}
 #### 4.3.10.36 FE action: location_shared
 ```json
 {
+  "conversationId": "conv_01KQ78BJY3Y0J02SRN6YDM3PYS",
+  "messageId": "msg_01KQ78HM8P8AV3BREAGNPNAJV0",
   "sender": { "type": "system" },
   "messageType": "user_action",
-  "responseRequired": true,
-  "content": { "data": { "action": "location_shared", "coordinates": [28.5355, 77.391] } }
+  "messageState": "COMPLETED",
+  "createdAt": "2026-04-27T16:12:46.166352+05:30",
+  "content": { "data": { "action": "location_shared", "coordinates": [28.4085982, 77.3166804] } }
 }
 ```
 #### 4.3.10.37 Bot template: property_carousel
 ```json
 {
-  "conversationId": "conv_1",
-  "messageId": "msg_b_10_37",
+  "conversationId": "conv_01KQ78BJY3Y0J02SRN6YDM3PYS",
+  "messageId": "msg_01KQ78HN6AX6FRBC01QQF8A009",
   "sender": { "type": "bot" },
-  "sourceMessageId": "msg_u_10_36",
+  "sourceMessageId": "msg_01KQ78HM8P8AV3BREAGNPNAJV0",
   "sequenceNumber": 0,
   "messageState": "COMPLETED",
+  "sourceMessageState": "IN_PROGRESS",
+  "createdAt": "2026-04-27T16:12:47.120890+05:30",
+  "content": {
+    "text": "Got it, searching for properties to buy near your current location in Faridabad! 🏠📍"
+  }
+}
+```
+```json
+{
+  "conversationId": "conv_01KQ78BJY3Y0J02SRN6YDM3PYS",
+  "messageId": "msg_01KQ78HNAMS73NYR9K6CJ75GXF",
+  "sender": { "type": "bot" },
+  "sourceMessageId": "msg_01KQ78HM8P8AV3BREAGNPNAJV0",
+  "sequenceNumber": 1,
+  "messageState": "COMPLETED",
+  "sourceMessageState": "IN_PROGRESS",
   "messageType": "template",
-  "createdAt": "2025-03-16T12:00:00.000Z",
   "content": {
     "templateId": "property_carousel",
     "data": {
-        // this is still under discussion, required to power "view all" button. discuss if this should be replaced with "hasViewMore"
-        "property_count": 15,
-        "service": "buy",
-        "category": "residential",
-        "city": "526acdc6c33455e9e4e9",
-        "filters": {
-          "poly": ["dce9290ec3fe8834a293"],
-          "est": 194298,
-          "region_entity_id": 31817,
-          "region_entity_type": "project",
-          "uuid": [],
-          "qv_resale_id": 1234,
-          "qv_rent_id": 12345,
-          "apartment_type_id": [1, 2],
-          "contact_person_id": [1, 2],
-          "facing": ["east", "west"],
-          "has_lift": true,
-          "is_gated_community": true,
-          "is_verified": true,
-          "max_area": 4000,
-          "max_poss": 0,
-          "max_price": 4800000,
-          "radius": 3000,
-          "routing_range": 10,
-          "routing_range_type": "time",
-          "min_price": 100,
-          "property_type_id": [1, 2],
-          "type": "project"
-        },
-        // structure should be similar to corresponding venus/casa APIs. this is just sample
-        "properties": [
-          {
-            "id": "p1",
-            "type": "project",
-            "title": "2, 3 BHK Apartments",
-            "name": "Godrej Air",
-            "short_address": [{ "display_name": "Sector 85" }, { "display_name": "Gurgaon" }],
-            "is_rera_verified": true,
-            "inventory_canonical_url": "https://example.com/property/p1",
-            "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
-            "property_tags": ["Ready to move"],
-            "formatted_min_price": "3 Cr",
-            "formatted_max_price": "3.5 Cr",
-            "unit_of_area": "sq.ft.",
-            "display_area_type": "Built up area",
-            "min_selected_area_in_unit": 2500,
-            "max_selected_area_in_unit": 4750,
-            "inventory_configs": []
-          },
-          {
-            "id": "p2",
-            "type": "rent",
-            "title": "3 BHK flat",
-            "short_address": [{ "display_name": "Sector 33" }, { "display_name": "Sohna" }, { "display_name": "Gurgaon" }],
-            "region_entities": [{ "name": "M3M Solitude Ralph Estate" }],
-            "is_rera_verified": false,
-            "is_verified": true,
-            "inventory_canonical_url": "https://example.com/property/p2",
-            "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
-            "property_tags": [],
-            "formatted_price": "30,000",
-            "unit_of_area": "sq.ft.",
-            "display_area_type": "Built up area",
-            "inventory_configs": [{ "furnish_type_id": 2, "area_value_in_unit": 4750 }]
-          },
-          {
-            "id": "p3",
-            "type": "resale",
-            "title": "3 BHK apartment",
-            "short_address": [{ "display_name": "Sector 33" }, { "display_name": "Sohna" }, { "display_name": "Gurgaon" }],
-            "region_entities": [{ "name": "M3M Solitude Ralph Estate" }],
-            "is_rera_verified": false,
-            "is_verified": true,
-            "inventory_canonical_url": "https://example.com/property/p3",
-            "thumb_image_url": "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=600",
-            "property_tags": ["Possession by March, 2026"],
-            "formatted_min_price": "3 Cr",
-            "unit_of_area": "sq.ft.",
-            "display_area_type": "Built up area",
-            "inventory_configs": [{ "furnish_type_id": null, "area_value_in_unit": 4750 }]
-          }
-        ]
+      "user_intent": "SRP",
+      "service": "buy",
+      "category": "residential",
+      "city": { "city_name": "Faridabad", "display_name": "Faridabad, Haryana", "bbx_uuid": "b19bc29408477e86c6fc", "id": "b19bc29408477e86c6fc" },
+      "entities": [],
+      "pagination": { "p": 2, "results_per_page": 10, "is_last_page": false, "cursor": "-1759790310", "resale_total_count": 741, "np_total_count": 100 },
+      "filters": { "apartment_type_id": [], "contact_person_id": [], "furnish_type_id": [], "property_type_id": [], "amenities": [], "facing": [] },
+      "properties": [
+        {
+          "id": "17816947",
+          "type": "resale",
+          "title": "6 BHK Independent House",
+          "short_address": [
+            { "polygon_uuid": "d9cbecdf2ab226fe40f4", "display_name": "Old Faridabad" },
+            { "polygon_uuid": "83ad92bd0696e4e5975b", "display_name": "Faridabad" }
+          ],
+          "inventory_canonical_url": "/in/buy/resale/page/17816947-6-bhk-independent-house-in-old-faridabad-for-rs-4500000-v2",
+          "property_tags": ["Possession: Feb 2026", "Resale", "semi furnished", "Ready to Move"],
+          "is_verified": false,
+          "formatted_price": "45.0 L",
+          "unit_of_area": "sq.ft.",
+          "display_area_type": "Builtup Area",
+          "inventory_configs": [{ "area_in_sq_ft": 468, "formatted_per_unit_rate": "9.62k", "furnish_type_id": 2, "number_of_bedrooms": 6, "price": 4500000, "price_on_request": false }]
+        }
+      ]
     }
   }
 }
@@ -2045,99 +1876,144 @@ Emitted when the Permissions API reports **`granted`** but **`getCurrentPosition
 #### 4.3.10.40 Bot template: property_carousel
 ```json
 {
-  "conversationId": "conv_1",
-  "messageId": "msg_b_10_40",
+  "conversationId": "conv_01KQ78BJY3Y0J02SRN6YDM3PYS",
+  "messageId": "msg_01KQ78F0PM3CGR8KR7X1RKVQMC",
   "sender": { "type": "bot" },
-  "sourceMessageId": "msg_u_10_38",
-  "sequenceNumber": 0,
+  "sourceMessageId": "msg_01KQ78EXZYSB56G458J9M4KXD6",
+  "sequenceNumber": 1,
   "messageState": "COMPLETED",
   "messageType": "template",
-  "createdAt": "2025-03-16T12:00:00.000Z",
+  "sourceMessageState": "IN_PROGRESS",
+  "createdAt": "2026-04-27T16:11:20.603525+05:30",
   "content": {
     "templateId": "property_carousel",
     "data": {
-        // this is still under discussion, required to power "view all" button. discuss if this should be replaced with "hasViewMore"
-        "property_count": 15,
-        "service": "buy",
-        "category": "residential",
-        "city": "526acdc6c33455e9e4e9",
-        "filters": {
-          "poly": ["dce9290ec3fe8834a293"],
-          "est": 194298,
-          "region_entity_id": 31817,
-          "region_entity_type": "project",
-          "uuid": [],
-          "qv_resale_id": 1234,
-          "qv_rent_id": 12345,
-          "apartment_type_id": [1, 2],
-          "contact_person_id": [1, 2],
-          "facing": ["east", "west"],
-          "has_lift": true,
-          "is_gated_community": true,
-          "is_verified": true,
-          "max_area": 4000,
-          "max_poss": 0,
-          "max_price": 4800000,
-          "radius": 3000,
-          "routing_range": 10,
-          "routing_range_type": "time",
-          "min_price": 100,
-          "property_type_id": [1, 2],
-          "type": "project"
-        },
-        // structure should be similar to corresponding venus/casa APIs. this is just sample
-        "properties": [
-          {
-            "id": "p1",
-            "type": "project",
-            "title": "2, 3 BHK Apartments",
-            "name": "Godrej Air",
-            "short_address": [{ "display_name": "Sector 85" }, { "display_name": "Gurgaon" }],
-            "is_rera_verified": true,
-            "inventory_canonical_url": "https://example.com/property/p1",
-            "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
-            "property_tags": ["Ready to move"],
-            "formatted_min_price": "3 Cr",
-            "formatted_max_price": "3.5 Cr",
-            "unit_of_area": "sq.ft.",
-            "display_area_type": "Built up area",
-            "min_selected_area_in_unit": 2500,
-            "max_selected_area_in_unit": 4750,
-            "inventory_configs": []
-          },
-          {
-            "id": "p2",
-            "type": "rent",
-            "title": "3 BHK flat",
-            "short_address": [{ "display_name": "Sector 33" }, { "display_name": "Sohna" }, { "display_name": "Gurgaon" }],
-            "region_entities": [{ "name": "M3M Solitude Ralph Estate" }],
-            "is_rera_verified": false,
-            "is_verified": true,
-            "inventory_canonical_url": "https://example.com/property/p2",
-            "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
-            "property_tags": [],
-            "formatted_price": "30,000",
-            "unit_of_area": "sq.ft.",
-            "display_area_type": "Built up area",
-            "inventory_configs": [{ "furnish_type_id": 2, "area_value_in_unit": 4750 }]
-          },
-          {
-            "id": "p3",
-            "type": "resale",
-            "title": "3 BHK apartment",
-            "short_address": [{ "display_name": "Sector 33" }, { "display_name": "Sohna" }, { "display_name": "Gurgaon" }],
-            "region_entities": [{ "name": "M3M Solitude Ralph Estate" }],
-            "is_rera_verified": false,
-            "is_verified": true,
-            "inventory_canonical_url": "https://example.com/property/p3",
-            "thumb_image_url": "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=600",
-            "property_tags": ["Possession by March, 2026"],
-            "formatted_min_price": "3 Cr",
-            "unit_of_area": "sq.ft.",
-            "display_area_type": "Built up area",
-            "inventory_configs": [{ "furnish_type_id": null, "area_value_in_unit": 4750 }]
-          }
-        ]
+      "user_intent": "SRP",
+      "service": "buy",
+      "category": "residential",
+      "city": {
+        "city_name": "Gurgaon",
+        "display_name": "Gurgaon",
+        "city_uuid": "3c69d8421a77f8f8b611",
+        "bbx_uuid": "526acdc6c33455e9e4e9",
+        "id": "526acdc6c33455e9e4e9"
+      },
+      "_comment": "Prefer `entities`. FE should still accept legacy `poly` during migration for backward compatibility.",
+      "entities": [
+        {
+          "id": "f745c4c0226869fa87b8",
+          "name": "sector 37d",
+          "display_name": "Sector 37D, Gurgaon",
+          "uuid": "f745c4c0226869fa87b8",
+          "lon_lat": [76.97277802321182, 28.445236369097103],
+          "city": "Gurgaon",
+          "type": "locality"
+        }
+      ],
+      "pagination": {
+        "p": 2,
+        "results_per_page": 10,
+        "is_last_page": false,
+        "cursor": "-1977752683",
+        "resale_total_count": 394,
+        "np_total_count": 35
+      },
+      "filters": {
+        "apartment_type_id": [1, 2],
+        "contact_person_id": [1, 2],
+        "facing": ["east", "west"],
+        "has_lift": true,
+        "is_gated_community": true,
+        "is_verified": true,
+        "max_area": 4000,
+        "max_poss": 0,
+        "max_price": 4800000,
+        "radius": 3000,
+        "routing_range": 10,
+        "routing_range_type": "time",
+        "min_price": 100,
+        "property_type_id": [1, 2],
+        "type": "project"
+      },
+      "properties": [
+        {
+          "id": "107997",
+          "type": "project",
+          "title": "3 BHK Flat",
+          "name": "Ramprastha Skyz",
+          "short_address": [
+            { "polygon_uuid": "f745c4c0226869fa87b8", "display_name": "Sector 37D" },
+            { "polygon_uuid": "3c69d8421a77f8f8b611", "display_name": "Gurgaon" }
+          ],
+          "thumb_image_url": "https://is1-3.housingcdn.com/4f2250e8/e4d1147af944a8bb439b19a95e78eea8/v0/version/ramprastha_skyz-sector_37d-gurgaon-ramprastha_promoters_%26_developers_private_ltd.jpeg",
+          "inventory_canonical_url": "/in/buy/projects/page/107997-ramprastha-skyz-by-ramprastha-promoters-developers-private-ltd-in-sector-37d",
+          "property_tags": ["Ready to Move", "Project", "RERA Approved"],
+          "is_rera_verified": true,
+          "formatted_min_price": "1.29 Cr",
+          "formatted_max_price": "1.52 Cr",
+          "formatted_price": "1.29 Cr",
+          "price_on_request": false,
+          "current_status": "Ready to Move",
+          "possession_date": "Jun, 2019",
+          "unit_of_area": "sq.ft.",
+          "display_area_type": "Super Builtup Area",
+          "min_selected_area_in_unit": 1725,
+          "max_selected_area_in_unit": 2025,
+          "inventory_configs": [
+            {
+              "formatted_price": "1.29 Cr",
+              "seller": [1],
+              "per_unit_rate": 7500,
+              "listing_id": "2a1f04ad61d9b72be76a",
+              "formatted_per_unit_rate": "7.5k",
+              "facing": "all",
+              "area_value_in_unit": 1725,
+              "flat_config_id": 352206,
+              "property_type_id": 1,
+              "coupon_details": [],
+              "price": 12937500,
+              "formatted_per_sqft_rate": "7.5k",
+              "seller_uuid": "634be935-1b63-4fe4-9a27-0d1728d12f25",
+              "price_on_request": false,
+              "area_information": [
+                {
+                  "value_in_unit": 1725,
+                  "name": "Super Builtup Area",
+                  "double_value_in_unit": 1725,
+                  "value": 1725,
+                  "double_value": 1725
+                }
+              ],
+              "property_type": "Apartment",
+              "id": 107997,
+              "number_of_toilets": null,
+              "apartment_group_name": "3 BHK",
+              "selected_area_in_unit": 1725,
+              "area": 1725,
+              "brokerage": 0,
+              "number_of_bedrooms": 3,
+              "derived_per_sqft_rate": 7500,
+              "pass_by_filter": true,
+              "apartment_type_id": 4,
+              "loan_amount": 10350000,
+              "is_available": true,
+              "derived_price": 12937500,
+              "per_sqft_rate": 7500,
+              "emi_amount": 72369,
+              "inventory_count": 0,
+              "floor_plan_urls": [],
+              "selected_area": 1725,
+              "completion_date": 1559347200,
+              "formatted_selected_area_in_unit": "1.725 K"
+            }
+          ],
+          "region_entities": [
+            { "name": "Tower-D", "id": "365412", "type": "np_building" },
+            { "name": "Tower-I", "id": "365417", "type": "np_building" },
+            { "name": "Tower-G", "id": "365415", "type": "np_building" }
+          ]
+        }
+      ]
     }
   }
 }
@@ -2194,36 +2070,41 @@ Emitted when the Permissions API reports **`granted`** but **`getCurrentPosition
 ```
 ```json
 {
-  "conversationId": "conv_1",
-  "messageId": "msg_b_050",
+  "conversationId": "conv_01KQ78BJY3Y0J02SRN6YDM3PYS",
+  "messageId": "msg_01KQ78GGQP77A1JHQYSX7B2F4A",
   "sender": { "type": "bot" },
-  "sourceMessageId": "msg_u_050",
-  "sequenceNumber": 0,
+  "sourceMessageId": "msg_01KQ78GD5ZX7MN0HKKTW3Z3TAE",
+  "sequenceNumber": 1,
   "messageState": "COMPLETED",
+  "sourceMessageState": "COMPLETED",
   "messageType": "template",
-  "createdAt": "2025-03-16T12:00:00.000Z",
+  "createdAt": "2026-04-27T16:12:09.790874+05:30",
   "content": {
     "templateId": "download_brochure",
     "data": {
-      // structure should be similar to corresponding venus/casa APIs. this is just sample
-      "property": {
-        "id": "p1",
-        "type": "project",
-        "title": "2, 3 BHK Apartments",
-        "name": "Godrej Air",
-        "short_address": [{ "display_name": "Sector 85" }, { "display_name": "Gurgaon" }],
-        "is_rera_verified": true,
-        "inventory_canonical_url": "https://example.com/property/p1",
-        "thumb_image_url": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600",
-        "property_tags": ["Ready to move"],
-        "formatted_min_price": "3 Cr",
-        "formatted_max_price": "3.5 Cr",
-        "unit_of_area": "sq.ft.",
-        "display_area_type": "Built up area",
-        "min_selected_area_in_unit": 2500,
-        "max_selected_area_in_unit": 4750,
-        "inventory_configs": []
-      }
+      "id": "107997",
+      "type": "project",
+      "title": "3 BHK Apartment",
+      "name": "Ramprastha Skyz",
+      "short_address": [
+        { "display_name": "Sector 37D", "polygon_uuid": "f745c4c0226869fa87b8" },
+        { "display_name": "Gurgaon", "polygon_uuid": "3c69d8421a77f8f8b611" }
+      ],
+      "cover_photo_url": "https://is1-3.housingcdn.com/4f2250e8/e4d1147af944a8bb439b19a95e78eea8/v0/version/ramprastha_skyz-sector_37d-gurgaon-ramprastha_promoters_%26_developers_private_ltd.jpeg",
+      "inventory_canonical_url": "/in/buy/projects/page/107997-ramprastha-skyz-by-ramprastha-promoters-developers-private-ltd-in-sector-37d",
+      "property_tags": ["Ready to Move", "Project", "RERA Approved"],
+      "is_rera_verified": true,
+      "formatted_min_price": "1.29 Cr",
+      "formatted_max_price": "1.52 Cr",
+      "price_on_request": false,
+      "unit_of_area": "sq.ft.",
+      "min_selected_area_in_unit": 1725,
+      "max_selected_area_in_unit": 2025,
+      "brochure_name": "Ramprastha Skyz Brochure",
+      "brochure_pdf_url": "https://housing-is-01.s3.amazonaws.com/6a32315a/539cd78d1eb97091141d44cf5f58bdbb/original.pdf",
+      "brochure_images": [
+        "https://is1-3.housingcdn.com/d9dd8fcc/407794a7ef2ad3e4cb759419023b4ad2/v0/version.jpg"
+      ]
     }
   }
 }
@@ -2248,10 +2129,16 @@ Emitted when the Permissions API reports **`granted`** but **`getCurrentPosition
 
 Identity is carried via request headers:
 
-- `token_id`: stable identifier for the **non-logged-in** user. Returned by `get-conversation-details` and stored by FE **forever**.
+- `token_id`: stable identifier for the **non-logged-in** user. Returned by `get-conversation-details` and stored by FE **permanently** (cookie).
 - `login-auth-token`: optional; present only when the user is logged in.
 
-`get-conversation-details` returns `tokenId` on every call; if `token_id` is sent, the same token is echoed back.
+`get-conversation-details` returns `tokenId` on every call:
+- If the request has **neither** `login-auth-token` nor `token_id`, BE **generates** a fresh `tokenId` and returns it.
+- If `token_id` is sent, the same token is echoed back.
+
+Logout behavior:
+- FE deletes both `login-auth-token` and `token_id` on logout.
+- A subsequent `get-conversation-details` call (without either header) will return a **new** `tokenId`.
 
 ### 4.4.1 Chat migration after login
 
@@ -2295,10 +2182,16 @@ When a guest chat (identified by `token_id`) becomes authenticated mid-session:
 - Transient templates (`share_location`, `shortlist_property`, `contact_seller`, `nested_qna`) are rendered only when they are the latest message to prevent stale CTA/template duplication in history.
 - Sticky `nested_qna`: while active as latest message, FE hides the text composer to avoid parallel free-text input during structured disambiguation.
 - `property_carousel`: title row is clickable and opens `inventory_canonical_url` in a new tab.
-- `property_carousel`: when `property_count > properties.length`, FE shows a trailing **View all** card that opens `getSRPUrl(service, category, city, filters)` in a new tab.
+- `property_carousel`: FE shows a trailing **View more / View all** card only when:
+  - `data.user_intent` is **`"SRP"`** or **`"shortlist"`**, and
+  - `data.pagination.is_last_page === false` (fallback: `property_count > properties.length` when pagination is missing)
+
+  It opens `getSRPUrl(service, category, city, filters)` in a new tab.
 - `locality_carousel`: locality name is clickable and opens locality `url` in a new tab.
 - Nested QnA contract:
   - bot template uses `template.data.selections[]` with `questionId` + options
+  - option metadata should move to `attributes: string[]`; FE renders it as `attributes.join(" | ")`
+  - deprecated fallback: if `attributes` is absent, FE may still render `type` + `city`
   - FE submit uses `user_action` with `action: "nested_qna_selection"` and `selections`.
 - Share location behavior:
   - ML always returns `share_location` for near-me queries.
@@ -2308,11 +2201,11 @@ When a guest chat (identified by `token_id`) becomes authenticated mid-session:
   - shortlist/contact/brochure actions are FE-gated behind login
   - successful action posts hidden/shown `user_action` to BE/ML.
 - Cancel API semantics:
-  - FE calls `POST /chats/cancel` with current user `messageId`
+  - FE calls `POST /v1/chat/cancel` with current user `messageId`
   - cancellation is advisory to ML; BE ignores late updates for cancelled/non-pending requests.
 
 ---
-### 4.6 `GET /chats/get-conversation-details` cursor contract
+### 4.6 `GET /v1/chat/get-conversation-details` cursor contract
 
 - Supported query params:
   - `pageSize` (optional, default `15`)
@@ -2392,8 +2285,8 @@ This section documents current behavior in this repository where it differs from
 ### A.1 Transport and request lifecycle
 
 - FE uses:
-  - `POST /api/chats/send-message-streamed` for user **`text`** (always) and for any turn with `responseRequired === true`
-  - `POST /api/chats/send-message` (non-streaming) **only** for `responseRequired === false` (e.g. hidden **`user_action`** such as shortlist/brochure signals — no user text)
+  - `POST /api/v1/chat/send-message-streamed` for user **`text`** (always) and for any turn with `responseRequired === true`
+  - `POST /api/v1/chat/send-message` (non-streaming) **only** for `responseRequired === false` (e.g. hidden **`user_action`** such as shortlist/brochure signals — no user text)
 - Stream sequence is:
   - `connection_ack` (immediate),
   - `chat_event` (0..N),
@@ -2406,7 +2299,7 @@ This section documents current behavior in this repository where it differs from
 
 #### A.1.1 History pagination — older messages (this app)
 
-- Initial transcript uses `GET /chats/get-conversation-details` with `pageSize` (see `INITIAL_PAGE_SIZE` in `app/chat/page.tsx`).
+- Initial transcript uses `GET /v1/chat/get-conversation-details` with `pageSize` (see `INITIAL_PAGE_SIZE` in `app/chat/page.tsx`).
 - Older pages use `messagesBefore=<messageId of current oldest row>` and `pageSize` (`LOAD_MORE_PAGE_SIZE`).
 - **UX:** an **Intersection Observer** on a top **sentinel** inside the chat scroll container auto-loads the next older page when the user scrolls near the top (with a top `rootMargin` prefetch). Loads are **edge-triggered** (entering view) and **count only successful prepends** (new rows actually merged).
 - **Budget:** the first **`AUTO_LOAD_OLDER_MAX` (4)** successful auto-loads per **`conversationId`** are free; after that, the UI shows only **“View older messages”** (manual tap) to reduce accidental / abusive churn against BE.
@@ -2431,8 +2324,8 @@ This section documents current behavior in this repository where it differs from
 ### A.3 Template/action behavior in current app
 
 - Property carousel actions are FE-owned:
-  - shortlist sends hidden `user_action` (`action: "shortlist"`) after FE/API success.
-  - contact sends shown `user_action` (`action: "crf_submitted"`).
+  - shortlist sends hidden `user_action` (`action: "shortlisted_property"`) after FE/API success.
+  - contact sends shown `user_action` (`action: "contacted_seller"`).
   - learn more sends shown `user_action` (`action: "learn_more_about_property"`).
 - `download_brochure` click emits hidden `user_action` (`action: "brochure_downloaded"`).
 - `nested_qna` uses `data.selections[]`; submit emits:
@@ -2503,7 +2396,7 @@ This section documents current behavior in this repository where it differs from
   - one line per property.
   - project example format: `<projectName> in <address>. <area-range> <title> <price>. link: <url>`.
   - rent/resale format: `<title> in <address> for <price>. link: <url>`.
-  - when `property_count > properties.length`, copy includes: `View all: <srpUrl>` where `srpUrl = getSRPUrl(service, category, city, filters)`.
+  - when `user_intent ∈ {"SRP","shortlist"}` and `pagination.is_last_page === false` (fallback: `property_count > properties.length`), copy includes: `View all: <srpUrl>` where `srpUrl = getSRPUrl(service, category, city, filters)`.
 - `template: locality_carousel`: computed by `getClipboardTextForLocalityCarousel(data)`.
   - one line per locality: `<name> (<rating>/5, <growth>% YoY)[ - <url>]`.
 - `template: download_brochure`: computed by `getClipboardTextForDownloadBrochure(data)`.
@@ -2537,10 +2430,35 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000), then **Open Chat** to go to `/chat`.
 
+#### Local HTTPS domain (for production-like CORS)
+
+Some production endpoints enforce Origin / CORS rules that only allow `*.housing.com` origins over HTTPS. To test the UI locally while calling the **production** chat APIs directly, run the app behind a local HTTPS domain.
+
+**One-time setup (mkcert + hosts):**
+
+```bash
+npm run setup:https
+```
+
+This generates:
+- `certs/privatekey.pem`
+- `certs/fullchain.pem`
+
+and adds `127.0.0.1 chat-local.housing.com` to `/etc/hosts`.
+
+**Run (HTTPS on 443, proxies to Next dev on 3000):**
+
+```bash
+NEXT_PUBLIC_PROD=true npm run dev:https
+```
+
+Open `https://chat-local.housing.com`.
+
 #### Stack (Phase 1)
 
 - **BE/ML:** Co-located in the same service (method calls; **no Kafka** in Phase 1).
-- **BE:** Next.js API routes under `/api/chats/*`: `get-conversation-details`, **`send-message` (JSON)**, **`send-message-streamed` (SSE)**, `cancel`.
+- **BE:** Next.js API routes under `/api/v1/chat/*`: `get-conversation-details`, **`send-message` (JSON)**, **`send-message-streamed` (SSE)**, `cancel`.
+- **Production host switch:** set `NEXT_PUBLIC_PROD=true` (or `PROD=true`) to make the FE call `https://platform-chatbot.housing.com` directly instead of the local mock-backed routes.
 - **FE:**
   - Uses `send-message-streamed` for `responseRequired=true` turns.
   - Uses `send-message` for `responseRequired=false` fire-and-forget turns.
@@ -2557,14 +2475,14 @@ Open [http://localhost:3000](http://localhost:3000), then **Open Chat** to go to
 
 #### HTTP API (paths as implemented under `/api`)
 
-- `GET /api/chats/get-conversation-details` → `{ conversationId, tokenId, messages, hasMore, isNew }`
+- `GET /api/v1/chat/get-conversation-details` → `{ statusCode: "2XX", responseCode: "SUCCESS", data: { conversationId, tokenId, messages, hasMore, isNew } }`
   - default `pageSize=15`
   - optional cursor `messagesBefore` or `messagesAfter`
-- `POST /api/chats/send-message` body `{ event: ChatEventFromUser }` (JSON-only)
+- `POST /api/v1/chat/send-message` body `{ event: ChatEventFromUser }` (JSON-only)
   - `event.conversationId` is required in payload (not query param).
   - Used for `responseRequired=false` turns.
-  - Returns JSON `{ messageId, messageState }` (current app returns `messageState: "COMPLETED"`).
-- `POST /api/chats/send-message-streamed` body `{ event: ChatEventFromUser }` with `Accept: text/event-stream`
+  - Returns `{ statusCode: "2XX", responseCode: "SUCCESS", data: { messageId, messageState } }` (current app returns `messageState: "COMPLETED"`).
+- `POST /api/v1/chat/send-message-streamed` body `{ event: ChatEventFromUser }` with `Accept: text/event-stream`
   - `event.conversationId` is required in payload (not query param).
   - Used for `responseRequired=true` turns.
   - If `login-auth-token` is present, BE authenticates first and forwards derived identifiers (`userId`, `gaId`) in `ChatEventToML.sender`.
@@ -2577,15 +2495,15 @@ Open [http://localhost:3000](http://localhost:3000), then **Open Chat** to go to
   - Each ML output is stored by BE as a new bot message with **`messageState: "COMPLETED"`** (per **part** row) and **`sourceMessageState`** echoing ML’s turn progress.
   - **`sourceMessageState`** from each ML event is mapped onto the **source user message** row’s **`messageState`** (see **§A.0**).
 - `POST /api/v1/chat/migrate-chat` with headers `login-auth-token` + `token_id` (**both mandatory**)
-  - When migration strategy is enabled, BE returns `{ data: { new_conversation_id: "c2" } }` and merges/moves guest history into the authenticated thread.
+  - When migration strategy is enabled, BE returns `{ statusCode: "2XX", responseCode: "SUCCESS", data: { new_conversation_id: "c2" } }` and merges/moves guest history into the authenticated thread.
   - FE switches to `c2` for all subsequent API calls; an immediate `get-conversation-details` refresh is **optional**.
 
 #### UI notes (complements §A.1.1, §A.2, §A.3)
 
 - **Scroll to bottom:** a floating control appears when the user scrolls away from the bottom (threshold ~100px / ~20% of viewport height); the scroll listener attaches after the main chat layout mounts (not on the initial loading screen).
-- **Older messages:** `GET /api/chats/get-conversation-details` with `messagesBefore` + `pageSize` (`LOAD_MORE_PAGE_SIZE`); auto-load via Intersection Observer for the first **`AUTO_LOAD_OLDER_MAX`** successful prepends, then **“View older messages”** — full rules in **§A.1.1**.
+- **Older messages:** `GET /api/v1/chat/get-conversation-details` with `messagesBefore` + `pageSize` (`LOAD_MORE_PAGE_SIZE`); auto-load via Intersection Observer for the first **`AUTO_LOAD_OLDER_MAX`** successful prepends, then **“View older messages”** — full rules in **§A.1.1**.
 - Transient templates (`share_location`, `shortlist_property`, `contact_seller`, `nested_qna`) render only for the **latest** bot message.
-- Property carousel **title** opens `inventory_canonical_url` in a new tab; trailing **View all** when `property_count > properties.length` opens `getSRPUrl(service, category, city, filters)`.
+- Property carousel **title** opens `inventory_canonical_url` in a new tab; trailing **View more** / **View all** when `user_intent ∈ {"SRP","shortlist"}` and `pagination.is_last_page === false` (fallback: `property_count > properties.length`) opens `getSRPUrl(service, category, city, filters)`.
 - Locality carousel **locality name** opens locality `url` in a new tab.
 - `context` and `analytics` messages are never rendered; input is hidden while sticky `nested_qna` is active.
 - **`NestedQna`:** submitting defers parent updates (`queueMicrotask`) so React does not update the chat page while `NestedQna` is rendering; hooks run unconditionally before any early return when `selections` is empty (**§A.2**).

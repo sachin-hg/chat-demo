@@ -19,20 +19,24 @@ export function DownloadBrochure({ data, messageId, onUserAction, disabled = fal
   const [open, setOpen] = useState(false);
   const auth = useAuth();
 
-  const property = (data.property as PropertyCarouselCard | undefined) ?? undefined;
-  if (!property) return null;
+  // Production shape: `data` is the property object itself (sample_conversation.json).
+  const property = data as (PropertyCarouselCard & Record<string, any>);
+  if (!property?.id || !property?.type) return null;
   const type = property.type ?? "project";
-  const propertyMeta: PropertyMeta = { id: property.id, type };
+  const propertyMeta: PropertyMeta = { id: String(property.id), type };
 
-  const imgSrc = property.thumb_image_url;
-  const brochureImages = [imgSrc, imgSrc, imgSrc];
+  const coverPhoto = property.cover_photo_url ?? property.thumb_image_url ?? "";
+  const imgSrc = coverPhoto || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600";
+  const brochureImages: string[] = Array.isArray(property.brochure_images) && property.brochure_images.length > 0
+    ? property.brochure_images
+    : [imgSrc];
 
-  const displayName = property.name ?? "";
+  const displayName = property.name ?? property.title ?? "";
   const displayPriceRange =
     property.type === "rent"
       ? property.formatted_price ?? ""
       : property.type === "resale"
-        ? property.formatted_min_price ?? ""
+        ? property.formatted_price ?? property.formatted_min_price ?? ""
         : `${property.formatted_min_price ?? ""} - ${property.formatted_max_price ?? ""}`.trim();
   const displayPriceText = displayPriceRange.trim().startsWith("₹")
     ? displayPriceRange.trim()
@@ -46,7 +50,7 @@ export function DownloadBrochure({ data, messageId, onUserAction, disabled = fal
       {/* Image wrapper – 249×160 in scout-bot */}
       <div className="relative w-full h-[160px] bg-[#f2f2f2]">
         <Image
-          src={imgSrc}
+          src={imgSrc.replace('version', 'large')}
           alt={displayName}
           fill
           className="object-cover brochure-card__image"
@@ -111,7 +115,7 @@ export function DownloadBrochure({ data, messageId, onUserAction, disabled = fal
           >
             <div className="w-10 h-1 bg-[#e1e2e8] rounded-full mx-auto mb-4" />
             <div className="flex items-center justify-between mb-3">
-              <p className="text-[15px] font-semibold text-[#111]">Brochure</p>
+              <p className="text-[15px] font-semibold text-[#111]">{property.brochure_name ?? "Brochure"}</p>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -141,14 +145,14 @@ export function DownloadBrochure({ data, messageId, onUserAction, disabled = fal
 }
 
 export function getClipboardTextForDownloadBrochure(templateData: Record<string, unknown>): string | null {
-  const property = (templateData.property as PropertyCarouselCard | undefined) ?? undefined;
+  const property = templateData as (PropertyCarouselCard & Record<string, any>);
   if (!property) return null;
-  const projectName = property?.name ?? "";
+  const projectName = property?.name ?? property?.title ?? "";
   const priceRange =
     property.type === "rent"
       ? property.formatted_price ?? ""
       : property.type === "resale"
-        ? property.formatted_min_price ?? ""
+        ? property.formatted_price ?? property.formatted_min_price ?? ""
         : `${property.formatted_min_price ?? ""} - ${property.formatted_max_price ?? ""}`.trim();
 
   if (!projectName && !priceRange) return null;

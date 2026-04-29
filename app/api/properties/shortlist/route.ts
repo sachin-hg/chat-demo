@@ -8,7 +8,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "propertyId required" }, { status: 400 });
     }
     // Mock: assume success (no persistence)
-    return NextResponse.json({ success: true as const });
+    return NextResponse.json({
+      statusCode: "2XX",
+      responseCode: "SUCCESS",
+      data: { success: true as const },
+    });
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
