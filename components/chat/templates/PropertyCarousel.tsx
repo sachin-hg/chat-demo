@@ -14,6 +14,8 @@ interface Props {
   messageId: string;
   onUserAction: (event: ChatEventFromUser) => void;
   propertyCount?: number;
+  pagination?: { is_last_page?: boolean } | null;
+  userIntent?: string;
   service?: string;
   category?: string;
   city?: string;
@@ -29,7 +31,16 @@ async function postAck(path: string, body: unknown): Promise<{ success: true }> 
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  const payload = await res.json();
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "data" in payload &&
+    ("statusCode" in payload || "responseCode" in payload)
+  ) {
+    return payload.data as { success: true };
+  }
+  return payload as { success: true };
 }
 
 export function PropertyCarousel({
@@ -37,6 +48,8 @@ export function PropertyCarousel({
   messageId,
   onUserAction,
   propertyCount,
+  pagination,
+  userIntent,
   service,
   category,
   city,
@@ -67,7 +80,11 @@ export function PropertyCarousel({
     if (!trimmed) return "";
     return trimmed.startsWith("₹") ? trimmed : `₹${trimmed}`;
   };
-  const hasMoreResults = typeof propertyCount === "number" && propertyCount > properties.length;
+  const allowViewAll = userIntent === "SRP" || userIntent === "shortlist";
+  const hasMoreResults =
+    allowViewAll &&
+    (pagination?.is_last_page === false ||
+      (typeof propertyCount === "number" && propertyCount > properties.length));
   const viewAllUrl = hasMoreResults ? getSRPUrl(service, category, city, filters) : "";
 
   return (
@@ -76,6 +93,7 @@ export function PropertyCarousel({
         const isShortlisted = shortlisted.has(p.id);
         const imgSrc = p.thumb_image_url?.replace("version", "large") ?? "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600";
         const propertyForMl = {
+          _id: p._id,
           id: p.id,
           type: p.type,
         };
@@ -100,7 +118,7 @@ export function PropertyCarousel({
 
         return (
           <div
-            key={p.id}
+            key={p._id || p.id}
             className="flex-shrink-0 w-[262px] rounded-[24px] bg-white border border-[#e1e2e8] overflow-hidden"
             style={{ scrollSnapAlign: "start" }}
             data-demo-property-index={idx}
@@ -159,7 +177,7 @@ export function PropertyCarousel({
                     responseRequired: false,
                     isVisible: false,
                     content: {
-                      data: { action: "shortlist", replyToMessageId: messageId, property: propertyForMl },
+                      data: { action: "shortlisted_property", replyToMessageId: messageId, property: propertyForMl },
                     },
                   } as unknown as ChatEventFromUser);
 
@@ -295,7 +313,7 @@ export function PropertyCarousel({
                       isVisible: true,
                       content: {
                         data: {
-                          action: "crf_submitted",
+                          action: "contacted_seller",
                           replyToMessageId: messageId,
                           property: propertyForMl,
                         },
@@ -362,6 +380,11 @@ export function getClipboardTextForPropertyCarousel(templateData: Record<string,
   const props = (templateData.properties as unknown[]) ?? [];
   if (!Array.isArray(props) || props.length === 0) return null;
   const propertyCount = typeof templateData.property_count === "number" ? templateData.property_count : undefined;
+  const pagination =
+    typeof templateData.pagination === "object" && templateData.pagination !== null
+      ? (templateData.pagination as { is_last_page?: boolean })
+      : undefined;
+  const userIntent = typeof templateData.user_intent === "string" ? templateData.user_intent : undefined;
   const service = typeof templateData.service === "string" ? templateData.service : undefined;
   const category = typeof templateData.category === "string" ? templateData.category : undefined;
   const city = typeof templateData.city === "string" ? templateData.city : undefined;
@@ -415,7 +438,11 @@ export function getClipboardTextForPropertyCarousel(templateData: Record<string,
     })
     .filter(Boolean);
 
-  if (typeof propertyCount === "number" && propertyCount > props.length) {
+  if (
+    (userIntent === "SRP" || userIntent === "shortlist") &&
+    (pagination?.is_last_page === false ||
+      (typeof propertyCount === "number" && propertyCount > props.length))
+  ) {
     lines.push(`View all: ${getSRPUrl(service, category, city, filters)}`);
   }
 

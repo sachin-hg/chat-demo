@@ -40,7 +40,7 @@ v1.1 **does not replace** this model; it adds **optional token-level streaming**
 
 ## 2) Backward Compatibility and Capability Negotiation
 
-Incremental (v1.1) streaming is negotiated **only** via the **query parameter** on `POST /chats/send-message-streamed`:
+Incremental (v1.1) streaming is negotiated **only** via the **query parameter** on `POST /v1/chat/send-message-streamed`:
 
 - `streamingEnabled=true` — request v1.1 incremental SSE (`message_delta` chunks + final v1 **`chat_event`** per part, same **`messageId`**) when the BE feature flag allows.
 - Omitted or `streamingEnabled=false` — **v1 behavior**: SSE uses full `chat_event` bot messages only (no delta events).
@@ -64,10 +64,10 @@ No separate API version header is used; clients rely on this query flag only.
 
 No new endpoint is required.
 
-- `POST /chats/send-message` remains non-streaming JSON-only.
-- `POST /chats/send-message-streamed` remains SSE, with optional v1.1 incremental semantics.
+- `POST /v1/chat/send-message` remains non-streaming JSON-only.
+- `POST /v1/chat/send-message-streamed` remains SSE, with optional v1.1 incremental semantics.
 
-### 3.1 `POST /chats/send-message-streamed`
+### 3.1 `POST /v1/chat/send-message-streamed`
 
 Request body remains identical to v1.
 
@@ -241,7 +241,7 @@ Maintain per-`messageId` transient state:
 
 ### 5.5 Reconnect and recovery
 - On disconnect before `connection_close`, FE calls:
-  - `GET /chats/get-history?conversationId=<id>&messages_after=<lastSeenEventId>`
+  - `GET /v1/chat/get-history?conversationId=<id>&messages_after=<lastSeenEventId>`
 - History remains source of truth; FE reconciles transient partial text against persisted final events.
 
 ---
@@ -256,7 +256,7 @@ Maintain per-`messageId` transient state:
 ### 6.2 Persistence strategy
 - **Chunks are not stored** as separate chat rows: **`message_delta`** fragments are **ephemeral** on the wire only.
 - Persist the **final** bot **part** when emitting the **`chat_event`** with full **`content`** for that **`messageId`** (same row v1 clients already consume).
-- **`GET /chats/get-history`** returns **only** complete persisted **`ChatEventToUser`** rows. **`message_delta`** payloads **must not** appear in **`get-history`** — they are not history entities. Until the **`chat_event`** is committed, a client that only polls history may not see that part yet (see **§5.5**).
+- **`GET /v1/chat/get-history`** returns **only** complete persisted **`ChatEventToUser`** rows. **`message_delta`** payloads **must not** appear in **`get-history`** — they are not history entities. Until the **`chat_event`** is committed, a client that only polls history may not see that part yet (see **§5.5**).
 - Optional: checkpoint partial text in ephemeral cache (Redis/in-memory) for operational resilience or reconnect (**§5.5**).
 
 ### 6.3 Cancellation semantics
@@ -284,7 +284,7 @@ When testing the **v1** SSE path (full `chat_event` streaming, not incremental `
 
 Request:
 ```http
-POST /api/chats/send-message-streamed
+POST /api/v1/chat/send-message-streamed
 Accept: text/event-stream
 Content-Type: application/json
 ```
@@ -306,7 +306,7 @@ data: {"reason":"response_complete"}
 
 Request:
 ```http
-POST /api/chats/send-message-streamed?streamingEnabled=true
+POST /api/v1/chat/send-message-streamed?streamingEnabled=true
 Accept: text/event-stream
 Content-Type: application/json
 ```
@@ -338,7 +338,7 @@ data: {"reason":"response_complete"}
 
 Request:
 ```http
-POST /api/chats/send-message-streamed?streamingEnabled=true
+POST /api/v1/chat/send-message-streamed?streamingEnabled=true
 Accept: text/event-stream
 Content-Type: application/json
 ```
@@ -389,7 +389,7 @@ sequenceDiagram
     participant BE as Chat Backend
     participant ML as ML Provider
 
-    FE->>BE: POST /chats/send-message-streamed?streamingEnabled=true
+    FE->>BE: POST /v1/chat/send-message-streamed?streamingEnabled=true
     BE-->>FE: SSE connection_ack
     BE->>ML: Start provider streaming call
     ML-->>BE: token chunks
@@ -406,7 +406,7 @@ sequenceDiagram
     participant FE as Frontend (v1.1-capable)
     participant BE as Chat Backend (flag off)
 
-    FE->>BE: POST /chats/send-message-streamed?streamingEnabled=true
+    FE->>BE: POST /v1/chat/send-message-streamed?streamingEnabled=true
     BE-->>FE: SSE connection_ack
     BE-->>FE: SSE chat_event (full bot message)
     BE-->>FE: SSE connection_close(response_complete)

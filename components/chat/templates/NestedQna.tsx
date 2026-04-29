@@ -6,6 +6,7 @@ export interface NestedQnaOption {
   id: string;
   title?: string;
   name?: string;
+  attributes?: string[];
   type?: string;
   city?: string;
 }
@@ -34,6 +35,9 @@ function optionLabel(opt: NestedQnaOption): string {
 }
 
 function optionSubLabel(opt: NestedQnaOption): string {
+  if (Array.isArray(opt.attributes) && opt.attributes.length > 0) {
+    return opt.attributes.filter(Boolean).join(" | ");
+  }
   if (opt.type && opt.city) return `${opt.type}  |  ${opt.city}`;
   return opt.type ?? opt.city ?? "";
 }

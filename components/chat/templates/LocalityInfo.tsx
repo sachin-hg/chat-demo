@@ -5,7 +5,11 @@ import Image from "next/image";
 interface Locality {
   id?: string;
   name?: string;
-  city?: string;
+  displayName?: string;
+  address?: string;
+  cityName?: string;
+  localityName?: string;
+  cityUuid?: string;
   image?: string;
   description?: string;
   highlights?: string[];
@@ -16,6 +20,7 @@ interface Locality {
   rating?: number;
   url?: string;
   link?: string;
+  percentGrowth?: number;
 }
 
 interface Props {
@@ -39,14 +44,13 @@ export function LocalityInfo({ data, onAction, disabled = false }: Props) {
     <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4" style={{ scrollSnapType: "x mandatory" }} data-demo="locality-carousel">
       {localities.map((loc, idx) => {
         const locId = loc.id ?? `loc_${idx}`;
-        const name = loc.name ?? "";
-        const city = loc.city ?? "";
+        const displayName = loc.displayName ?? loc.name ?? "";
         const image = loc.image ?? "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=400";
-        const trend = loc.priceTrend ?? 0;
+        const growth = typeof loc.percentGrowth === "number" ? loc.percentGrowth : 0;
         const rating = loc.rating ?? 4;
         const localityUrl = loc.url ?? loc.link;
-        const isUp = trend >= 0;
-        const displayName = name || city || "Locality";
+        const isUp = growth >= 0;
+        const label = displayName || loc.cityName || loc.cityUuid || "Locality";
 
         return (
           <div
@@ -56,7 +60,7 @@ export function LocalityInfo({ data, onAction, disabled = false }: Props) {
             data-demo-locality-index={idx}
           >
             <div className="relative h-[160px] bg-gray-100 rounded-t-[24px] overflow-hidden">
-              <Image src={image} alt={name} fill className="object-cover" unoptimized sizes="262px" />
+              <Image src={image.replace('version', 'large')} alt={label} fill className="object-cover" unoptimized sizes="262px" />
             </div>
             <div className="p-4">
               {localityUrl ? (
@@ -66,10 +70,10 @@ export function LocalityInfo({ data, onAction, disabled = false }: Props) {
                   rel="noopener noreferrer"
                   className="block font-semibold text-sm text-[#111] truncate hover:underline"
                 >
-                  {name || "Locality"}
+                  {displayName || "Locality"}
                 </a>
               ) : (
-                <p className="font-semibold text-sm text-[#111] truncate">{name || "Locality"}</p>
+                <p className="font-semibold text-sm text-[#111] truncate">{displayName || "Locality"}</p>
               )}
 
               <div className="flex gap-3 mt-3">
@@ -94,7 +98,7 @@ export function LocalityInfo({ data, onAction, disabled = false }: Props) {
                         <path d="M12 20L4 4h16l-8 16z" />
                       </svg>
                     )}
-                    <span className="text-sm font-normal text-[#111]">{Math.abs(trend)}% YoY</span>
+                    <span className="text-sm font-normal text-[#111]">{Math.abs(growth)}% YoY</span>
                   </div>
                 </div>
               </div>
@@ -108,7 +112,7 @@ export function LocalityInfo({ data, onAction, disabled = false }: Props) {
                       action: "show_properties_in_locality",
                       responseRequired: true,
                       isVisible: true,
-                      derivedLabel: `Show properties in ${displayName}`,
+                      derivedLabel: `Show properties in ${label}`,
                       locality: { localityUuid: locId },
                     })
                   }
@@ -125,7 +129,7 @@ export function LocalityInfo({ data, onAction, disabled = false }: Props) {
                       action: "learn_more_about_locality",
                       responseRequired: true,
                       isVisible: true,
-                      derivedLabel: `Learn more about ${displayName}`,
+                      derivedLabel: `Learn more about ${label}`,
                       locality: { localityUuid: locId },
                     })
                   }
@@ -151,10 +155,10 @@ export function getClipboardTextForLocalityCarousel(templateData: Record<string,
 
   const lines = localities
     .map((loc) => {
-      const name = loc.name ?? loc.city ?? "Locality";
+      const name = loc.displayName ?? loc.name ?? loc.cityName ?? "Locality";
       const rating = loc.rating ?? 4;
-      const trend = loc.priceTrend ?? 0;
-      const growth = `${Math.abs(trend)}% YoY`;
+      const growthValue = typeof loc.percentGrowth === "number" ? loc.percentGrowth : 0;
+      const growth = `${Math.abs(growthValue)}% YoY`;
       const link = loc.url ?? loc.link;
       const linkPart = link ? ` - ${link}` : "";
       return `${name} (${rating}/5, ${growth})${linkPart}`;

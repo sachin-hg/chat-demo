@@ -3,8 +3,7 @@
 import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
-  getConversationId,
-  getHistory,
+  getConversationDetails,
   sendMessage,
   sendMessageStream,
   cancelRequest,
@@ -30,7 +29,7 @@ const LOAD_MORE_PAGE_SIZE = 6;
 /** After this many auto-loads (scroll-up), user must tap "View older messages" to protect BE. */
 const AUTO_LOAD_OLDER_MAX = 4;
 const REPLY_TIMEOUT_MS = 25000;
-/** After abrupt SSE end, poll `get-history` until the turn is terminal (see `isTurnTerminalInHistory`). */
+/** After abrupt SSE end, poll `get-conversation-details` until the turn is terminal (see `isTurnTerminalInHistory`). */
 const HISTORY_POLL_INTERVAL_MS = 1500;
 const HISTORY_POLL_MAX_MS = 90_000;
 
@@ -131,11 +130,13 @@ function buildContextEvent(conversationId: string): ChatEventFromUser {
     conversationId,
     sender: { type: "system" },
     messageType: "context",
+    "isVisible":false,
     responseRequired: false,
     content: {
       data: {
         user_intent: "SRP",
         service: "buy",
+        "theme":"multiple_filters",
         category: "residential",
         city: "526acdc6c33455e9e4e9",
         poly: ["dce9290ec3fe8834a293"],
@@ -143,6 +144,9 @@ function buildContextEvent(conversationId: string): ChatEventFromUser {
         properties: [{ id: 123, type: "project" }],
         uuid: [],
         filters: {
+          "construction_filters":"under_construction,ready_to_move",
+          "contact_person_id":[1,2,3],
+          "sort_key":"relevance",
           apartment_type_id: [1, 2],
           max_price: 4800000,
           min_price: 100,
@@ -472,7 +476,7 @@ function ChatPageContent() {
   const [networkError, setNetworkError] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const knownMessageIdsRef = useRef<Set<string>>(new Set());
-  /** After SSE `connection_ack`, true until `connection_close` or a terminal bot `chat_event` — drives get-history fallback on abrupt stream end. */
+  /** After SSE `connection_ack`, true until `connection_close` or a terminal bot `chat_event` — drives history fallback on abrupt stream end. */
   const pendingSseHistoryFallbackRef = useRef(false);
   /** Bot `messageId`s that are receiving v1.1 `message_delta` until the final `chat_event` replaces the row. */
   const streamingMessageIdsRef = useRef<Set<string>>(new Set());
@@ -527,8 +531,8 @@ function ChatPageContent() {
     sseHistoryPollAbortRef.current = ac;
     const signal = ac.signal;
 
-    const applySnapshot = (hist: Awaited<ReturnType<typeof getHistory>>) => {
-      const list = hist.messages as StoredMessage[];
+    const applySnapshot = (hist: Awaited<ReturnType<typeof getConversationDetails>>) => {
+      const list = (hist.messages ?? []) as StoredMessage[];
       setMessages(list);
       knownMessageIdsRef.current = new Set(
         list.map((m) => m.messageId).filter((id): id is string => Boolean(id))
@@ -541,7 +545,7 @@ function ChatPageContent() {
     try {
       if (userTurnId == null) {
         const n = Math.max(INITIAL_PAGE_SIZE, lastMessagesRef.current.length + 5);
-        const hist = await getHistory(conversationId, { page_size: n });
+        const hist = await getConversationDetails({ pageSize: n });
         if (signal.aborted) return;
         applySnapshot(hist);
         clearReplyWaiting();
@@ -551,7 +555,7 @@ function ChatPageContent() {
 
       while (!signal.aborted && Date.now() - started < HISTORY_POLL_MAX_MS) {
         const n = Math.max(INITIAL_PAGE_SIZE, lastMessagesRef.current.length + 5);
-        const hist = await getHistory(conversationId, { page_size: n });
+        const hist = await getConversationDetails({ pageSize: n });
         if (signal.aborted) return;
         applySnapshot(hist);
 
@@ -667,17 +671,17 @@ function ChatPageContent() {
     let cancelled = false;
     (async () => {
       try {
-        const { conversationId: cid } = await getConversationId(isDemo);
+        const details = await getConversationDetails({ pageSize: INITIAL_PAGE_SIZE });
+        const cid = details.conversationId;
         if (cancelled) return;
         setConversationId(cid);
         // Context is fire-and-forget in Phase 1 (no response expected).
         // Sent on each chat open to keep ML context fresh.
         sendMessage(buildContextEvent(cid)).catch(() => {});
-        const hist = await getHistory(cid, { page_size: INITIAL_PAGE_SIZE });
         if (cancelled) return;
-        const list = hist.messages as StoredMessage[];
+        const list = (details.messages ?? []) as StoredMessage[];
         setMessages(list);
-        setHasMoreOlder(hist.hasMore);
+        setHasMoreOlder(details.hasMore);
         list.forEach((m) => m.messageId && knownMessageIdsRef.current.add(m.messageId));
       } catch (e) {
         console.error(e);
@@ -705,7 +709,7 @@ function ChatPageContent() {
         const newConversationId = res.newConversationId;
         if (!newConversationId || newConversationId === conversationId) return;
         setConversationId(newConversationId);
-        // Do not refetch history here (spec: optional after migrate). Keep current transcript; BE owns merged c2 state on next get-history.
+        // Do not refetch history here (spec: optional after migrate). Keep current transcript; BE owns merged c2 state on next get-conversation-details.
         setMessages((prev) =>
           prev.map((m) => ({ ...m, conversationId: newConversationId }))
         );
@@ -788,11 +792,11 @@ function ChatPageContent() {
     olderLoadInFlightRef.current = true;
     setLoadingMoreOlder(true);
     try {
-      const hist = await getHistory(conversationId, {
-        messages_before: firstMessageId,
-        page_size: LOAD_MORE_PAGE_SIZE,
+      const hist = await getConversationDetails({
+        messagesBefore: firstMessageId,
+        pageSize: LOAD_MORE_PAGE_SIZE,
       });
-      const histList = hist.messages as StoredMessage[];
+      const histList = (hist.messages ?? []) as StoredMessage[];
       const toPrepend = histList.filter(
         (m) => m.messageId && !knownMessageIdsRef.current.has(m.messageId)
       );

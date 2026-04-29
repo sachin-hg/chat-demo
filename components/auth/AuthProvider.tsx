@@ -26,7 +26,16 @@ async function postAck(path: string, body: unknown): Promise<{ success: true; lo
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  const payload = await res.json();
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "data" in payload &&
+    ("statusCode" in payload || "responseCode" in payload)
+  ) {
+    return payload.data as { success: true; login_auth_token?: string };
+  }
+  return payload as { success: true; login_auth_token?: string };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
