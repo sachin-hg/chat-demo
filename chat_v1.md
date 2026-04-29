@@ -986,11 +986,7 @@ Property payload shape reference APIs (for template payloads that carry a proper
         "routing_range_type": "time",
         "min_price": 100,
         "property_type_id": [1, 2],
-        "type": "project",
-        "region_entity_id": 31817,
-        "region_entity_type": "project",
-        "qv_resale_id": 1234,
-        "qv_rent_id": 12345
+        "type": "project" // project/resale
       }
     }
   }
@@ -1201,9 +1197,27 @@ data: {"reason":"response_complete"}
       "service": "buy",
       "category": "residential",
       "city": { "city_name": "Gurgaon", "display_name": "Gurgaon", "city_uuid": "3c69d8421a77f8f8b611", "bbx_uuid": "526acdc6c33455e9e4e9", "id": "526acdc6c33455e9e4e9" },
+      "filters": {
+        
+        "apartment_type_id": [1, 2],
+        "contact_person_id": [1, 2],
+        "facing": ["east", "west"],
+        "has_lift": true,
+        "is_gated_community": true,
+        "is_verified": true,
+        "max_area": 4000,
+        "max_poss": 0,
+        "max_price": 4800000,
+        "radius": 3000,
+        "routing_range": 10,
+        "routing_range_type": "time",
+        "min_price": 100,
+        "property_type_id": [1, 2],
+        "type": "project"
+      },
       "entities": [{ "id": "f745c4c0226869fa87b8", "display_name": "Sector 37D, Gurgaon", "uuid": "f745c4c0226869fa87b8", "city": "Gurgaon", "type": "locality" }],
       "pagination": { "p": 2, "results_per_page": 10, "is_last_page": false, "cursor": "-1977752683", "resale_total_count": 394, "np_total_count": 35 },
-      "filters": { "apartment_type_id": [], "contact_person_id": [], "furnish_type_id": [], "property_type_id": [], "amenities": [], "facing": [] },
+  
       "properties": [
         {
           "id": "107997",
