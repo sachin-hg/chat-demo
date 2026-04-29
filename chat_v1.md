@@ -2446,13 +2446,27 @@ This generates:
 
 and adds `127.0.0.1 chat-local.housing.com` to `/etc/hosts`.
 
-**Run (HTTPS on 443, proxies to Next dev on 3000):**
+**Run local HTTPS UI while pointing to prod APIs:**
 
 ```bash
 NEXT_PUBLIC_PROD=true npm run dev:https
 ```
 
 Open `https://chat-local.housing.com`.
+
+**What this does**
+- Starts Next dev on `http://localhost:3000`
+- Starts a local TLS reverse proxy on `https://chat-local.housing.com` (port **443**) that forwards to the Next dev server
+- Because the browser origin is now `https://*.housing.com`, calling prod APIs directly is much less likely to be blocked by CORS
+
+**Troubleshooting**
+- If `npm run setup:https` fails with `mkcert ... rootCA-key.pem: permission denied`, fix mkcert CA ownership (macOS):
+
+```bash
+sudo chown -R "$(whoami)":staff "$HOME/Library/Application Support/mkcert"
+```
+
+Then rerun `npm run setup:https`.
 
 #### Stack (Phase 1)
 
