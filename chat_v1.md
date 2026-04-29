@@ -965,11 +965,21 @@ Property payload shape reference APIs (for template payloads that carry a proper
   "createdAt": "2026-04-27T16:00:00.000Z",
   "content": {
     "data": {
-      "user_intent": "SRP",
+      "user_intent": "SRP", // need to check exact values with Uttam
+      "theme": "multi_filters", // need to check exact values with Uttam
       "service": "buy",
       "category": "residential",
       "city": "526acdc6c33455e9e4e9",
+
+      // this is what we want:
       "entities": [{ "id": "dce9290ec3fe8834a293", "type": "locality" }],
+
+      // this is what we have currently:
+      "poly": ["dce9290ec3fe8834a293"],
+      "est": 1234,
+      "uuid": ["sdfsdfs-sdfsdf-s-dfsdf-3434"]
+
+
       "properties": [{ "id": 123, "type": "project" }],
       "filters": {
         "apartment_type_id": [1, 2],
@@ -1487,13 +1497,13 @@ data: {"reason":"response_complete"}
   "content": {
     "templateId": "nested_qna",
     "data": {
-      "_comment": "Prefer `attributes[]` for option metadata. `type`/`city` are deprecated but should still be supported for now.",
       "selections": [
         {
           "questionId": "sub_intent_1",
           "title": "Which sector 32 are you referring to?",
           "type": "locality_single_select",
           "options": [
+            // Prefer `attributes[]` for option metadata. `type`/`city` are deprecated but should still be supported for now.
             { "id": "uuid1", "title": "Sector 32", "attributes": ["Locality", "Gurgaon"], "attributes": ["Locality", "Faridabad"] }, // type/city is deprecated. we'll move to attributes array
             { "id": "uuid2", "title": "Sector 32", "attributes": ["Locality", "Faridabad"], "city": "Faridabad", "type": "Locality" }
           ]
@@ -1526,8 +1536,12 @@ data: {"reason":"response_complete"}
       "action": "nested_qna_selection",
       "replyToMessageId": "msg_b_030",
       "selections": [
+        // if user doesnt skip or select a item from the list, they can write an answer for that given question as a text:
         { "questionId": "sub_intent_1", "text": "sector 32 gurgaon" },
-        { "questionId": "sub_intent_2", "skipped": true }
+        // if user skips a question then skipped true for that question
+        { "questionId": "sub_intent_2", "skipped": true },
+        // if user selects from one of the options then it's id should be sent in "selection"
+        { "questionId": "sub_intent_2", "selection": "id" }
       ]
     },
     "derivedLabel": "Q. Which sector 32 are you referring to?\nA. sector 32 gurgaon\n\nQ. Which sector 21 are you referring to?\nA. Skipped"
@@ -2502,6 +2516,24 @@ Then rerun `npm run setup:https`.
 - In FE-facing events, `sourceMessageId` is optional and typically not required for rendering.
 
 #### HTTP API (paths as implemented under `/api`)
+
+- **Standard JSON envelope (all non-SSE endpoints):** All JSON responses are wrapped as:
+  - `statusCode`: `"2XX"` / `"4XX"` / `"5XX"` (string)
+  - `responseCode`: `"SUCCESS"` / `"ERROR"` (string)
+  - `data`: the actual response payload for the endpoint
+
+Example:
+
+```json
+{
+  "statusCode": "2XX",
+  "responseCode": "SUCCESS",
+  "data": {
+    "messageId": "msg_01KQCHVMD6JC53K5ZQTVWP260H",
+    "messageState": "COMPLETED"
+  }
+}
+```
 
 - `GET /api/v1/chat/get-conversation-details` → `{ statusCode: "2XX", responseCode: "SUCCESS", data: { conversationId, tokenId, messages, hasMore, isNew } }`
   - default `pageSize=15`
